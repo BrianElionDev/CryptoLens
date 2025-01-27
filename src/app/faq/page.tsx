@@ -50,6 +50,23 @@ export default function FAQPage() {
 
         <main className="max-w-4xl mx-auto px-4 py-8">
           <FAQ />
+
+          {/* Common Questions Cards */}
+          <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-6">
+            {commonQuestions.map((item, index) => (
+              <div
+                key={index}
+                className="p-6 rounded-xl bg-gradient-to-r from-blue-900/20 to-purple-900/20 border border-blue-500/20 backdrop-blur-sm hover:border-blue-400/30 transition-all duration-300 group"
+              >
+                <h3 className="text-xl font-semibold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 mb-2">
+                  {item.question}
+                </h3>
+                <p className="text-gray-400 group-hover:text-gray-300 transition-colors">
+                  {item.description}
+                </p>
+              </div>
+            ))}
+          </div>
         </main>
 
         {/* Floating Action Button */}
@@ -98,7 +115,6 @@ export default function FAQPage() {
     </div>
   );
 }
-
 const commonQuestions = [
   {
     question: "Market Sentiment Analysis",
