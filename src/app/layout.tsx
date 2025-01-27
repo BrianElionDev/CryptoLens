@@ -21,25 +21,14 @@ export const metadata: Metadata = {
 
 function Navbar() {
   return (
-    <div className="fixed top-0 left-0 right-0 z-50">
+    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-7xl">
       <div className="relative">
-        {/* Purple announcement bar */}
-        <div className="bg-[#7C3AED] py-2 px-4 text-white text-sm font-medium text-center">
-          <span className="inline-flex items-center">
-            <span className="mr-2">🚀</span>
-            Discover crypto insights with CryptoLens
-            <Link
-              href="/knowledge"
-              className="ml-2 underline hover:text-white/90"
-            >
-              Learn more →
-            </Link>
-          </span>
-        </div>
+        {/* Glow effect */}
+        <div className="absolute -inset-1 bg-gradient-to-r from-blue-600/20 via-purple-600/20 to-pink-600/20 rounded-2xl blur-lg"></div>
 
         {/* Main navbar */}
-        <div className="bg-white/5 backdrop-blur-xl border-b border-white/10">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="relative bg-gray-900/70 backdrop-blur-xl border border-gray-700/50 rounded-2xl shadow-2xl">
+          <div className="px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-16">
               {/* Logo and primary nav */}
               <div className="flex items-center">
@@ -49,27 +38,27 @@ function Navbar() {
                   </span>
                 </Link>
                 <nav className="hidden md:flex ml-10 space-x-8">
-                  <Link
+                  {/* <Link
                     href="/"
                     className="text-gray-300 hover:text-white px-3 py-2 text-sm font-medium"
                   >
                     Home
-                  </Link>
+                  </Link> */}
                   <Link
                     href="/knowledge"
-                    className="text-gray-300 hover:text-white px-3 py-2 text-sm font-medium"
+                    className="text-gray-300 hover:text-white px-3 py-2 text-sm font-medium transition-colors"
                   >
                     Knowledge
                   </Link>
                   <Link
                     href="/analytics"
-                    className="text-gray-300 hover:text-white px-3 py-2 text-sm font-medium"
+                    className="text-gray-300 hover:text-white px-3 py-2 text-sm font-medium transition-colors"
                   >
                     Analytics
                   </Link>
                   <Link
                     href="/faq"
-                    className="text-gray-300 hover:text-white px-3 py-2 text-sm font-medium"
+                    className="text-gray-300 hover:text-white px-3 py-2 text-sm font-medium transition-colors"
                   >
                     FAQ
                   </Link>
@@ -80,7 +69,7 @@ function Navbar() {
               <div className="flex items-center space-x-4">
                 <Link
                   href="/knowledge"
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 hover:from-blue-600 hover:via-purple-600 hover:to-pink-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-200"
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 hover:from-blue-600 hover:via-purple-600 hover:to-pink-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-200 shadow-lg shadow-purple-500/20"
                 >
                   Get Started
                 </Link>
@@ -104,7 +93,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-900`}
       >
         <Navbar />
-        <div className="pt-28">
+        <div className="pt-24">
           <KnowledgeProvider>{children}</KnowledgeProvider>
         </div>
       </body>

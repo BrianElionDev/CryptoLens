@@ -1,52 +1,52 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { useKnowledge } from "@/contexts/KnowledgeContext";
 import {
   PieChart,
   Pie,
   Cell,
   Tooltip,
-  ResponsiveContainer,
   Legend,
+  ResponsiveContainer,
 } from "recharts";
 
-interface TooltipProps {
+const COLORS = [
+  "#3B82F6", // blue-500
+  "#8B5CF6", // purple-500
+  "#EC4899", // pink-500
+  "#10B981", // emerald-500
+  "#F59E0B", // amber-500
+  "#6366F1", // indigo-500
+  "#14B8A6", // teal-500
+  "#F43F5E", // rose-500
+  "#8B5CF6", // violet-500
+  "#06B6D4", // cyan-500
+];
+
+interface CustomTooltipProps {
   active?: boolean;
-  payload?: {
+  payload?: Array<{
     name: string;
     value: number;
-    color: string;
-    dataKey?: string;
     payload: {
       name: string;
       value: number;
-      color: string;
     };
-  }[];
-  label?: string;
+  }>;
 }
 
-interface Project {
-  Coin: string;
-  Marketcap: string;
-  Rpoints: number;
-  "Total count": number;
-}
-
-interface SortedData {
-  projects: Project[];
-  total_count: number;
-  total_rpoints: number;
-}
-
-const COLORS = ["#60A5FA", "#C084FC", "#F472B6", "#34D399", "#A78BFA"];
-
-const formatLargeNumber = (value: number) => {
-  if (value >= 1e9) return `${(value / 1e9).toFixed(2)}B`;
-  if (value >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
-  if (value >= 1e3) return `${(value / 1e3).toFixed(2)}K`;
-  return value.toFixed(2);
+const CustomTooltip = ({ active, payload }: CustomTooltipProps) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-gray-800/90 backdrop-blur-sm border border-gray-700 rounded-lg p-4 shadow-xl">
+        <p className="text-cyan-200 font-medium">{payload[0].payload.name}</p>
+        <p className="text-gray-300">
+          Count: <span className="text-cyan-200">{payload[0].value}</span>
+        </p>
+      </div>
+    );
+  }
+  return null;
 };
 
 export default function AnalyticsPage() {
@@ -56,101 +56,50 @@ export default function AnalyticsPage() {
   const processedData = {
     marketCapDistribution: [] as { name: string; value: number }[],
     rPointsTrend: [] as { name: string; value: number }[],
-    categoryDistribution: [] as { name: string; value: number }[],
+    projectDistribution: [] as { name: string; value: number }[],
     topProjects: [] as { name: string; rpoints: number }[],
   };
 
   if (knowledge && knowledge.length > 0) {
-    // Calculate coin distribution
-    const coinMap = new Map<string, number>();
+    // Calculate project distribution
+    const projectMap = new Map<string, number>();
+    const marketCapMap = new Map<string, number>();
+    const rPointsMap = new Map<string, number>();
 
-    for (const item of knowledge) {
-      if (!item.sorted) continue;
+    knowledge.forEach((item) => {
+      if (item.llm_answer && item.llm_answer.projects) {
+        item.llm_answer.projects.forEach((project) => {
+          // Project distribution
+          projectMap.set(
+            project.coin_or_project,
+            (projectMap.get(project.coin_or_project) || 0) + 1
+          );
 
-      try {
-        const parsedData = JSON.parse(item.sorted);
-        // The data is already the projects array
-        const projects = parsedData;
+          // Market cap distribution
+          marketCapMap.set(
+            project.marketcap,
+            (marketCapMap.get(project.marketcap) || 0) + 1
+          );
 
-        if (!Array.isArray(projects)) continue;
-
-        for (const project of projects) {
-          if (project && project.Coin && project["Total count"]) {
-            const currentCount = coinMap.get(project.Coin) || 0;
-            coinMap.set(project.Coin, currentCount + project["Total count"]);
-          }
-        }
-      } catch (e) {
-        console.error("Error parsing sorted data:", e);
+          // R-points distribution
+          rPointsMap.set(
+            project.coin_or_project,
+            (rPointsMap.get(project.coin_or_project) || 0) + project.rpoints
+          );
+        });
       }
-    }
+    });
 
-    // console.log("Final coin map:", coinMap);
-
-    // Convert to array and sort by frequency
-    processedData.categoryDistribution = Array.from(coinMap.entries())
+    // Convert to arrays and sort
+    processedData.projectDistribution = Array.from(projectMap.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 10)
       .map(([name, value]) => ({ name, value }));
 
-    // Calculate market cap distribution
-    const marketCapMap = new Map<string, number>();
-    knowledge.forEach((item) => {
-      if (item.sorted) {
-        try {
-          const data = JSON.parse(item.sorted) as SortedData;
-          if (data && data.projects) {
-            data.projects.forEach((project) => {
-              // Convert market cap string to number (remove B, M, K suffixes)
-              const capStr = project.Marketcap.replace(/[BMK]/g, "");
-              let cap = parseFloat(capStr);
-              if (!isNaN(cap)) {
-                if (project.Marketcap.includes("B")) cap *= 1e9;
-                else if (project.Marketcap.includes("M")) cap *= 1e6;
-                else if (project.Marketcap.includes("K")) cap *= 1e3;
-                marketCapMap.set(
-                  project.Coin,
-                  (marketCapMap.get(project.Coin) || 0) + cap
-                );
-              }
-            });
-          }
-        } catch (e) {
-          console.error("Error parsing sorted data:", e);
-        }
-      }
-    });
-
-    // Convert to array and sort by market cap
     processedData.marketCapDistribution = Array.from(marketCapMap.entries())
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
       .map(([name, value]) => ({ name, value }));
 
-    // Calculate R-points trend
-    const rPointsMap = new Map<string, number>();
-    knowledge.forEach((item) => {
-      if (item.sorted) {
-        try {
-          const data = JSON.parse(item.sorted) as SortedData;
-          if (data && data.projects) {
-            data.projects.forEach((project) => {
-              const points = parseFloat(project.Rpoints.toString());
-              if (!isNaN(points)) {
-                rPointsMap.set(
-                  String(project.Coin),
-                  (rPointsMap.get(String(project.Coin)) || 0) + points
-                );
-              }
-            });
-          }
-        } catch (e) {
-          console.error("Error parsing sorted data:", e);
-        }
-      }
-    });
-
-    // Convert to array and sort by R-points
     processedData.rPointsTrend = Array.from(rPointsMap.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
@@ -159,7 +108,6 @@ export default function AnalyticsPage() {
         value: Math.round(value * 100) / 100,
       }));
 
-    // Get top projects by R-points
     processedData.topProjects = Array.from(rPointsMap.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
@@ -169,38 +117,20 @@ export default function AnalyticsPage() {
       }));
   }
 
-  const CustomTooltip = ({ active, payload, label }: TooltipProps) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-gray-900/90 backdrop-blur-sm border border-blue-500/20 p-4 rounded-lg shadow-xl">
-          <p className="text-cyan-200 font-medium">{label}</p>
-          {payload.map((entry, index) => {
-            const value = entry.value;
-            return (
-              <p key={index} style={{ color: entry.color }} className="text-sm">
-                {entry.name}:{" "}
-                {value >= 1e6
-                  ? formatLargeNumber(value)
-                  : value.toLocaleString()}
-              </p>
-            );
-          })}
-        </div>
-      );
-    }
-    return null;
-  };
-
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900">
+        <div className="text-cyan-200 text-xl">Loading analytics...</div>
       </div>
     );
   }
 
   if (error) {
-    return <div className="text-cyan-200 text-center py-8">{error}</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900">
+        <div className="text-red-400 text-xl">Error: {error}</div>
+      </div>
+    );
   }
 
   return (
@@ -208,34 +138,12 @@ export default function AnalyticsPage() {
       {/* Background Animation */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -inset-[10px] opacity-50">
-          <motion.div
-            animate={{
-              scale: [1, 1.2, 1],
-              opacity: [0.3, 0.6, 0.3],
-            }}
-            transition={{
-              duration: 8,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-            className="absolute top-1/4 -left-20 w-[500px] h-[500px] bg-gradient-to-r from-purple-600/40 to-pink-600/40 rounded-full mix-blend-multiply filter blur-xl"
-          />
-          <motion.div
-            animate={{
-              scale: [1.2, 1, 1.2],
-              opacity: [0.5, 0.3, 0.5],
-            }}
-            transition={{
-              duration: 8,
-              repeat: Infinity,
-              ease: "easeInOut",
-              delay: 1,
-            }}
-            className="absolute top-1/3 -right-20 w-[600px] h-[600px] bg-gradient-to-r from-cyan-600/40 to-blue-600/40 rounded-full mix-blend-multiply filter blur-xl"
-          />
+          <div className="absolute top-1/4 -left-20 w-[500px] h-[500px] bg-purple-500/30 rounded-full mix-blend-multiply filter blur-xl" />
+          <div className="absolute top-1/3 -right-20 w-[600px] h-[600px] bg-cyan-500/30 rounded-full mix-blend-multiply filter blur-xl" />
+          <div className="absolute -bottom-32 left-1/3 w-[600px] h-[600px] bg-pink-500/30 rounded-full mix-blend-multiply filter blur-xl" />
         </div>
-        <div className="absolute inset-0 bg-gradient-to-t from-gray-900/90 via-gray-900/50 to-transparent" />
-        <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-20" />
+        <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 via-gray-900/50 to-transparent" />
+        <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
       </div>
 
       {/* Main Content */}
@@ -262,47 +170,47 @@ export default function AnalyticsPage() {
               {knowledge?.length || 0}
             </p>
           </div>
-          {/* Total Coins */}
+          {/* Total Projects */}
           <div className="p-6 rounded-xl bg-gradient-to-r from-purple-900/20 to-pink-900/20 border border-purple-500/20 backdrop-blur-sm">
             <h3 className="text-gray-400 text-sm font-medium mb-2">
-              Unique Coins
+              Unique Projects
             </h3>
             <p className="text-2xl font-bold text-cyan-200">
-              {processedData.categoryDistribution.length}
+              {processedData.projectDistribution.length}
             </p>
           </div>
-          {/* Most Frequent Coin */}
+          {/* Most Frequent Project */}
           <div className="p-6 rounded-xl bg-gradient-to-r from-pink-900/20 to-red-900/20 border border-pink-500/20 backdrop-blur-sm">
             <h3 className="text-gray-400 text-sm font-medium mb-2">
-              Most Frequent Coin
+              Most Frequent Project
             </h3>
             <p className="text-2xl font-bold text-cyan-200">
-              {processedData.categoryDistribution[0]?.name || "N/A"}
+              {processedData.projectDistribution[0]?.name || "N/A"}
             </p>
           </div>
-          {/* Top Frequency */}
+          {/* Top R Points */}
           <div className="p-6 rounded-xl bg-gradient-to-r from-red-900/20 to-orange-900/20 border border-red-500/20 backdrop-blur-sm">
             <h3 className="text-gray-400 text-sm font-medium mb-2">
-              Top Frequency
+              Highest R Points
             </h3>
             <p className="text-2xl font-bold text-cyan-200">
-              {processedData.categoryDistribution[0]?.value || 0}
+              {processedData.rPointsTrend[0]?.value || 0}
             </p>
           </div>
         </div>
 
         {/* Chart Grid */}
         <div className="grid grid-cols-1 gap-8">
-          {/* Coin Distribution */}
+          {/* Project Distribution */}
           <div className="p-6 rounded-xl bg-gradient-to-r from-pink-900/20 via-red-900/20 to-orange-900/20 border border-pink-500/20 backdrop-blur-sm">
             <h2 className="text-xl font-bold text-cyan-200 mb-4">
-              Top 10 Coins Distribution
+              Top 10 Projects Distribution
             </h2>
             <div className="h-[600px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={processedData.categoryDistribution}
+                    data={processedData.projectDistribution}
                     cx="50%"
                     cy="50%"
                     innerRadius={120}
@@ -314,7 +222,7 @@ export default function AnalyticsPage() {
                       `${name} (${value} - ${(percent * 100).toFixed(1)}%)`
                     }
                   >
-                    {processedData.categoryDistribution.map((entry, index) => (
+                    {processedData.projectDistribution.map((entry, index) => (
                       <Cell
                         key={`cell-${index}`}
                         fill={COLORS[index % COLORS.length]}
