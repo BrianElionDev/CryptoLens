@@ -1,21 +1,109 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useKnowledge } from "@/contexts/KnowledgeContext";
 import KnowledgeBase from "@/components/KnowledgeBase";
 import { KnowledgeItem } from "@/types/knowledge";
+import { useKnowledgeStore } from "@/stores/knowledgeStore";
+
+type DateFilterType = "all" | "today" | "week" | "month" | "year";
+type SortByType = "date" | "title" | "channel";
 
 export default function KnowledgePage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { knowledge, isLoading, error } = useKnowledge();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterChannel, setFilterChannel] = useState("all");
-  const [dateFilter, setDateFilter] = useState<
-    "all" | "today" | "week" | "month" | "year"
-  >("all");
-  const [sortBy, setSortBy] = useState<"date" | "title" | "channel">("date");
-  const [expandedItem, setExpandedItem] = useState<KnowledgeItem | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
+  const [expandedItem, setExpandedItem] = useState<KnowledgeItem | null>(null);
+
+  const {
+    searchTerm,
+    filterChannel,
+    dateFilter,
+    sortBy,
+    currentPage,
+    setSearchTerm,
+    setFilterChannel,
+    setDateFilter,
+    setSortBy,
+    setCurrentPage,
+  } = useKnowledgeStore();
+
+  // Initialize from URL params on first load
+  useEffect(() => {
+    const search = searchParams.get("search");
+    const channel = searchParams.get("channel");
+    const date = searchParams.get("date");
+    const sort = searchParams.get("sort");
+    const page = searchParams.get("page");
+
+    if (search) setSearchTerm(search);
+    if (channel) setFilterChannel(channel);
+    if (date && ["all", "today", "week", "month", "year"].includes(date)) {
+      setDateFilter(date as DateFilterType);
+    }
+    if (sort && ["date", "title", "channel"].includes(sort)) {
+      setSortBy(sort as SortByType);
+    }
+    if (page) setCurrentPage(Number(page));
+  }, [
+    searchParams,
+    setSearchTerm,
+    setFilterChannel,
+    setDateFilter,
+    setSortBy,
+    setCurrentPage,
+  ]);
+
+  // Update URL when filters change
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (searchTerm) {
+      params.set("search", searchTerm);
+    } else {
+      params.delete("search");
+    }
+
+    if (filterChannel !== "all") {
+      params.set("channel", filterChannel);
+    } else {
+      params.delete("channel");
+    }
+
+    if (dateFilter !== "all") {
+      params.set("date", dateFilter);
+    } else {
+      params.delete("date");
+    }
+
+    if (sortBy !== "date") {
+      params.set("sort", sortBy);
+    } else {
+      params.delete("sort");
+    }
+
+    if (currentPage !== 1) {
+      params.set("page", currentPage.toString());
+    } else {
+      params.delete("page");
+    }
+
+    const newUrl = `${window.location.pathname}${
+      params.toString() ? `?${params.toString()}` : ""
+    }`;
+
+    router.push(newUrl, { scroll: false });
+  }, [
+    searchTerm,
+    filterChannel,
+    dateFilter,
+    sortBy,
+    currentPage,
+    searchParams,
+    router,
+  ]);
 
   // Get unique channels from the channel name field
   const channels = Array.from(
@@ -75,6 +163,16 @@ export default function KnowledgePage() {
       return channelA.localeCompare(channelB);
     });
 
+  // Fix the pagination button handlers
+  const handlePrevPage = () => setCurrentPage(Math.max(1, currentPage - 1));
+  const handleNextPage = () =>
+    setCurrentPage(
+      Math.min(
+        Math.ceil(filteredAndSortedItems.length / itemsPerPage),
+        currentPage + 1
+      )
+    );
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -105,8 +203,8 @@ export default function KnowledgePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col space-y-4">
             {/* Top Bar */}
-            <div className="flex items-center justify-between mb-6">
-              <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 animate-gradient-x">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <h1 className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500">
                 Knowledge Base
               </h1>
               <div className="flex items-center space-x-3">
@@ -119,29 +217,31 @@ export default function KnowledgePage() {
             </div>
 
             {/* Search Bar */}
-            <div className="relative group mb-6">
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg blur opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-              <div className="relative flex items-center">
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search knowledge..."
-                  className="w-full bg-gray-900/60 bg-gradient-to-r from-blue-600/10 to-purple-600/10 border border-blue-500/30 rounded-lg py-3 pl-12 pr-4 text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all duration-200 hover:from-blue-600/20 hover:to-purple-600/20"
-                />
-                <svg
-                  className="absolute left-4 w-5 h-5 text-gray-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            <div className="w-full">
+              <div className="relative group mb-6">
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg blur opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                <div className="relative flex items-center">
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Search knowledge..."
+                    className="w-full bg-gray-900/60 bg-gradient-to-r from-blue-600/10 to-purple-600/10 border border-blue-500/30 rounded-lg py-3 pl-12 pr-4 text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all duration-200 hover:from-blue-600/20 hover:to-purple-600/20"
                   />
-                </svg>
+                  <svg
+                    className="absolute left-4 w-5 h-5 text-gray-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                </div>
               </div>
             </div>
 
@@ -153,7 +253,7 @@ export default function KnowledgePage() {
                 <select
                   value={dateFilter}
                   onChange={(e) =>
-                    setDateFilter(e.target.value as typeof dateFilter)
+                    setDateFilter(e.target.value as DateFilterType)
                   }
                   className="relative z-10 w-full appearance-none bg-gray-900/60 bg-gradient-to-r from-green-600/10 to-emerald-600/10 border border-green-500/30 rounded-lg py-2 px-4 text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-400/50 transition-all duration-200 hover:from-green-600/20 hover:to-emerald-600/20"
                 >
@@ -233,7 +333,7 @@ export default function KnowledgePage() {
                 <div className="absolute inset-0 bg-gradient-to-r from-pink-500/20 to-red-500/20 rounded-lg blur opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                 <select
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                  onChange={(e) => setSortBy(e.target.value as SortByType)}
                   className="relative z-10 w-full appearance-none bg-gray-900/60 bg-gradient-to-r from-pink-600/10 to-red-600/10 border border-pink-500/30 rounded-lg py-2 px-4 text-gray-200 focus:outline-none focus:ring-2 focus:ring-pink-500/50 focus:border-pink-400/50 transition-all duration-200 hover:from-pink-600/20 hover:to-red-600/20"
                 >
                   <option value="date" className="bg-gray-900 text-gray-200">
@@ -278,9 +378,9 @@ export default function KnowledgePage() {
 
         {/* Pagination */}
         {filteredAndSortedItems.length > itemsPerPage && (
-          <div className="mt-8 flex justify-center items-center space-x-4">
+          <div className="mt-8 flex flex-wrap justify-center items-center gap-4">
             <button
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              onClick={handlePrevPage}
               disabled={currentPage === 1}
               className="px-6 py-3 rounded-xl bg-gray-900/80 backdrop-blur-sm text-gray-200 hover:text-white transition-all duration-200 border border-blue-500/30 hover:border-blue-400/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 group"
             >
@@ -319,14 +419,7 @@ export default function KnowledgePage() {
             </div>
 
             <button
-              onClick={() =>
-                setCurrentPage((p) =>
-                  Math.min(
-                    Math.ceil(filteredAndSortedItems.length / itemsPerPage),
-                    p + 1
-                  )
-                )
-              }
+              onClick={handleNextPage}
               disabled={
                 currentPage ===
                 Math.ceil(filteredAndSortedItems.length / itemsPerPage)
