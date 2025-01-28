@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useKnowledge } from "@/contexts/KnowledgeContext";
 import KnowledgeBase from "@/components/KnowledgeBase";
@@ -10,7 +10,7 @@ import { useKnowledgeStore } from "@/stores/knowledgeStore";
 type DateFilterType = "all" | "today" | "week" | "month" | "year";
 type SortByType = "date" | "title" | "channel";
 
-export default function KnowledgePage() {
+function KnowledgePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { knowledge, isLoading, error } = useKnowledge();
@@ -566,5 +566,19 @@ export default function KnowledgePage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function KnowledgePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+      }
+    >
+      <KnowledgePageContent />
+    </Suspense>
   );
 }
