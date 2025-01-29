@@ -6,12 +6,10 @@ import axios from "axios";
 export default function FAQ() {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError("");
     setAnswer("");
 
@@ -29,8 +27,6 @@ export default function FAQ() {
     } catch (err) {
       setError("Failed to get answer. Please try again.");
       console.error("FAQ Error:", err);
-    } finally {
-      setLoading(false);
     }
   };
 
