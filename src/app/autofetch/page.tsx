@@ -3,11 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
+import { Toaster, toast } from "react-hot-toast";
 
 export default function AutofetchPage() {
   const router = useRouter();
-  const [channelName, setChannelName] = useState("");
-  const [startDate, setStartDate] = useState("");
+  const [channelHandler, setChannelHandler] = useState("");
+  const [totalResults, setTotalResults] = useState("");
+  const [publishedBefore, setPublishedBefore] = useState("");
+  const [publishedAfter, setPublishedAfter] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -16,16 +19,27 @@ export default function AutofetchPage() {
     setIsSubmitting(true);
     setError("");
 
+    const promise = axios.post(
+      "https://hook.us2.make.com/ngpyvadtax553g1rlsn2cs5soca8ilnv",
+      {
+        channel_handler: channelHandler.trim(),
+        total_results: parseInt(totalResults),
+        published_before: new Date(publishedBefore).toISOString(),
+        published_after: new Date(publishedAfter).toISOString(),
+      }
+    );
+
+    toast.promise(promise, {
+      loading: "Starting automation...",
+      success: () => {
+        router.push("/knowledge");
+        return "Automation started successfully!";
+      },
+      error: "Failed to start automation",
+    });
+
     try {
-      const formattedDate = new Date(startDate).toISOString();
-
-      // Replace with your make.com webhook URL
-      await axios.post("YOUR_MAKE_WEBHOOK_URL", {
-        channelName: channelName.trim(),
-        startDate: formattedDate,
-      });
-
-      router.push("/knowledge");
+      await promise;
     } catch (error) {
       console.error("Error:", error);
       setError("Failed to start automation. Please try again.");
@@ -36,6 +50,32 @@ export default function AutofetchPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900 relative overflow-hidden">
+      <Toaster
+        position="top-center"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: "#1F2937",
+            color: "#fff",
+            border: "1px solid rgba(59, 130, 246, 0.2)",
+          },
+          success: {
+            icon: "🚀",
+            style: {
+              background: "rgba(16, 185, 129, 0.1)",
+              border: "1px solid rgba(16, 185, 129, 0.2)",
+            },
+          },
+          error: {
+            icon: "❌",
+            style: {
+              background: "rgba(239, 68, 68, 0.1)",
+              border: "1px solid rgba(239, 68, 68, 0.2)",
+            },
+          },
+        }}
+      />
+
       {/* Animated background elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute inset-0">
@@ -48,7 +88,7 @@ export default function AutofetchPage() {
       </div>
 
       {/* Content */}
-      <div className="relative z-10 w-[95%] max-w-md mx-auto pt-20 px-4">
+      <div className="relative z-10 w-[95%] max-w-md mx-auto pt-5 px-4">
         <div className="relative group">
           {/* Card glow effect */}
           <div className="absolute -inset-1 bg-gradient-to-r from-blue-600/50 via-purple-600/50 to-pink-600/50 rounded-2xl blur-lg group-hover:blur-xl transition-all duration-300 opacity-70"></div>
@@ -89,74 +129,82 @@ export default function AutofetchPage() {
                   htmlFor="channel"
                   className="block text-sm font-medium text-gray-300 mb-2"
                 >
-                  Channel Name
+                  Channel Handler
                 </label>
-                <div className="relative group">
-                  <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg blur opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  <input
-                    type="text"
-                    id="channel"
-                    value={channelName}
-                    onChange={(e) => setChannelName(e.target.value)}
-                    placeholder="@channel_name"
-                    className="relative z-10 w-full bg-gray-900/60 border border-gray-700/50 rounded-lg py-3 px-4 text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50"
-                    required
-                  />
-                </div>
+                <input
+                  type="text"
+                  id="channel"
+                  value={channelHandler}
+                  onChange={(e) => setChannelHandler(e.target.value)}
+                  placeholder="@channel_name"
+                  className="relative z-10 w-full bg-gray-900/60 border border-gray-700/50 rounded-lg py-3 px-4 text-gray-200"
+                  required
+                />
               </div>
 
               <div>
                 <label
-                  htmlFor="date"
+                  htmlFor="total"
                   className="block text-sm font-medium text-gray-300 mb-2"
                 >
-                  Start Date
+                  Number of Videos
                 </label>
-                <div className="relative group">
-                  <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-lg blur opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  <input
-                    type="date"
-                    id="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="relative z-10 w-full bg-gray-900/60 border border-gray-700/50 rounded-lg py-3 px-4 text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-400/50 [color-scheme:dark]"
-                    required
-                  />
-                </div>
+                <input
+                  type="text"
+                  id="total"
+                  value={totalResults}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (/^\d*$/.test(value)) {
+                      setTotalResults(value);
+                    }
+                  }}
+                  placeholder="10"
+                  className="relative z-10 w-full bg-gray-900/60 border border-gray-700/50 rounded-lg py-3 px-4 text-gray-200"
+                  required
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="after"
+                  className="block text-sm font-medium text-gray-300 mb-2"
+                >
+                  Published After
+                </label>
+                <input
+                  type="date"
+                  id="after"
+                  value={publishedAfter}
+                  onChange={(e) => setPublishedAfter(e.target.value)}
+                  className="relative z-10 w-full bg-gray-900/60 border border-gray-700/50 rounded-lg py-3 px-4 text-gray-200 [color-scheme:dark]"
+                  required
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="before"
+                  className="block text-sm font-medium text-gray-300 mb-2"
+                >
+                  Published Before
+                </label>
+                <input
+                  type="date"
+                  id="before"
+                  value={publishedBefore}
+                  onChange={(e) => setPublishedBefore(e.target.value)}
+                  className="relative z-10 w-full bg-gray-900/60 border border-gray-700/50 rounded-lg py-3 px-4 text-gray-200 [color-scheme:dark]"
+                  required
+                />
               </div>
 
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg py-3 px-4 hover:from-blue-600 hover:to-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-purple-500/25"
+                className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg py-3 px-4"
               >
-                {isSubmitting ? (
-                  <span className="flex items-center justify-center">
-                    <svg
-                      className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
-                    Starting Automation...
-                  </span>
-                ) : (
-                  "Start Automation"
-                )}
+                {isSubmitting ? "Starting Automation..." : "Start Automation"}
               </button>
             </form>
           </div>
