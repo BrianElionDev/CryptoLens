@@ -35,79 +35,42 @@ export default function FAQ() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="bg-gray-900/40 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-gray-800 hover:border-blue-500/50 transition-duration-300">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label
-              htmlFor="question"
-              className="block text-sm font-medium text-cyan-200"
-            >
-              Ask about crypto markets, sentiment, or get investment advice
-            </label>
-            <div className="mt-2 relative">
-              <input
-                type="text"
-                id="question"
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                className="block w-full rounded-xl bg-gray-800/60 border-gray-700 text-gray-100 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500/50 placeholder-gray-400"
-                placeholder="e.g., What's the current sentiment for Bitcoin?"
-                required
-              />
-              <button
-                type="submit"
-                disabled={loading}
-                className="absolute right-2 top-2 inline-flex items-center px-4 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-all duration-200"
-              >
-                {loading ? (
-                  <div className="flex items-center">
-                    <svg
-                      className="animate-spin h-4 w-4 mr-2"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                        fill="none"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                    Processing
-                  </div>
-                ) : (
-                  "Ask AI"
-                )}
-              </button>
-            </div>
+    <div className="w-full">
+      <form onSubmit={handleSubmit} className="w-full">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg blur opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            <input
+              type="text"
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              placeholder="Ask anything about crypto..."
+              className="w-full bg-gray-900/60 bg-gradient-to-r from-blue-600/10 to-purple-600/10 border border-blue-500/30 rounded-lg py-3 px-4 text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all duration-200"
+            />
           </div>
-        </form>
+          <button
+            type="submit"
+            className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-lg text-white bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 hover:from-blue-600 hover:via-purple-600 hover:to-pink-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-200 shadow-lg shadow-purple-500/20 whitespace-nowrap"
+          >
+            Ask Question
+          </button>
+        </div>
+      </form>
 
-        {error && (
-          <div className="mt-4 text-red-400 bg-red-900/20 rounded-lg p-3 border border-red-900/50">
-            {error}
-          </div>
-        )}
+      {error && (
+        <div className="mt-4 text-red-400 bg-red-900/20 rounded-lg p-3 border border-red-900/50">
+          {error}
+        </div>
+      )}
 
-        {answer && (
-          <div className="mt-6 bg-gray-800/40 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
-            <h3 className="text-lg font-medium text-cyan-200 mb-3">
-              Analysis:
-            </h3>
-            <div className="prose prose-invert max-w-none text-gray-300 whitespace-pre-wrap">
-              {answer}
-            </div>
+      {answer && (
+        <div className="mt-6 bg-gray-800/40 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
+          <h3 className="text-lg font-medium text-cyan-200 mb-3">Analysis:</h3>
+          <div className="prose prose-invert max-w-none text-gray-300 whitespace-pre-wrap">
+            {answer}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

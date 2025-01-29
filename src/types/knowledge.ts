@@ -15,7 +15,6 @@ export interface LLMAnswer {
 
 export interface Project {
   coin_or_project: string;
-  marketcap: "micro" | "small" | "medium" | "large";
+  marketcap: string;
   rpoints: number;
-  total_count?: number;
 }

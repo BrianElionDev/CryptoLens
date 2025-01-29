@@ -23,15 +23,22 @@ export default function KnowledgeBase({ items }: KnowledgeBaseProps) {
       return (
         <div className="mt-4 space-y-4">
           <div className="flex justify-between text-sm text-gray-400">
-            <span>Total Projects: {total_count}</span>
-            <span>Total R Points: {total_rpoints}</span>
+            <div className="flex gap-8">
+              <span>Total Coins: {total_count}</span>
+              <span className="border-l border-gray-600 pl-8">
+                Count: {total_count}
+              </span>
+              <span className="border-l border-gray-600 pl-8">
+                Total R Points: {total_rpoints}
+              </span>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-700/30 backdrop-blur-sm">
               <thead className="bg-gray-800/30">
                 <tr>
                   <th className="px-4 py-2 text-left text-xs font-medium text-cyan-200 uppercase tracking-wider">
-                    Project
+                    Coins
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-cyan-200 uppercase tracking-wider">
                     Market Cap
@@ -42,73 +49,69 @@ export default function KnowledgeBase({ items }: KnowledgeBaseProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-700/30 bg-gray-800/10">
-                {projects.map((project, index) => {
-                  const isTopProject = top3Projects.some(
-                    (p) => p.coin_or_project === project.coin_or_project
-                  );
-                  return (
-                    <tr
-                      key={index}
-                      className={`transition-all duration-200 backdrop-blur-sm ${
-                        isTopProject ? "bg-blue-900/10" : "hover:bg-gray-700/10"
-                      }`}
-                    >
-                      <td className="px-4 py-2 text-sm">
-                        <div className="flex items-center gap-2">
-                          {isTopProject && (
-                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500/20 text-xs font-medium text-blue-300">
-                              {top3Projects.findIndex(
-                                (p) =>
-                                  p.coin_or_project === project.coin_or_project
-                              ) + 1}
+                {[...projects]
+                  .sort((a, b) => Number(b.rpoints) - Number(a.rpoints))
+                  .map((project, index) => {
+                    const isTopProject = top3Projects.some(
+                      (p) => p.coin_or_project === project.coin_or_project
+                    );
+                    return (
+                      <tr
+                        key={index}
+                        className={`transition-all duration-200 backdrop-blur-sm ${
+                          isTopProject
+                            ? "bg-blue-900/10"
+                            : "hover:bg-gray-700/10"
+                        }`}
+                      >
+                        <td className="px-4 py-2 text-sm">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`font-medium ${
+                                isTopProject ? "text-blue-200" : "text-gray-300"
+                              }`}
+                            >
+                              {project.coin_or_project}
                             </span>
-                          )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-2 text-sm">
                           <span
-                            className={`font-medium ${
-                              isTopProject ? "text-blue-200" : "text-gray-300"
+                            className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                              project.marketcap === "large"
+                                ? "bg-green-900/50 text-green-300 border border-green-500/20"
+                                : project.marketcap === "medium"
+                                ? "bg-yellow-900/50 text-yellow-300 border border-yellow-500/20"
+                                : "bg-red-900/50 text-red-300 border border-red-500/20"
                             }`}
                           >
-                            {project.coin_or_project}
+                            {project.marketcap}
                           </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-2 text-sm">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                            project.marketcap === "large"
-                              ? "bg-green-900/50 text-green-300 border border-green-500/20"
-                              : project.marketcap === "medium"
-                              ? "bg-yellow-900/50 text-yellow-300 border border-yellow-500/20"
-                              : "bg-red-900/50 text-red-300 border border-red-500/20"
-                          }`}
-                        >
-                          {project.marketcap}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2 text-sm">
-                        <div className="flex items-center gap-2">
-                          <div className="h-1.5 w-12 bg-gray-700/50 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full ${
-                                isTopProject ? "bg-blue-500" : "bg-gray-500"
-                              }`}
-                              style={{
-                                width: `${(project.rpoints / 10) * 100}%`,
-                              }}
-                            />
+                        </td>
+                        <td className="px-4 py-2 text-sm">
+                          <div className="flex items-center gap-2">
+                            <div className="h-1.5 w-12 bg-gray-700/50 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${
+                                  isTopProject ? "bg-blue-500" : "bg-gray-500"
+                                }`}
+                                style={{
+                                  width: `${(project.rpoints / 10) * 100}%`,
+                                }}
+                              />
+                            </div>
+                            <span
+                              className={
+                                isTopProject ? "text-blue-200" : "text-gray-300"
+                              }
+                            >
+                              {project.rpoints}
+                            </span>
                           </div>
-                          <span
-                            className={
-                              isTopProject ? "text-blue-200" : "text-gray-300"
-                            }
-                          >
-                            {project.rpoints}
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                        </td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </table>
           </div>
@@ -203,9 +206,7 @@ export default function KnowledgeBase({ items }: KnowledgeBaseProps) {
                   {new Date(item.date).toLocaleDateString()}
                 </div>
                 <div className="flex items-center gap-2 text-sm text-gray-400 backdrop-blur-sm px-2 py-0.5 rounded-full bg-gray-800/30">
-                  <span>{item.llm_answer.total_count} Projects</span>
-                  <span>•</span>
-                  <span>{item.llm_answer.total_rpoints} R Points</span>
+                  <span>{item.llm_answer.projects.length} Coins</span>
                 </div>
               </div>
             </div>
