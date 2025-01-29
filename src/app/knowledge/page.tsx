@@ -262,13 +262,13 @@ function KnowledgePageContent() {
                     Today
                   </option>
                   <option value="week" className="bg-gray-900 text-gray-200">
-                    Last Week
+                    Recent 7 Days
                   </option>
                   <option value="month" className="bg-gray-900 text-gray-200">
-                    Last Month
+                    Recent 30 Days
                   </option>
                   <option value="year" className="bg-gray-900 text-gray-200">
-                    Last Year
+                    Recent 12 Months
                   </option>
                 </select>
                 <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none z-20">
