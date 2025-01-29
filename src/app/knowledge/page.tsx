@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useKnowledge } from "@/contexts/KnowledgeContext";
 import KnowledgeBase from "@/components/KnowledgeBase";
-import { KnowledgeItem } from "@/types/knowledge";
 import { useKnowledgeStore } from "@/stores/knowledgeStore";
 
 type DateFilterType = "all" | "today" | "week" | "month" | "year";
@@ -15,7 +14,6 @@ function KnowledgePageContent() {
   const searchParams = useSearchParams();
   const { knowledge, isLoading, error } = useKnowledge();
   const itemsPerPage = 9;
-  const [expandedItem, setExpandedItem] = useState<KnowledgeItem | null>(null);
 
   const {
     searchTerm,
@@ -444,127 +442,6 @@ function KnowledgePageContent() {
           </div>
         )}
       </main>
-
-      {/* Modal */}
-      {expandedItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => setExpandedItem(null)}
-          />
-
-          {/* Modal Content */}
-          <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl bg-gradient-to-br from-gray-900/95 via-gray-800/95 to-gray-900/95 border border-gray-700/50 shadow-2xl">
-            {/* Modal Header */}
-            <div className="sticky top-0 z-10 backdrop-blur-xl bg-gray-900/70 border-b border-gray-700/50 p-6 rounded-t-2xl">
-              <div className="flex justify-between items-start">
-                <div className="space-y-2">
-                  <h3 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400">
-                    {expandedItem.video_title}
-                  </h3>
-                  <div className="flex items-center space-x-3">
-                    <span className="px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400 text-sm">
-                      {expandedItem["channel name"]}
-                    </span>
-                    <span className="px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm">
-                      {new Date(expandedItem.date).toLocaleDateString()}
-                    </span>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setExpandedItem(null)}
-                  className="p-2 rounded-lg hover:bg-gray-700/50 transition-colors"
-                >
-                  <svg
-                    className="w-6 h-6 text-gray-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-6 space-y-6">
-              {/* Projects Table */}
-              <div className="rounded-xl overflow-hidden border border-gray-700/50 bg-gray-800/30">
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-700/50">
-                    <thead>
-                      <tr className="bg-gray-800/50">
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                          Project
-                        </th>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                          Market Cap
-                        </th>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                          R-Points
-                        </th>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                          Total Count
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-700/50">
-                      {[...expandedItem.llm_answer.projects]
-                        .sort((a, b) => (b.rpoints || 0) - (a.rpoints || 0))
-                        .map((project, index) => (
-                          <tr
-                            key={index}
-                            className="hover:bg-gray-700/30 transition-colors"
-                          >
-                            <td className="px-6 py-4 whitespace-nowrap text-sm">
-                              <span className="font-medium text-blue-400">
-                                {project.coin_or_project}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm">
-                              <span className="text-emerald-400">
-                                {project.marketcap}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm">
-                              <span className="text-purple-400">
-                                {project.rpoints}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm">
-                              <span className="px-2.5 py-1 rounded-full bg-gray-700/50 text-gray-300">
-                                {project.total_count || 1}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Transcript */}
-              <div className="space-y-3">
-                <h4 className="text-lg font-medium text-gray-300">
-                  Transcript
-                </h4>
-                <div className="p-4 rounded-xl bg-gray-800/30 border border-gray-700/50">
-                  <p className="text-gray-300 text-sm leading-relaxed">
-                    {expandedItem.transcript}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
