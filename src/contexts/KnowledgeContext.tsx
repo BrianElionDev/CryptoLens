@@ -9,19 +9,12 @@ interface KnowledgeContextType {
   error: string | null;
   expandedCard: string | null;
   setExpandedCard: (id: string | null) => void;
-  refreshKnowledge: () => Promise<void>;
+  refetch: () => Promise<void>;
 }
 
-const KnowledgeContext = createContext<KnowledgeContextType>({
-  knowledge: [],
-  isLoading: false,
-  error: null,
-  expandedCard: null,
-  setExpandedCard: () => {},
-  refreshKnowledge: async () => {},
-});
-
-export const useKnowledge = () => useContext(KnowledgeContext);
+const KnowledgeContext = createContext<KnowledgeContextType | undefined>(
+  undefined
+);
 
 export function KnowledgeProvider({ children }: { children: React.ReactNode }) {
   const [knowledge, setKnowledge] = useState<KnowledgeItem[]>([]);
@@ -59,13 +52,19 @@ export function KnowledgeProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Initial fetch
   useEffect(() => {
     fetchKnowledge();
   }, []);
 
-  const refreshKnowledge = async () => {
-    await fetchKnowledge();
-  };
+  // Polling effect - fetch every 30 seconds
+  useEffect(() => {
+    const pollInterval = setInterval(() => {
+      fetchKnowledge();
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(pollInterval);
+  }, []);
 
   return (
     <KnowledgeContext.Provider
@@ -75,10 +74,18 @@ export function KnowledgeProvider({ children }: { children: React.ReactNode }) {
         error,
         expandedCard,
         setExpandedCard,
-        refreshKnowledge,
+        refetch: fetchKnowledge,
       }}
     >
       {children}
     </KnowledgeContext.Provider>
   );
+}
+
+export function useKnowledge() {
+  const context = useContext(KnowledgeContext);
+  if (context === undefined) {
+    throw new Error("useKnowledge must be used within a KnowledgeProvider");
+  }
+  return context;
 }

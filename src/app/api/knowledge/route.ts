@@ -11,6 +11,43 @@ if (!supabaseUrl || !supabaseServiceKey) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+// Add interface for raw data
+interface RawDataItem {
+  id?: string;
+  date: string;
+  transcript: string;
+  video_title: string;
+  channel_name: string;
+  link?: string;
+  llm_answer: {
+    projects: Array<{
+      coin_or_project: string;
+      Marketcap?: string;
+      marketcap?: string;
+      Rpoints?: number;
+      rpoints?: number;
+      "Total count"?: number;
+      total_count?: number;
+      category?: string[];
+    }>;
+    total_count?: number;
+    total_Rpoints?: number;
+    total_rpoints?: number;
+  }[];
+}
+
+// Add interface for project structure
+interface RawProject {
+  coin_or_project: string;
+  Marketcap?: string;
+  marketcap?: string;
+  Rpoints?: number;
+  rpoints?: number;
+  "Total count"?: number;
+  total_count?: number;
+  category?: string[];
+}
+
 export async function GET() {
   try {
     const { data: knowledgeData, error } = await supabase
@@ -32,6 +69,7 @@ export async function GET() {
       transcript: item.transcript,
       video_title: item.video_title,
       "channel name": item["channel name"],
+      link: item.link || "",
       llm_answer: item.llm_answer,
     }));
 
@@ -56,19 +94,24 @@ export async function POST(request: Request) {
       throw new Error("Invalid data format: expected an object");
     }
 
-    // Handle both array and object formats
-    const dataArray = Array.isArray(data) ? data : Object.values(data);
+    // Update the data transformation
+    const dataArray = Array.isArray(data)
+      ? data
+      : Object.entries(data).map(([id, item]) => ({
+          ...(item as RawDataItem),
+          id,
+        }));
 
     const transformedData = dataArray.map((item, index) => {
       if (!item || typeof item !== "object") {
         throw new Error(`Item ${index} is not an object`);
       }
 
-      // Check for fields and log their presence
+      // Check for required fields
       const missingFields = [];
       if (!item.transcript) missingFields.push("transcript");
-      if (!item["video title"]) missingFields.push("video title");
-      if (!item["channel name"]) missingFields.push("channel name");
+      if (!item.video_title) missingFields.push("video_title");
+      if (!item.channel_name) missingFields.push("channel_name");
       if (!item.llm_answer) missingFields.push("llm_answer");
 
       if (missingFields.length > 0) {
@@ -79,121 +122,38 @@ export async function POST(request: Request) {
         );
       }
 
-      // Parse llm_answer if it's a string
-      let llm_answer;
-      try {
-        llm_answer =
-          typeof item.llm_answer === "string"
-            ? JSON.parse(item.llm_answer.replace(/([{,]\s*)(\w+):/g, '$1"$2":'))
-            : item.llm_answer;
-      } catch (parseError: unknown) {
-        console.error(`JSON Parse Error for item ${index}:`, parseError);
-        throw new Error(
-          `Failed to parse llm_answer JSON in item ${index}: ${
-            parseError instanceof Error
-              ? parseError.message
-              : String(parseError)
-          }`
-        );
-      }
+      // Parse llm_answer if it's an array
+      const llm_answer = Array.isArray(item.llm_answer)
+        ? item.llm_answer[0]
+        : item.llm_answer;
 
-      if (!llm_answer.projects || !Array.isArray(llm_answer.projects)) {
-        throw new Error(
-          `Invalid llm_answer.projects in item ${index}: expected an array`
-        );
-      }
-
-      interface RawProject {
-        "coin or project"?: string;
-        coin_or_project?: string;
-        marketcap?: string;
-        Marketcap?: string;
-        rpoints?: number;
-        Rpoints?: number;
-        "Total count"?: number;
-      }
-
-      // Validate and fix project structure
-      llm_answer.projects = llm_answer.projects.map((project: RawProject) => {
-        // Fix any malformed keys
-        const fixedProject: RawProject = {};
-        Object.entries(project).forEach(([key, value]) => {
-          // Remove any stray colons and normalize quotes
-          const fixedKey = key.replace(/[:"']/g, "");
-          fixedProject[fixedKey as keyof RawProject] = value;
-        });
-        return fixedProject;
-      });
-
+      // Update project transformation
       const transformedProjects = llm_answer.projects.map(
-        (project: RawProject, projectIndex: number) => {
-          const coin_or_project =
-            project["coin or project"] || project.coin_or_project;
-          if (!coin_or_project) {
-            throw new Error(
-              `Missing coin_or_project in project ${projectIndex} of item ${index}`
-            );
-          }
-          const marketcap = project.marketcap || project.Marketcap;
-          if (!marketcap) {
-            throw new Error(
-              `Missing marketcap in project ${projectIndex} of item ${index}`
-            );
-          }
-          const rpoints = project.rpoints || project.Rpoints;
-          if (typeof rpoints !== "number") {
-            throw new Error(
-              `Invalid rpoints in project ${projectIndex} of item ${index}: expected a number`
-            );
-          }
-
-          return {
-            coin_or_project,
-            marketcap: marketcap.toLowerCase(),
-            rpoints,
-          };
-        }
+        (project: RawProject) => ({
+          coin_or_project: project.coin_or_project,
+          marketcap: (
+            project.Marketcap ||
+            project.marketcap ||
+            ""
+          ).toLowerCase(),
+          rpoints: project.Rpoints || project.rpoints || 0,
+          total_count: project["Total count"] || project.total_count || 0,
+          category: project.category || [],
+        })
       );
 
-      // Handle case-insensitive field names and spaces
-      let total_count =
-        llm_answer.total_count ||
-        llm_answer.Total_count ||
-        llm_answer["total count"] ||
-        llm_answer["Total Count"];
-
-      let total_rpoints =
-        llm_answer.total_rpoints ||
-        llm_answer.Total_rpoints ||
-        llm_answer["total rpoints"] ||
-        llm_answer["Total rpoints"];
-
-      // If totals are not provided, calculate them from projects
-      if (typeof total_count !== "number") {
-        total_count = llm_answer.projects.reduce(
-          (sum: number, p: { "Total count"?: number }) =>
-            sum + (p["Total count"] || 1),
-          0
-        );
-      }
-
-      if (typeof total_rpoints !== "number") {
-        total_rpoints = llm_answer.projects.reduce(
-          (sum: number, p: { Rpoints?: number; rpoints?: number }) =>
-            sum + (p.Rpoints || p.rpoints || 0),
-          0
-        );
-      }
-
+      // Update the return object
       return {
         date: item.date || new Date().toISOString(),
         transcript: item.transcript,
-        video_title: item["video title"],
-        "channel name": item["channel name"],
+        video_title: item.video_title,
+        "channel name": item.channel_name,
+        link: item.link || "",
         llm_answer: {
           projects: transformedProjects,
-          total_count,
-          total_rpoints,
+          total_count: llm_answer.total_count || 0,
+          total_rpoints:
+            llm_answer.total_Rpoints || llm_answer.total_rpoints || 0,
         },
         created_at: new Date().toISOString(),
       };
@@ -210,10 +170,21 @@ export async function POST(request: Request) {
       throw new Error(`Failed to delete existing data: ${deleteError.message}`);
     }
 
+    // Before the insert, transform the data to match the table structure
+    const dbData = transformedData.map((item) => ({
+      date: item.date,
+      transcript: item.transcript,
+      video_title: item.video_title,
+      "channel name": item["channel name"],
+      link: item.link,
+      llm_answer: item.llm_answer,
+      created_at: item.created_at,
+    }));
+
     // Insert new data
     const { error: insertError } = await supabase
       .from("knowledge")
-      .insert(transformedData);
+      .insert(dbData);
 
     if (insertError) {
       console.error("Insert Error:", insertError);

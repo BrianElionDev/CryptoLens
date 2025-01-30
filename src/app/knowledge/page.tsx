@@ -13,7 +13,7 @@ function KnowledgePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { knowledge, isLoading, error } = useKnowledge();
-  const itemsPerPage = 9;
+  const itemsPerPage = 25;
 
   const {
     searchTerm,
@@ -155,10 +155,10 @@ function KnowledgePageContent() {
       if (sortBy === "title") {
         return a.video_title.localeCompare(b.video_title);
       }
-      // Sort by channel
-      const channelA = a["channel name"] || "Unknown";
-      const channelB = b["channel name"] || "Unknown";
-      return channelA.localeCompare(channelB);
+      if (sortBy === "channel") {
+        return (a["channel name"] || "").localeCompare(b["channel name"] || "");
+      }
+      return 0;
     });
 
   // Fix the pagination button handlers

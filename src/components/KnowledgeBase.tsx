@@ -13,7 +13,7 @@ export default function KnowledgeBase({ items }: KnowledgeBaseProps) {
 
   const renderLLMAnswer = (llm_answer: KnowledgeItem["llm_answer"]) => {
     try {
-      const { projects, total_count, total_rpoints } = llm_answer;
+      const { projects } = llm_answer;
 
       // Sort projects by rpoints in descending order
       const top3Projects = [...projects]
@@ -22,17 +22,6 @@ export default function KnowledgeBase({ items }: KnowledgeBaseProps) {
 
       return (
         <div className="mt-4 space-y-4">
-          <div className="flex justify-between text-sm text-gray-400">
-            <div className="flex gap-8">
-              <span>Total Coins: {total_count}</span>
-              <span className="border-l border-gray-600 pl-8">
-                Count: {total_count}
-              </span>
-              <span className="border-l border-gray-600 pl-8">
-                Total R Points: {total_rpoints}
-              </span>
-            </div>
-          </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-700/30 backdrop-blur-sm">
               <thead className="bg-gray-800/30">
@@ -42,6 +31,9 @@ export default function KnowledgeBase({ items }: KnowledgeBaseProps) {
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-cyan-200 uppercase tracking-wider">
                     Market Cap
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-cyan-200 uppercase tracking-wider">
+                    Total Count
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-cyan-200 uppercase tracking-wider">
                     R Points
@@ -65,15 +57,13 @@ export default function KnowledgeBase({ items }: KnowledgeBaseProps) {
                         }`}
                       >
                         <td className="px-4 py-2 text-sm">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`font-medium ${
-                                isTopProject ? "text-blue-200" : "text-gray-300"
-                              }`}
-                            >
-                              {project.coin_or_project}
-                            </span>
-                          </div>
+                          <span
+                            className={`font-medium ${
+                              isTopProject ? "text-blue-200" : "text-gray-300"
+                            }`}
+                          >
+                            {project.coin_or_project}
+                          </span>
                         </td>
                         <td className="px-4 py-2 text-sm">
                           <span
@@ -89,25 +79,22 @@ export default function KnowledgeBase({ items }: KnowledgeBaseProps) {
                           </span>
                         </td>
                         <td className="px-4 py-2 text-sm">
-                          <div className="flex items-center gap-2">
-                            <div className="h-1.5 w-12 bg-gray-700/50 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full rounded-full ${
-                                  isTopProject ? "bg-blue-500" : "bg-gray-500"
-                                }`}
-                                style={{
-                                  width: `${(project.rpoints / 10) * 100}%`,
-                                }}
-                              />
-                            </div>
-                            <span
-                              className={
-                                isTopProject ? "text-blue-200" : "text-gray-300"
-                              }
-                            >
-                              {project.rpoints}
-                            </span>
-                          </div>
+                          <span
+                            className={
+                              isTopProject ? "text-blue-200" : "text-gray-300"
+                            }
+                          >
+                            {project.total_count}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-sm">
+                          <span
+                            className={
+                              isTopProject ? "text-blue-200" : "text-gray-300"
+                            }
+                          >
+                            {project.rpoints}
+                          </span>
                         </td>
                       </tr>
                     );
@@ -117,9 +104,8 @@ export default function KnowledgeBase({ items }: KnowledgeBaseProps) {
           </div>
         </div>
       );
-    } catch (error) {
-      console.error("Error rendering LLM answer:", error);
-      return null;
+    } catch {
+      return <div>Error rendering LLM answer</div>;
     }
   };
 
@@ -205,8 +191,22 @@ export default function KnowledgeBase({ items }: KnowledgeBaseProps) {
                 <div className="text-sm text-gray-400 backdrop-blur-sm px-2 py-0.5 rounded-full bg-gray-800/30">
                   {new Date(item.date).toLocaleDateString()}
                 </div>
-                <div className="flex items-center gap-2 text-sm text-gray-400 backdrop-blur-sm px-2 py-0.5 rounded-full bg-gray-800/30">
-                  <span>{item.llm_answer.projects.length} Coins</span>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={item.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-blue-400 hover:text-blue-300 transition-colors backdrop-blur-sm px-2 py-0.5 rounded-full bg-gray-800/30"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!item.link) e.preventDefault();
+                    }}
+                  >
+                    {item.link ? "Watch Video" : "No Link"}
+                  </a>
+                  <div className="text-sm text-gray-400 backdrop-blur-sm px-2 py-0.5 rounded-full bg-gray-800/30">
+                    <span>{item.llm_answer.projects.length} Coins</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -225,8 +225,17 @@ export default function KnowledgeBase({ items }: KnowledgeBaseProps) {
                 date: "",
                 transcript: "",
                 "channel name": "Unknown",
+                link: "",
                 llm_answer: {
-                  projects: [],
+                  projects: [
+                    {
+                      coin_or_project: "",
+                      marketcap: "",
+                      rpoints: 0,
+                      total_count: 0,
+                      category: [],
+                    },
+                  ],
                   total_count: 0,
                   total_rpoints: 0,
                 },

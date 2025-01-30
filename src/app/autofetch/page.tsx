@@ -8,7 +8,7 @@ import { Toaster, toast } from "react-hot-toast";
 export default function AutofetchPage() {
   const router = useRouter();
   const [channelHandler, setChannelHandler] = useState("");
-  const [totalResults, setTotalResults] = useState("");
+
   const [publishedBefore, setPublishedBefore] = useState("");
   const [publishedAfter, setPublishedAfter] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -23,7 +23,6 @@ export default function AutofetchPage() {
       "https://hook.us2.make.com/ngpyvadtax553g1rlsn2cs5soca8ilnv",
       {
         channel_handler: channelHandler.trim(),
-        total_results: parseInt(totalResults),
         published_before: new Date(publishedBefore).toISOString(),
         published_after: new Date(publishedAfter).toISOString(),
       }
@@ -88,7 +87,7 @@ export default function AutofetchPage() {
       </div>
 
       {/* Content */}
-      <div className="relative z-10 w-[95%] max-w-md mx-auto pt-5 px-4">
+      <div className="relative z-10 w-[95%] max-w-md mx-auto pt-10 px-4">
         <div className="relative group">
           {/* Card glow effect */}
           <div className="absolute -inset-1 bg-gradient-to-r from-blue-600/50 via-purple-600/50 to-pink-600/50 rounded-2xl blur-lg group-hover:blur-xl transition-all duration-300 opacity-70"></div>
@@ -144,33 +143,10 @@ export default function AutofetchPage() {
 
               <div>
                 <label
-                  htmlFor="total"
-                  className="block text-sm font-medium text-gray-300 mb-2"
-                >
-                  Number of Videos
-                </label>
-                <input
-                  type="text"
-                  id="total"
-                  value={totalResults}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (/^\d*$/.test(value)) {
-                      setTotalResults(value);
-                    }
-                  }}
-                  placeholder="10"
-                  className="relative z-10 w-full bg-gray-900/60 border border-gray-700/50 rounded-lg py-3 px-4 text-gray-200"
-                  required
-                />
-              </div>
-
-              <div>
-                <label
                   htmlFor="after"
                   className="block text-sm font-medium text-gray-300 mb-2"
                 >
-                  Published After
+                  From Date
                 </label>
                 <input
                   type="date"
@@ -187,7 +163,7 @@ export default function AutofetchPage() {
                   htmlFor="before"
                   className="block text-sm font-medium text-gray-300 mb-2"
                 >
-                  Published Before
+                  To Date
                 </label>
                 <input
                   type="date"

@@ -4,6 +4,7 @@ export interface KnowledgeItem {
   transcript: string;
   video_title: string;
   "channel name": string;
+  link: string;
   llm_answer: LLMAnswer;
 }
 
@@ -17,4 +18,6 @@ export interface Project {
   coin_or_project: string;
   marketcap: string;
   rpoints: number;
+  total_count: number;
+  category: string[];
 }
