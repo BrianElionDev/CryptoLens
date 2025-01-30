@@ -53,19 +53,21 @@ export default function AnalyticsPage() {
           const projectName = project.coin_or_project;
           const rpoints = project.Rpoints || project.rpoints || 0;
 
-          // Update project trends
-          if (!data.projectTrends.has(projectName)) {
-            data.projectTrends.set(projectName, []);
-          }
-          const trendData = data.projectTrends.get(projectName)!;
+          // Update project trends - Only add dates with non-zero rpoints
+          if (rpoints > 0) {
+            if (!data.projectTrends.has(projectName)) {
+              data.projectTrends.set(projectName, []);
+            }
+            const trendData = data.projectTrends.get(projectName)!;
 
-          // Find or create entry for this date
-          let dateEntry = trendData.find((entry) => entry.date === date);
-          if (!dateEntry) {
-            dateEntry = { date, rpoints: 0 };
-            trendData.push(dateEntry);
+            // Find or create entry for this date
+            let dateEntry = trendData.find((entry) => entry.date === date);
+            if (!dateEntry) {
+              dateEntry = { date, rpoints: 0 };
+              trendData.push(dateEntry);
+            }
+            dateEntry.rpoints += rpoints;
           }
-          dateEntry.rpoints += rpoints;
 
           // Update total R-points for distribution
           const currentTotal = data.projectDistribution.find(
@@ -122,19 +124,8 @@ export default function AnalyticsPage() {
     data.projectDistribution.sort((a, b) => b.value - a.value);
     data.categoryDistribution.sort((a, b) => b.value - a.value);
 
-    // Ensure all dates for all projects
-    const allDates = new Set<string>();
+    // Sort each project's trend data by date
     data.projectTrends.forEach((trendData) => {
-      trendData.forEach((entry) => allDates.add(entry.date));
-    });
-
-    data.projectTrends.forEach((trendData) => {
-      const existingDates = new Set(trendData.map((entry) => entry.date));
-      allDates.forEach((date) => {
-        if (!existingDates.has(date)) {
-          trendData.push({ date, rpoints: 0 });
-        }
-      });
       trendData.sort(
         (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
       );
