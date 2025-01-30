@@ -1,59 +1,22 @@
 "use client";
 
 import { useKnowledge } from "@/contexts/KnowledgeContext";
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  AreaChart,
-  Area,
-} from "recharts";
+
 import { useState, useMemo, useEffect } from "react";
+import { GraphsTab } from "./components/GraphsTab";
+import { CategoriesTab } from "./components/CategoriesTab";
+import { CoinCategoriesTab } from "./components/CoinCategoriesTab";
 
-const COLORS = [
-  "#3B82F6", // blue-500
-  "#8B5CF6", // purple-500
-  "#EC4899", // pink-500
-  "#10B981", // emerald-500
-  "#F59E0B", // amber-500
-  "#6366F1", // indigo-500
-  "#14B8A6", // teal-500
-  "#F43F5E", // rose-500
-  "#8B5CF6", // violet-500
-  "#06B6D4", // cyan-500
-];
+// Add type for tab
+type TabType = "graphs" | "categories" | "coinCategories";
 
-interface CustomTooltipProps {
-  active?: boolean;
-  payload?: Array<{
-    name: string;
-    value: number;
-    payload: {
-      name: string;
-      value: number;
-    };
-  }>;
+// Add interface for raw project data
+interface RawProjectData {
+  coin_or_project: string;
+  Rpoints?: number;
+  rpoints?: number;
+  category?: string[];
 }
-
-const CustomTooltip = ({ active, payload }: CustomTooltipProps) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-gray-800/90 backdrop-blur-sm border border-gray-700 rounded-lg p-4 shadow-xl">
-        <p className="text-cyan-200 font-medium">{payload[0].payload.name}</p>
-        <p className="text-gray-300">
-          Count: <span className="text-cyan-200">{payload[0].value}</span>
-        </p>
-      </div>
-    );
-  }
-  return null;
-};
 
 export default function AnalyticsPage() {
   const { knowledge, isLoading, error } = useKnowledge();
@@ -61,61 +24,120 @@ export default function AnalyticsPage() {
   const [windowWidth, setWindowWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 640
   );
+  const [activeTab, setActiveTab] = useState<TabType>("graphs");
 
   // Process knowledge data for analytics
   const processedData = useMemo(() => {
     const data = {
       projectDistribution: [] as { name: string; value: number }[],
       projectTrends: new Map<string, { date: string; rpoints: number }[]>(),
+      categoryDistribution: [] as { name: string; value: number }[],
+      coinCategories: [] as { coin: string; categories: string[] }[],
     };
 
     if (!knowledge?.length) return data;
 
-    // Calculate total R-points per project and collect trend data
-    const projectRPoints = new Map<string, number>();
-    const projectTrends = new Map<string, Map<string, number>>();
+    // Create a Map to track unique coins and their categories
+    const coinCategoryMap = new Map<string, Set<string>>();
 
     knowledge.forEach((item) => {
       if (item.llm_answer?.projects) {
-        item.llm_answer.projects.forEach((project) => {
+        const date = new Date(item.date).toISOString().split("T")[0];
+
+        // Handle both array and object formats of llm_answer
+        const projects = Array.isArray(item.llm_answer.projects)
+          ? item.llm_answer.projects
+          : [item.llm_answer.projects];
+
+        projects.forEach((project: RawProjectData) => {
           const projectName = project.coin_or_project;
-          const rpoints = project.rpoints || 0;
+          const rpoints = project.Rpoints || project.rpoints || 0;
 
-          // Update total R-points
-          projectRPoints.set(
-            projectName,
-            (projectRPoints.get(projectName) || 0) + rpoints
-          );
-
-          // Update trend data
-          if (!projectTrends.has(projectName)) {
-            projectTrends.set(projectName, new Map());
+          // Update project trends
+          if (!data.projectTrends.has(projectName)) {
+            data.projectTrends.set(projectName, []);
           }
-          const trendMap = projectTrends.get(projectName)!;
-          trendMap.set(item.date, (trendMap.get(item.date) || 0) + rpoints);
+          const trendData = data.projectTrends.get(projectName)!;
+
+          // Find or create entry for this date
+          let dateEntry = trendData.find((entry) => entry.date === date);
+          if (!dateEntry) {
+            dateEntry = { date, rpoints: 0 };
+            trendData.push(dateEntry);
+          }
+          dateEntry.rpoints += rpoints;
+
+          // Update total R-points for distribution
+          const currentTotal = data.projectDistribution.find(
+            (p) => p.name === projectName
+          );
+          if (currentTotal) {
+            currentTotal.value += rpoints;
+          } else {
+            data.projectDistribution.push({
+              name: projectName,
+              value: rpoints,
+            });
+          }
+
+          // Update category distribution
+          if (project.category) {
+            project.category.forEach((cat) => {
+              const categoryEntry = data.categoryDistribution.find(
+                (c) => c.name === cat
+              );
+              if (categoryEntry) {
+                categoryEntry.value++;
+              } else {
+                data.categoryDistribution.push({ name: cat, value: 1 });
+              }
+            });
+          }
+
+          // Track unique categories for each coin
+          if (project.category) {
+            if (!coinCategoryMap.has(projectName)) {
+              coinCategoryMap.set(projectName, new Set());
+            }
+            project.category.forEach((cat) => {
+              coinCategoryMap.get(projectName)!.add(cat);
+            });
+          }
         });
       }
     });
 
-    // Convert to sorted array for pie chart
-    data.projectDistribution = Array.from(projectRPoints.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([name, value]) => ({
-        name,
-        value: Math.round(value * 100) / 100,
-      }));
+    // Convert coin categories map to array
+    data.coinCategories = Array.from(coinCategoryMap.entries()).map(
+      ([coin, categories]) => ({
+        coin,
+        categories: Array.from(categories),
+      })
+    );
 
-    // Convert trend data to array format
-    projectTrends.forEach((dateMap, projectName) => {
-      const trendData = Array.from(dateMap.entries())
-        .sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
-        .map(([date, rpoints]) => ({
-          date,
-          rpoints: Math.round(rpoints * 100) / 100,
-        }));
+    // Sort by coin name
+    data.coinCategories.sort((a, b) => a.coin.localeCompare(b.coin));
 
-      data.projectTrends.set(projectName, trendData);
+    // Sort distributions
+    data.projectDistribution.sort((a, b) => b.value - a.value);
+    data.categoryDistribution.sort((a, b) => b.value - a.value);
+
+    // Ensure all dates for all projects
+    const allDates = new Set<string>();
+    data.projectTrends.forEach((trendData) => {
+      trendData.forEach((entry) => allDates.add(entry.date));
+    });
+
+    data.projectTrends.forEach((trendData) => {
+      const existingDates = new Set(trendData.map((entry) => entry.date));
+      allDates.forEach((date) => {
+        if (!existingDates.has(date)) {
+          trendData.push({ date, rpoints: 0 });
+        }
+      });
+      trendData.sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
     });
 
     return data;
@@ -130,8 +152,10 @@ export default function AnalyticsPage() {
 
   // Get trend data for selected project
   const projectTrendData = useMemo(() => {
-    if (!selectedProject) return [];
-    return processedData.projectTrends.get(selectedProject) || [];
+    if (!selectedProject || !processedData.projectTrends.has(selectedProject)) {
+      return [];
+    }
+    return processedData.projectTrends.get(selectedProject)!;
   }, [selectedProject, processedData.projectTrends]);
 
   // Add this useEffect for handling window resize
@@ -188,230 +212,66 @@ export default function AnalyticsPage() {
           </p>
         </div>
 
-        {/* Stats Overview */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-8 sm:mb-12">
-          {/* Total Entries */}
-          <div className="p-4 sm:p-6 rounded-xl bg-gradient-to-r from-blue-900/20 to-purple-900/20 border border-blue-500/20 backdrop-blur-sm">
-            <h3 className="text-gray-400 text-xs sm:text-sm font-medium mb-2">
-              Total Entries
-            </h3>
-            <p className="text-lg sm:text-2xl font-bold text-cyan-200">
-              {knowledge?.length || 0}
-            </p>
-          </div>
-          {/* Total Projects */}
-          <div className="p-4 sm:p-6 rounded-xl bg-gradient-to-r from-purple-900/20 to-pink-900/20 border border-purple-500/20 backdrop-blur-sm">
-            <h3 className="text-gray-400 text-xs sm:text-sm font-medium mb-2">
-              Unique Coins
-            </h3>
-            <p className="text-lg sm:text-2xl font-bold text-cyan-200">
-              {processedData.projectDistribution.length}
-            </p>
-          </div>
-          {/* Most Frequent Project */}
-          <div className="p-4 sm:p-6 rounded-xl bg-gradient-to-r from-pink-900/20 to-red-900/20 border border-pink-500/20 backdrop-blur-sm">
-            <h3 className="text-gray-400 text-xs sm:text-sm font-medium mb-2">
-              Most Frequent Coin
-            </h3>
-            <p className="text-lg sm:text-2xl font-bold text-cyan-200">
-              {processedData.projectDistribution[0]?.name || "N/A"}
-            </p>
-          </div>
-          {/* Top R Points */}
-          <div className="p-4 sm:p-6 rounded-xl bg-gradient-to-r from-red-900/20 to-orange-900/20 border border-red-500/20 backdrop-blur-sm">
-            <h3 className="text-gray-400 text-xs sm:text-sm font-medium mb-2">
-              Highest R Points
-            </h3>
-            <p className="text-lg sm:text-2xl font-bold text-cyan-200">
-              {processedData.projectDistribution[0]?.value || 0}
-            </p>
-          </div>
+        {/* Tabs */}
+        <div className="flex space-x-4 mb-8 border-b border-gray-800">
+          <button
+            onClick={() => setActiveTab("graphs")}
+            className={`px-4 py-2 text-sm font-medium transition-colors relative ${
+              activeTab === "graphs"
+                ? "text-cyan-200"
+                : "text-gray-400 hover:text-gray-300"
+            }`}
+          >
+            Charts & Graphs
+            {activeTab === "graphs" && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-purple-500" />
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("categories")}
+            className={`px-4 py-2 text-sm font-medium transition-colors relative ${
+              activeTab === "categories"
+                ? "text-cyan-200"
+                : "text-gray-400 hover:text-gray-300"
+            }`}
+          >
+            Categories
+            {activeTab === "categories" && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-purple-500" />
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("coinCategories")}
+            className={`px-4 py-2 text-sm font-medium transition-colors relative ${
+              activeTab === "coinCategories"
+                ? "text-cyan-200"
+                : "text-gray-400 hover:text-gray-300"
+            }`}
+          >
+            Coin Categories
+            {activeTab === "coinCategories" && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-purple-500" />
+            )}
+          </button>
         </div>
 
-        {/* Chart Grid */}
-        <div className="grid grid-cols-1 gap-6 sm:gap-8">
-          {/* Project Distribution */}
-          <div className="p-4 sm:p-6 rounded-xl bg-gradient-to-r from-pink-900/20 via-red-900/20 to-orange-900/20 border border-pink-500/20 backdrop-blur-sm">
-            <h2 className="text-lg sm:text-xl font-bold text-cyan-200 mb-4">
-              Top 10 Coins by Total R-Points
-            </h2>
-            <div className="h-[400px] sm:h-[600px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={processedData.projectDistribution}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={windowWidth < 640 ? 60 : 120}
-                    outerRadius={windowWidth < 640 ? 100 : 200}
-                    fill="#8884d8"
-                    paddingAngle={5}
-                    dataKey="value"
-                    label={({ name, value, percent }) =>
-                      windowWidth < 640
-                        ? `${name.slice(0, 8)}...${(percent * 100).toFixed(1)}%`
-                        : `${name} (${value} total rpoints - ${(
-                            percent * 100
-                          ).toFixed(1)}%)`
-                    }
-                  >
-                    {processedData.projectDistribution.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={COLORS[index % COLORS.length]}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend
-                    layout={windowWidth < 640 ? "horizontal" : "vertical"}
-                    align={windowWidth < 640 ? "center" : "right"}
-                    verticalAlign={windowWidth < 640 ? "bottom" : "middle"}
-                    wrapperStyle={{
-                      paddingLeft: windowWidth < 640 ? "0" : "20px",
-                      fontSize: windowWidth < 640 ? "12px" : "14px",
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Trend Graph */}
-          <div className="p-4 sm:p-6 rounded-xl bg-gradient-to-r from-blue-900/20 via-purple-900/20 to-pink-900/20 border border-blue-500/20 backdrop-blur-sm">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-              <h2 className="text-lg sm:text-xl font-bold text-cyan-200">
-                Project R-Points Over Time
-              </h2>
-              <select
-                className="w-full sm:w-auto bg-gray-900/60 border border-gray-700/50 rounded-lg py-2 px-4 text-sm sm:text-base text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50"
-                onChange={(e) => setSelectedProject(e.target.value)}
-                value={selectedProject}
-              >
-                <option value="">Select a project</option>
-                {processedData.projectDistribution.map((project) => (
-                  <option key={project.name} value={project.name}>
-                    {project.name} ({project.value} total rpoints)
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="h-[300px] sm:h-[400px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart
-                  data={projectTrendData}
-                  margin={{
-                    top: 10,
-                    right: 10,
-                    left: windowWidth < 640 ? 0 : 20,
-                    bottom: 5,
-                  }}
-                >
-                  <defs>
-                    <linearGradient
-                      id="colorRpoints"
-                      x1="0"
-                      y1="0"
-                      x2="0"
-                      y2="1"
-                    >
-                      <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="colorLine" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#60A5FA" stopOpacity={1} />
-                      <stop offset="95%" stopColor="#3B82F6" stopOpacity={1} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="#374151"
-                    opacity={0.3}
-                  />
-                  <XAxis
-                    dataKey="date"
-                    stroke="#9CA3AF"
-                    tick={{
-                      fill: "#9CA3AF",
-                      fontSize: windowWidth < 640 ? 10 : 12,
-                    }}
-                    tickFormatter={(date) =>
-                      windowWidth < 640
-                        ? new Date(date).toLocaleDateString(undefined, {
-                            month: "numeric",
-                            day: "numeric",
-                          })
-                        : new Date(date).toLocaleDateString()
-                    }
-                    tickLine={false}
-                  />
-                  <YAxis
-                    stroke="#9CA3AF"
-                    tick={{
-                      fill: "#9CA3AF",
-                      fontSize: windowWidth < 640 ? 10 : 12,
-                    }}
-                    tickLine={false}
-                    axisLine={false}
-                    label={
-                      windowWidth < 640
-                        ? undefined
-                        : {
-                            value: "R-Points",
-                            angle: -90,
-                            position: "insideLeft",
-                            fill: "#9CA3AF",
-                            style: { textAnchor: "middle" },
-                          }
-                    }
-                  />
-                  <Tooltip
-                    content={({ active, payload, label }) => {
-                      if (active && payload && payload.length) {
-                        return (
-                          <div className="bg-gray-800/90 backdrop-blur-sm border border-gray-700/50 rounded-lg p-4 shadow-xl">
-                            <p className="text-cyan-200 font-medium mb-1">
-                              {new Date(label).toLocaleDateString()}
-                            </p>
-                            <div className="flex items-center gap-2">
-                              <div className="w-2 h-2 rounded-full bg-blue-400" />
-                              <p className="text-gray-300">
-                                R-Points:{" "}
-                                <span className="text-cyan-200 font-medium">
-                                  {payload[0].value}
-                                </span>
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      }
-                      return null;
-                    }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="rpoints"
-                    stroke="url(#colorLine)"
-                    strokeWidth={3}
-                    fill="url(#colorRpoints)"
-                    dot={{
-                      fill: "#3B82F6",
-                      stroke: "#1E40AF",
-                      strokeWidth: 2,
-                      r: 4,
-                    }}
-                    activeDot={{
-                      r: 6,
-                      fill: "#60A5FA",
-                      stroke: "#3B82F6",
-                      strokeWidth: 2,
-                    }}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
+        {/* Tab Content */}
+        {activeTab === "graphs" ? (
+          <GraphsTab
+            processedData={processedData}
+            knowledge={knowledge}
+            selectedProject={selectedProject}
+            setSelectedProject={setSelectedProject}
+            windowWidth={windowWidth}
+            projectTrendData={projectTrendData}
+          />
+        ) : activeTab === "categories" ? (
+          <CategoriesTab
+            categoryDistribution={processedData.categoryDistribution}
+          />
+        ) : (
+          <CoinCategoriesTab processedData={processedData} />
+        )}
       </div>
 
       <style jsx global>{`
