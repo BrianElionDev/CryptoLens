@@ -5,7 +5,10 @@ import { motion } from "framer-motion";
 
 const Features = () => {
   const scrollToFeatures = () => {
-    document.getElementById("features")?.scrollIntoView({ behavior: "smooth" });
+    const featuresElement = document.getElementById("features");
+    if (featuresElement) {
+      featuresElement.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   };
 
   const cardVariants = {
@@ -16,17 +19,17 @@ const Features = () => {
   };
 
   return (
-    <>
-      <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
+    <div className="h-full flex flex-col">
+      <div className="flex flex-col sm:flex-row gap-2 justify-center lg:justify-start mb-2">
         <motion.div whileHover="hover" variants={cardVariants}>
           <Link
             href="/faq"
-            className="group relative bg-gray-900/40 backdrop-blur-sm rounded-xl p-4 border border-gray-800 hover:border-blue-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/20 block w-full sm:w-[240px]"
+            className="group relative bg-gray-900/40 backdrop-blur-sm rounded-md p-4 border border-gray-800 hover:border-blue-500/50 transition-all duration-300 block w-full sm:w-[220px] h-[72px]"
           >
             <div className="flex items-center space-x-3">
-              <div className="p-2.5 bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-lg group-hover:from-blue-600/30 group-hover:to-purple-600/30 transition-all duration-300">
+              <div className="p-2 bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-md">
                 <svg
-                  className="w-6 h-6 text-cyan-200 group-hover:text-cyan-300 transition-colors"
+                  className="w-5 h-5 text-cyan-200 group-hover:text-cyan-300 transition-colors"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -39,28 +42,27 @@ const Features = () => {
                   />
                 </svg>
               </div>
-              <div>
-                <h3 className="text-lg font-medium text-cyan-200 group-hover:text-cyan-100">
+              <div className="flex flex-col justify-center">
+                <h3 className="text-base font-medium text-cyan-200 whitespace-nowrap">
                   Ask AI
                 </h3>
-                <p className="text-sm text-gray-400 group-hover:text-gray-300">
-                  Get personalized crypto insights
+                <p className="text-sm text-gray-400 whitespace-nowrap">
+                  Get crypto insights
                 </p>
               </div>
             </div>
-            <div className="absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-blue-500/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
           </Link>
         </motion.div>
 
         <motion.div whileHover="hover" variants={cardVariants}>
           <Link
             href="/knowledge"
-            className="group relative bg-gray-900/40 backdrop-blur-sm rounded-xl p-4 border border-gray-800 hover:border-blue-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/20 block w-full sm:w-[240px]"
+            className="group relative bg-gray-900/40 backdrop-blur-sm rounded-md p-3 border border-gray-800 hover:border-blue-500/50 transition-all duration-300 block w-full sm:w-[220px] h-[75px]"
           >
             <div className="flex items-center space-x-3">
-              <div className="p-2.5 bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-lg group-hover:from-blue-600/30 group-hover:to-purple-600/30 transition-all duration-300">
+              <div className="p-2 bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-md">
                 <svg
-                  className="w-6 h-6 text-cyan-200 group-hover:text-cyan-300 transition-colors"
+                  className="w-5 h-5 text-cyan-200 group-hover:text-cyan-300 transition-colors"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -73,16 +75,15 @@ const Features = () => {
                   />
                 </svg>
               </div>
-              <div>
-                <h3 className="text-lg font-medium text-cyan-200 group-hover:text-cyan-100">
+              <div className="flex flex-col justify-center">
+                <h3 className="text-base font-medium text-cyan-200 whitespace-nowrap">
                   Knowledge Base
                 </h3>
-                <p className="text-sm text-gray-400 group-hover:text-gray-300">
-                  Explore curated market analysis
+                <p className="text-sm text-gray-400 whitespace-nowrap">
+                  Explore market analysis
                 </p>
               </div>
             </div>
-            <div className="absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-blue-500/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
           </Link>
         </motion.div>
 
@@ -98,15 +99,15 @@ const Features = () => {
 
       <div
         id="features"
-        className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8 lg:mt-10"
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1.5 flex-1"
       >
         <motion.div
-          whileHover={{ scale: 1.03 }}
-          className="bg-gray-800/30 backdrop-blur-md p-4 rounded-xl border border-cyan-900/50 hover:border-cyan-700/50 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/5"
+          whileHover={{ scale: 1.01 }}
+          className="bg-gray-800/30 backdrop-blur-md p-2.5 rounded-md border border-cyan-900/50 hover:border-cyan-700/50 transition-all duration-300 flex flex-col h-32"
         >
-          <div className="w-12 h-12 bg-cyan-500/10 rounded-lg flex items-center justify-center mb-3">
+          <div className="w-6 h-6 bg-cyan-500/10 rounded-md flex items-center justify-center mb-1.5">
             <svg
-              className="w-6 h-6 text-cyan-400"
+              className="w-4 h-4 text-cyan-400"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -119,21 +120,23 @@ const Features = () => {
               />
             </svg>
           </div>
-          <h3 className="text-base font-semibold text-cyan-200 mb-1.5">
-            Real-Time Market Analysis
-          </h3>
-          <p className="text-sm text-gray-300 leading-relaxed">
-            Stay ahead with instant market trends and AI-powered analysis.
-          </p>
+          <div className="flex-1 flex flex-col justify-center">
+            <h3 className="text-xs font-medium text-cyan-200 mb-1">
+              Real-Time Market Analysis
+            </h3>
+            <p className="text-xs text-gray-300 leading-tight">
+              Stay ahead with instant market trends and AI-powered analysis.
+            </p>
+          </div>
         </motion.div>
 
         <motion.div
-          whileHover={{ scale: 1.03 }}
-          className="bg-gray-800/30 backdrop-blur-md p-4 rounded-xl border border-purple-900/50 hover:border-purple-700/50 transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/5"
+          whileHover={{ scale: 1.01 }}
+          className="bg-gray-800/30 backdrop-blur-md p-2.5 rounded-md border border-purple-900/50 hover:border-purple-700/50 transition-all duration-300 flex flex-col h-32"
         >
-          <div className="w-12 h-12 bg-purple-500/10 rounded-lg flex items-center justify-center mb-3">
+          <div className="w-6 h-6 bg-purple-500/10 rounded-md flex items-center justify-center mb-1.5">
             <svg
-              className="w-6 h-6 text-purple-400"
+              className="w-4 h-4 text-purple-400"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -146,22 +149,24 @@ const Features = () => {
               />
             </svg>
           </div>
-          <h3 className="text-base font-semibold text-purple-200 mb-1.5">
-            Smart Sentiment Analysis
-          </h3>
-          <p className="text-sm text-gray-300 leading-relaxed">
-            Understand market sentiment through AI-powered analysis of social
-            media, news, and trading patterns.
-          </p>
+          <div className="flex-1 flex flex-col justify-center">
+            <h3 className="text-xs font-medium text-purple-200 mb-1">
+              Smart Sentiment Analysis
+            </h3>
+            <p className="text-xs text-gray-300 leading-tight">
+              Understand market sentiment through AI-powered analysis of social
+              media, news, and trading patterns.
+            </p>
+          </div>
         </motion.div>
 
         <motion.div
-          whileHover={{ scale: 1.03 }}
-          className="bg-gray-800/30 backdrop-blur-md p-4 rounded-xl border border-pink-900/50 hover:border-pink-700/50 transition-all duration-300 hover:shadow-lg hover:shadow-pink-500/5"
+          whileHover={{ scale: 1.01 }}
+          className="bg-gray-800/30 backdrop-blur-md p-2.5 rounded-md border border-pink-900/50 hover:border-pink-700/50 transition-all duration-300 flex flex-col h-32"
         >
-          <div className="w-12 h-12 bg-pink-500/10 rounded-lg flex items-center justify-center mb-3">
+          <div className="w-6 h-6 bg-pink-500/10 rounded-md flex items-center justify-center mb-1.5">
             <svg
-              className="w-6 h-6 text-pink-400"
+              className="w-4 h-4 text-pink-400"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -174,16 +179,18 @@ const Features = () => {
               />
             </svg>
           </div>
-          <h3 className="text-base font-semibold text-pink-200 mb-1.5">
-            Personalized Investment Insights
-          </h3>
-          <p className="text-sm text-gray-300 leading-relaxed">
-            Get tailored investment recommendations based on your preferences
-            and market conditions.
-          </p>
+          <div className="flex-1 flex flex-col justify-center">
+            <h3 className="text-xs font-medium text-pink-200 mb-1">
+              Personalized Investment Insights
+            </h3>
+            <p className="text-xs text-gray-300 leading-tight">
+              Get tailored investment recommendations based on your preferences
+              and market conditions.
+            </p>
+          </div>
         </motion.div>
       </div>
-    </>
+    </div>
   );
 };
 
