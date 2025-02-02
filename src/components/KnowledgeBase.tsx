@@ -38,6 +38,9 @@ export default function KnowledgeBase({ items }: KnowledgeBaseProps) {
                   <th className="px-4 py-2 text-left text-xs font-medium text-cyan-200 uppercase tracking-wider">
                     R Points
                   </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-cyan-200 uppercase tracking-wider">
+                    Categories
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-700/30 bg-gray-800/10">
@@ -95,6 +98,18 @@ export default function KnowledgeBase({ items }: KnowledgeBaseProps) {
                           >
                             {project.rpoints}
                           </span>
+                        </td>
+                        <td className="px-4 py-2 text-sm">
+                          <div className="flex flex-wrap gap-1">
+                            {project.category?.map((cat: string, i: number) => (
+                              <span
+                                key={i}
+                                className="px-2 py-0.5 rounded-full text-xs bg-gray-900/50 text-gray-300 border border-gray-700/50"
+                              >
+                                {cat}
+                              </span>
+                            )) || "-"}
+                          </div>
                         </td>
                       </tr>
                     );

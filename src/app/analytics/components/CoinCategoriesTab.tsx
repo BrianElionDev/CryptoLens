@@ -94,7 +94,7 @@ export const CoinCategoriesTab = ({
           <thead>
             <tr className="border-b border-gray-800">
               <th className="py-4 px-6 text-left text-sm font-medium text-gray-400 bg-gray-900/40">
-                Coin/Project
+                Coin
               </th>
               <th className="py-4 px-6 text-left text-sm font-medium text-gray-400 bg-gray-900/40">
                 Categories

@@ -8,6 +8,7 @@ import React, {
   useCallback,
 } from "react";
 import { KnowledgeItem } from "@/types/knowledge";
+import { toast } from "react-hot-toast";
 
 interface KnowledgeContextType {
   knowledge: KnowledgeItem[];
@@ -67,9 +68,25 @@ export function KnowledgeProvider({ children }: { children: React.ReactNode }) {
 
       if (JSON.stringify(data.knowledge) !== JSON.stringify(knowledge)) {
         setKnowledge(data.knowledge);
+        toast.success("New knowledge data received!", {
+          icon: "🔄",
+          style: {
+            background: "rgba(16, 185, 129, 0.2)",
+            border: "1px solid rgba(16, 185, 129, 0.5)",
+            color: "#E5E7EB",
+          },
+        });
       }
     } catch (err) {
       console.error("Error polling knowledge:", err);
+      toast.error("Failed to fetch updates", {
+        icon: "❌",
+        style: {
+          background: "rgba(239, 68, 68, 0.2)",
+          border: "1px solid rgba(239, 68, 68, 0.5)",
+          color: "#E5E7EB",
+        },
+      });
     }
   }, [knowledge]);
 

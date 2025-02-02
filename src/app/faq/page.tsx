@@ -5,7 +5,7 @@ import Link from "next/link";
 
 export default function FAQPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900 relative">
+    <div className="min-h-screen pt-20 bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900 relative">
       {/* Background Animation */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -inset-[10px] opacity-50">
