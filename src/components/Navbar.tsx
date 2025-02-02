@@ -32,10 +32,22 @@ export default function Navbar() {
                   Knowledge
                 </Link>
                 <Link
+                  href="/channels"
+                  className="text-gray-300 hover:text-white px-3 py-2 text-sm font-medium transition-colors"
+                >
+                  Channels
+                </Link>
+                <Link
                   href="/analytics"
                   className="text-gray-300 hover:text-white px-3 py-2 text-sm font-medium transition-colors"
                 >
                   Analytics
+                </Link>
+                <Link
+                  href="/categories"
+                  className="text-gray-300 hover:text-white px-3 py-2 text-sm font-medium transition-colors"
+                >
+                  Categories
                 </Link>
                 <Link
                   href="/autofetch"
@@ -117,11 +129,25 @@ export default function Navbar() {
                 Knowledge
               </Link>
               <Link
+                href="/channels"
+                className="block px-3 py-2 rounded-lg text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700/50 transition-colors"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Channels
+              </Link>
+              <Link
                 href="/analytics"
                 className="block px-3 py-2 rounded-lg text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700/50 transition-colors"
                 onClick={() => setIsMenuOpen(false)}
               >
                 Analytics
+              </Link>
+              <Link
+                href="/categories"
+                className="block px-3 py-2 rounded-lg text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700/50 transition-colors"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Categories
               </Link>
               <Link
                 href="/autofetch"

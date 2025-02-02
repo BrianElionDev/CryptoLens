@@ -33,8 +33,8 @@ export default function AutofetchPage() {
       success: () => {
         setTimeout(() => {
           router.push("/knowledge");
-        }, 4000);
-        return "Automation started successfully!";
+        }, 5000);
+        return "Automation started successfully! It is runnning in the background and will take a few minutes to complete.";
       },
       error: "Failed to start automation",
     });
@@ -50,7 +50,7 @@ export default function AutofetchPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900 relative overflow-hidden">
+    <div className="min-h-screen pt-24 bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900 relative overflow-hidden">
       <Toaster
         position="top-center"
         toastOptions={{
