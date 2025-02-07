@@ -1,14 +1,12 @@
+import { useState, useMemo, useEffect } from "react";
 import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
-  AreaChart,
-  Area,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
 } from "recharts";
 import { KnowledgeItem } from "@/types/knowledge";
 
@@ -24,165 +22,101 @@ interface GraphsTabProps {
   projectTrendData: { date: string; rpoints: number }[];
 }
 
-export const GraphsTab = ({
-  processedData,
-  selectedProject,
-  setSelectedProject,
-  windowWidth,
-  projectTrendData,
-}: GraphsTabProps) => {
+export const GraphsTab = ({ processedData, knowledge }: GraphsTabProps) => {
+  const [selectedProjectState, setSelectedProjectState] = useState("");
+
+  // Set initial selected project
+  useEffect(() => {
+    if (processedData.projectDistribution.length > 0 && !selectedProjectState) {
+      setSelectedProjectState(processedData.projectDistribution[0].name);
+    }
+  }, [processedData.projectDistribution, selectedProjectState]);
+
+  // Get trend data for selected project
+  const projectTrendDataState = useMemo(() => {
+    if (!selectedProjectState || !knowledge) return [];
+
+    // Create a map of dates to rpoints for the selected project
+    const trendMap = new Map<string, number>();
+
+    knowledge.forEach((entry) => {
+      const date = new Date(entry.date).toLocaleDateString();
+      entry.llm_answer.projects.forEach((project) => {
+        if (project.coin_or_project === selectedProjectState) {
+          const rpoints = Number(project.rpoints || 0);
+          trendMap.set(date, (trendMap.get(date) || 0) + rpoints);
+        }
+      });
+    });
+
+    // Convert map to array and sort by date
+    return Array.from(trendMap.entries())
+      .map(([date, rpoints]) => ({ date, rpoints }))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [selectedProjectState, knowledge]);
+
+  const top10Projects = processedData.projectDistribution.slice(0, 10);
+
   return (
-    <>
-      {/* Stats Overview */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-8 sm:mb-12">
-        {/* Total Entries */}
-
-        {/* Other stats cards... */}
+    <div className="space-y-8">
+      {/* Project Selection */}
+      <div className="bg-gray-900/50 rounded-xl p-6 backdrop-blur-sm border border-gray-800/50">
+        <h3 className="text-lg font-semibold text-cyan-200 mb-4">
+          Top 10 Projects by R-Points
+        </h3>
+        <select
+          value={selectedProjectState}
+          onChange={(e) => setSelectedProjectState(e.target.value)}
+          className="w-full bg-gray-800/50 text-gray-200 border border-gray-700/50 rounded-lg py-2 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+        >
+          {top10Projects.map((project) => (
+            <option key={project.name} value={project.name}>
+              {project.name} ({project.value} R-Points)
+            </option>
+          ))}
+        </select>
       </div>
 
-      {/* Chart Grid */}
-      <div className="grid grid-cols-1 gap-6 sm:gap-8">
-        {/* Pie Chart */}
-        <div className="bg-gray-900/40 backdrop-blur-sm rounded-xl border border-gray-800/50 p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-medium text-indigo-300">
-              Top 10 Coins by R-Points
-            </h3>
-          </div>
-          <div className="h-[400px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={processedData.projectDistribution.slice(0, 10)}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={windowWidth < 640 ? 60 : 100}
-                  outerRadius={windowWidth < 640 ? 100 : 160}
-                  fill="#8884d8"
-                  paddingAngle={5}
-                  dataKey="value"
-                  label={({ name, value, percent }) =>
-                    windowWidth < 640
-                      ? `${name.slice(0, 8)}...${(percent * 100).toFixed(1)}%`
-                      : `${name} (${value.toLocaleString()})`
-                  }
-                  labelLine={{ stroke: "#6b7280", strokeWidth: 1 }}
-                >
-                  {processedData.projectDistribution
-                    .slice(0, 10)
-                    .map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={`hsl(${(index * 25 + 220) % 360}, 70%, 60%)`}
-                      />
-                    ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#1f2937",
-                    border: "1px solid rgba(107, 114, 128, 0.3)",
-                    borderRadius: "0.5rem",
-                    padding: "0.75rem",
-                  }}
-                  formatter={(value: number) => [
-                    value.toLocaleString(),
-                    "R-Points",
-                  ]}
-                />
-                <Legend
-                  formatter={(value) =>
-                    value.length > 20 ? `${value.slice(0, 20)}...` : value
-                  }
-                  wrapperStyle={{
-                    fontSize: "12px",
-                    color: "#9ca3af",
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Area Chart */}
-        <div className="bg-gray-900/40 backdrop-blur-sm rounded-xl border border-gray-800/50 p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-medium text-indigo-300">
-              R-Points Timeline
-            </h3>
-            <select
-              className="w-full sm:w-auto bg-gray-900/60 border border-gray-700/50 rounded-lg py-2 px-4 text-sm sm:text-base text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50"
-              onChange={(e) => setSelectedProject(e.target.value)}
-              value={selectedProject}
+      {/* Trend Chart */}
+      <div className="bg-gray-900/50 rounded-xl p-6 backdrop-blur-sm border border-gray-800/50">
+        <h3 className="text-lg font-semibold text-cyan-200 mb-4">
+          R-Points Trend for {selectedProjectState}
+        </h3>
+        <div className="h-[400px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart
+              data={projectTrendDataState}
+              margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
             >
-              <option value="">Select a project</option>
-              {processedData.projectDistribution.slice(0, 10).map((project) => (
-                <option key={project.name} value={project.name}>
-                  {project.name} ({project.value} total rpoints)
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={projectTrendData}
-                margin={{
-                  top: 10,
-                  right: 10,
-                  left: 0,
-                  bottom: 0,
+              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+              <XAxis
+                dataKey="date"
+                stroke="#9ca3af"
+                tick={{ fill: "#9ca3af" }}
+              />
+              <YAxis stroke="#9ca3af" tick={{ fill: "#9ca3af" }} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "rgba(17, 24, 39, 0.8)",
+                  border: "1px solid rgba(59, 130, 246, 0.5)",
+                  borderRadius: "0.5rem",
+                  backdropFilter: "blur(8px)",
                 }}
-              >
-                <defs>
-                  <linearGradient id="colorRPoints" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis
-                  dataKey="date"
-                  stroke="#6b7280"
-                  fontSize={12}
-                  tickLine={false}
-                  tickFormatter={(value) =>
-                    new Date(value).toLocaleDateString()
-                  }
-                />
-                <YAxis
-                  stroke="#6b7280"
-                  fontSize={12}
-                  tickLine={false}
-                  tickFormatter={(value) => value.toLocaleString()}
-                />
-                <Tooltip
-                  cursor={{ stroke: "#6b7280", strokeWidth: 1 }}
-                  contentStyle={{
-                    backgroundColor: "#1f2937",
-                    border: "1px solid rgba(107, 114, 128, 0.3)",
-                    borderRadius: "0.5rem",
-                    padding: "0.75rem",
-                  }}
-                  labelFormatter={(value) =>
-                    new Date(value).toLocaleDateString()
-                  }
-                  formatter={(value: number) => [
-                    value.toLocaleString(),
-                    "R-Points",
-                  ]}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="rpoints"
-                  stroke="#6366f1"
-                  strokeWidth={2}
-                  fillOpacity={1}
-                  fill="url(#colorRPoints)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+                labelStyle={{ color: "#e5e7eb" }}
+                itemStyle={{ color: "#93c5fd" }}
+              />
+              <Line
+                type="monotone"
+                dataKey="rpoints"
+                stroke="#3b82f6"
+                strokeWidth={2}
+                dot={{ fill: "#3b82f6", r: 4 }}
+                activeDot={{ r: 6, fill: "#60a5fa" }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
         </div>
       </div>
-    </>
+    </div>
   );
 };
