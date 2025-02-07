@@ -1,14 +1,13 @@
 "use client";
 
 import { useKnowledge } from "@/contexts/KnowledgeContext";
-
 import { useState, useMemo, useEffect } from "react";
 import { GraphsTab } from "./components/GraphsTab";
 import { CategoriesTab } from "./components/CategoriesTab";
-import { CoinCategoriesTab } from "./components/CoinCategoriesTab";
+import { CombinedMarketTable } from "./components/CombinedMarketTable";
 
 // Add type for tab
-type TabType = "graphs" | "categories" | "coinCategories";
+type TabType = "market" | "graphs" | "categories";
 
 // Add interface for raw project data
 interface RawProjectData {
@@ -19,270 +18,255 @@ interface RawProjectData {
 }
 
 export default function AnalyticsPage() {
-  const { knowledge, isLoading, error } = useKnowledge();
-  const [selectedProject, setSelectedProject] = useState("");
-  const [windowWidth, setWindowWidth] = useState(
-    typeof window !== "undefined" ? window.innerWidth : 640
+  const { knowledge } = useKnowledge();
+  const [activeTab, setActiveTab] = useState<TabType>("market");
+  const [selectedProject, setSelectedProject] = useState<string>("");
+  const [windowWidth, setWindowWidth] = useState<number>(0);
+  const [showChannelMenu, setShowChannelMenu] = useState(false);
+  const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
+  const [tempSelectedChannels, setTempSelectedChannels] = useState<string[]>(
+    []
   );
-  const [activeTab, setActiveTab] = useState<TabType>("graphs");
 
-  // Process knowledge data for analytics
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   const processedData = useMemo(() => {
     const data = {
       projectDistribution: [] as { name: string; value: number }[],
       projectTrends: new Map<string, { date: string; rpoints: number }[]>(),
       categoryDistribution: [] as { name: string; value: number }[],
-      coinCategories: [] as { coin: string; categories: string[] }[],
+      coinCategories: [] as {
+        coin: string;
+        categories: string[];
+        channel: string;
+      }[],
+      channels: [] as string[],
     };
 
-    if (!knowledge?.length) return data;
+    if (!knowledge?.length) {
+      console.log("No knowledge data available");
+      return data;
+    }
+
+    console.log(`Processing ${knowledge.length} knowledge entries`);
 
     // Create a Map to track unique coins and their categories
     const coinCategoryMap = new Map<string, Set<string>>();
+    const projectMap = new Map<string, number>();
+    const categoryMap = new Map<string, number>();
+    const channelSet = new Set<string>();
+
+    let totalProjects = 0;
 
     knowledge.forEach((item) => {
-      if (item.llm_answer?.projects) {
-        const date = new Date(item.date).toISOString().split("T")[0];
+      const projects = item.llm_answer.projects;
+      const channel = item["channel name"];
+      channelSet.add(channel);
+      totalProjects += projects.length;
 
-        // Handle both array and object formats of llm_answer
-        const projects = Array.isArray(item.llm_answer.projects)
-          ? item.llm_answer.projects
-          : [item.llm_answer.projects];
+      projects.forEach((project: RawProjectData) => {
+        const projectName = project.coin_or_project;
+        const rpoints = Number(project.rpoints || project.Rpoints || 0);
 
-        projects.forEach((project: RawProjectData) => {
-          const projectName = project.coin_or_project;
-          const rpoints = project.Rpoints || project.rpoints || 0;
+        // Update project distribution
+        const currentPoints = projectMap.get(projectName) || 0;
+        projectMap.set(projectName, currentPoints + rpoints);
 
-          // Update project trends - Only add dates with non-zero rpoints
-          if (rpoints > 0) {
-            if (!data.projectTrends.has(projectName)) {
-              data.projectTrends.set(projectName, []);
-            }
-            const trendData = data.projectTrends.get(projectName)!;
-
-            // Find or create entry for this date
-            let dateEntry = trendData.find((entry) => entry.date === date);
-            if (!dateEntry) {
-              dateEntry = { date, rpoints: 0 };
-              trendData.push(dateEntry);
-            }
-            dateEntry.rpoints += rpoints;
+        // Track unique categories for each coin
+        if (project.category) {
+          if (!coinCategoryMap.has(projectName)) {
+            coinCategoryMap.set(projectName, new Set());
           }
-
-          // Update total R-points for distribution
-          const currentTotal = data.projectDistribution.find(
-            (p) => p.name === projectName
-          );
-          if (currentTotal) {
-            currentTotal.value += rpoints;
-          } else {
-            data.projectDistribution.push({
-              name: projectName,
-              value: rpoints,
-            });
-          }
-
-          // Update category distribution
-          if (project.category) {
-            project.category.forEach((cat) => {
-              const categoryEntry = data.categoryDistribution.find(
-                (c) => c.name === cat
-              );
-              if (categoryEntry) {
-                categoryEntry.value++;
-              } else {
-                data.categoryDistribution.push({ name: cat, value: 1 });
-              }
-            });
-          }
-
-          // Track unique categories for each coin
-          if (project.category) {
-            if (!coinCategoryMap.has(projectName)) {
-              coinCategoryMap.set(projectName, new Set());
-            }
-            project.category.forEach((cat) => {
-              coinCategoryMap.get(projectName)!.add(cat);
-            });
-          }
-        });
-      }
+          project.category.forEach((cat) => {
+            coinCategoryMap.get(projectName)!.add(cat);
+            const currentCount = categoryMap.get(cat) || 0;
+            categoryMap.set(cat, currentCount + 1);
+          });
+        }
+      });
     });
+
+    // Convert Maps to arrays
+    data.projectDistribution = Array.from(projectMap.entries())
+      .map(([name, value]) => ({
+        name,
+        value: Math.round(value * 100) / 100,
+      }))
+      .sort((a, b) => b.value - a.value);
+
+    data.categoryDistribution = Array.from(categoryMap.entries())
+      .map(([name, value]) => ({
+        name,
+        value,
+      }))
+      .sort((a, b) => b.value - a.value);
 
     // Convert coin categories map to array
-    data.coinCategories = Array.from(coinCategoryMap.entries()).map(
-      ([coin, categories]) => ({
+    data.coinCategories = Array.from(coinCategoryMap.entries())
+      .map(([coin, categories]) => ({
         coin,
         categories: Array.from(categories),
-      })
+        channel:
+          knowledge.find((item) =>
+            item.llm_answer.projects.some((p) => p.coin_or_project === coin)
+          )?.["channel name"] || "",
+      }))
+      .sort((a, b) => a.coin.localeCompare(b.coin));
+
+    // Add channels
+    data.channels = Array.from(channelSet).sort();
+
+    console.log(
+      `Processed ${totalProjects} total projects into ${data.coinCategories.length} unique coins`
     );
-
-    // Sort by coin name
-    data.coinCategories.sort((a, b) => a.coin.localeCompare(b.coin));
-
-    // Sort distributions
-    data.projectDistribution.sort((a, b) => b.value - a.value);
-    data.categoryDistribution.sort((a, b) => b.value - a.value);
-
-    // Sort each project's trend data by date
-    data.projectTrends.forEach((trendData) => {
-      trendData.sort(
-        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-      );
-    });
 
     return data;
   }, [knowledge]);
 
-  // Set the default selected project when data is loaded
-  useEffect(() => {
-    if (processedData.projectDistribution.length > 0 && !selectedProject) {
-      setSelectedProject(processedData.projectDistribution[0].name);
-    }
-  }, [processedData.projectDistribution, selectedProject]);
-
-  // Get trend data for selected project
-  const projectTrendData = useMemo(() => {
-    if (!selectedProject || !processedData.projectTrends.has(selectedProject)) {
-      return [];
-    }
-    return processedData.projectTrends.get(selectedProject)!;
-  }, [selectedProject, processedData.projectTrends]);
-
-  // Add this useEffect for handling window resize
-  useEffect(() => {
-    function handleResize() {
-      setWindowWidth(window.innerWidth);
-    }
-
-    if (typeof window !== "undefined") {
-      window.addEventListener("resize", handleResize);
-      return () => window.removeEventListener("resize", handleResize);
-    }
-  }, []);
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900">
-        <div className="text-cyan-200 text-xl">Loading analytics...</div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900">
-        <div className="text-red-400 text-xl">Error: {error}</div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen pt-24 bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900 relative">
-      {/* Background Animation */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -inset-[10px] opacity-50">
-
-          <div className="absolute top-1/4 -left-20 w-[500px] h-[500px] bg-purple-500/30 rounded-full mix-blend-multiply filter blur-xl" />
-          <div className="absolute top-1/3 -right-20 w-[600px] h-[600px] bg-cyan-500/30 rounded-full mix-blend-multiply filter blur-xl" />
-          <div className="absolute -bottom-32 left-1/3 w-[600px] h-[600px] bg-pink-500/30 rounded-full mix-blend-multiply filter blur-xl" />
-        </div>
-        <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 via-gray-900/50 to-transparent" />
-        <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
-      </div>
-
-      {/* Main Content */}
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-12">
-        {/* Header */}
-        <div className="mb-8 sm:mb-12">
-          <h1 className="text-2xl sm:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 animate-gradient-x mb-2 sm:mb-4">
-            Crypto Analytics Dashboard
-          </h1>
-          <p className="text-sm sm:text-base text-gray-400 max-w-3xl">
-            Real-time insights and analytics for cryptocurrency markets. Track
-            trends, analyze performance, and make informed decisions.
-          </p>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex space-x-4 mb-8 border-b border-gray-800">
-          <button
-            onClick={() => setActiveTab("graphs")}
-            className={`px-4 py-2 text-sm font-medium transition-colors relative ${
-              activeTab === "graphs"
-                ? "text-cyan-200"
-                : "text-gray-400 hover:text-gray-300"
-            }`}
-          >
-            Charts & Graphs
-            {activeTab === "graphs" && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-purple-500" />
+    <div className="min-h-screen pt-24 bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900">
+      <div className="container mx-auto px-4 space-y-8">
+        {/* Channel Selector */}
+        <div className="flex justify-end mb-4">
+          <div className="relative">
+            <button
+              onClick={() => {
+                setShowChannelMenu(!showChannelMenu);
+                setTempSelectedChannels(selectedChannels);
+              }}
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-900/60 border border-gray-700/50 text-gray-200 hover:bg-gray-800/60 flex items-center gap-2"
+            >
+              <span>Channels</span>
+              <span className="text-blue-400">
+                {selectedChannels.length ? `(${selectedChannels.length})` : ""}
+              </span>
+            </button>
+            {showChannelMenu && (
+              <div className="absolute top-full right-0 mt-2 w-64 bg-gray-900/95 border border-gray-700/50 rounded-lg shadow-lg backdrop-blur-sm z-10 p-4">
+                <div className="flex justify-between mb-4">
+                  <button
+                    onClick={() =>
+                      setTempSelectedChannels(processedData.channels)
+                    }
+                    className="text-xs text-blue-400 hover:text-blue-300"
+                  >
+                    Select All
+                  </button>
+                  <button
+                    onClick={() => setTempSelectedChannels([])}
+                    className="text-xs text-blue-400 hover:text-blue-300"
+                  >
+                    Deselect All
+                  </button>
+                </div>
+                <div className="space-y-2 mb-4 max-h-60 overflow-y-auto">
+                  {processedData.channels.map((channel) => (
+                    <label
+                      key={channel}
+                      className="flex items-center px-4 py-2 hover:bg-gray-800/60 cursor-pointer rounded"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={tempSelectedChannels.includes(channel)}
+                        onChange={(e) => {
+                          setTempSelectedChannels((prev) =>
+                            e.target.checked
+                              ? [...prev, channel]
+                              : prev.filter((ch) => ch !== channel)
+                          );
+                        }}
+                        className="mr-2"
+                      />
+                      <span className="text-sm text-gray-200">{channel}</span>
+                    </label>
+                  ))}
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setShowChannelMenu(false)}
+                    className="px-3 py-1 text-gray-400 hover:text-gray-300 text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedChannels(tempSelectedChannels);
+                      setShowChannelMenu(false);
+                    }}
+                    className="px-4 py-2 bg-blue-500/20 text-blue-300 rounded hover:bg-blue-500/30 text-sm"
+                  >
+                    Apply
+                  </button>
+                </div>
+              </div>
             )}
-          </button>
-          <button
-            onClick={() => setActiveTab("categories")}
-            className={`px-4 py-2 text-sm font-medium transition-colors relative ${
-              activeTab === "categories"
-                ? "text-cyan-200"
-                : "text-gray-400 hover:text-gray-300"
-            }`}
-          >
-            Categories
-            {activeTab === "categories" && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-purple-500" />
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("coinCategories")}
-            className={`px-4 py-2 text-sm font-medium transition-colors relative ${
-              activeTab === "coinCategories"
-                ? "text-cyan-200"
-                : "text-gray-400 hover:text-gray-300"
-            }`}
-          >
-            Coin Categories
-            {activeTab === "coinCategories" && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-purple-500" />
-            )}
-          </button>
+          </div>
         </div>
 
-        {/* Tab Content */}
-        {activeTab === "graphs" ? (
+        <div className="flex justify-center mb-8">
+          <div className="inline-flex rounded-lg bg-gray-900/50 p-1 backdrop-blur-sm">
+            <button
+              onClick={() => setActiveTab("market")}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === "market"
+                  ? "bg-blue-500/20 text-blue-300"
+                  : "text-gray-400 hover:text-gray-300"
+              }`}
+            >
+              Market
+            </button>
+            <button
+              onClick={() => setActiveTab("graphs")}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === "graphs"
+                  ? "bg-blue-500/20 text-blue-300"
+                  : "text-gray-400 hover:text-gray-300"
+              }`}
+            >
+              Graphs
+            </button>
+            <button
+              onClick={() => setActiveTab("categories")}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === "categories"
+                  ? "bg-blue-500/20 text-blue-300"
+                  : "text-gray-400 hover:text-gray-300"
+              }`}
+            >
+              Categories
+            </button>
+          </div>
+        </div>
+
+        {activeTab === "market" && (
+          <CombinedMarketTable
+            processedData={processedData}
+            selectedChannels={selectedChannels}
+          />
+        )}
+        {activeTab === "graphs" && (
           <GraphsTab
             processedData={processedData}
             knowledge={knowledge}
             selectedProject={selectedProject}
             setSelectedProject={setSelectedProject}
             windowWidth={windowWidth}
-            projectTrendData={projectTrendData}
+            projectTrendData={
+              processedData.projectTrends.get(selectedProject) || []
+            }
           />
-        ) : activeTab === "categories" ? (
+        )}
+
+        {activeTab === "categories" && (
           <CategoriesTab
             categoryDistribution={processedData.categoryDistribution}
           />
-        ) : (
-          <CoinCategoriesTab processedData={processedData} />
         )}
       </div>
-
-      <style jsx global>{`
-        @keyframes gradient-x {
-          0% {
-            background-position: 0% 50%;
-          }
-          50% {
-            background-position: 100% 50%;
-          }
-          100% {
-            background-position: 0% 50%;
-          }
-        }
-        .animate-gradient-x {
-          background-size: 200% 200%;
-          animation: gradient-x 15s ease infinite;
-        }
-      `}</style>
     </div>
   );
 }
