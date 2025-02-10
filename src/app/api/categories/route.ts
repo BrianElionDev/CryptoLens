@@ -82,7 +82,7 @@ export async function GET() {
       timestamp,
       isFresh: true,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Return cached data if available
     if (categoryCache) {
       return NextResponse.json({
@@ -93,7 +93,8 @@ export async function GET() {
     }
 
     // If it's a rate limit error, provide a specific message
-    if (error?.response?.status === 429) {
+    const axiosError = error as { response?: { status: number } };
+    if (axiosError?.response?.status === 429) {
       return NextResponse.json(
         {
           error: "Rate limit exceeded, please try again later",
