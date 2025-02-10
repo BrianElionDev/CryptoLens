@@ -5,6 +5,7 @@ import { useState, useMemo, useEffect } from "react";
 import { GraphsTab } from "./components/GraphsTab";
 import { CategoriesTab } from "./components/CategoriesTab";
 import { CombinedMarketTable } from "./components/CombinedMarketTable";
+import { CategoryMarketTable } from "./components/CategoryMarketTable";
 
 // Add type for tab
 type TabType = "market" | "graphs" | "categories";
@@ -21,18 +22,11 @@ export default function AnalyticsPage() {
   const { knowledge } = useKnowledge();
   const [activeTab, setActiveTab] = useState<TabType>("market");
   const [selectedProject, setSelectedProject] = useState<string>("");
-  const [windowWidth, setWindowWidth] = useState<number>(0);
   const [showChannelMenu, setShowChannelMenu] = useState(false);
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   const [tempSelectedChannels, setTempSelectedChannels] = useState<string[]>(
     []
   );
-
-  useEffect(() => {
-    const handleResize = () => setWindowWidth(window.innerWidth);
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
 
   const processedData = useMemo(() => {
     const data = {
@@ -43,16 +37,14 @@ export default function AnalyticsPage() {
         coin: string;
         categories: string[];
         channel: string;
+        rpoints: number;
       }[],
       channels: [] as string[],
     };
 
     if (!knowledge?.length) {
-      console.log("No knowledge data available");
       return data;
     }
-
-    console.log(`Processing ${knowledge.length} knowledge entries`);
 
     // Create a Map to track unique coins and their categories
     const coinCategoryMap = new Map<string, Set<string>>();
@@ -60,13 +52,10 @@ export default function AnalyticsPage() {
     const categoryMap = new Map<string, number>();
     const channelSet = new Set<string>();
 
-    let totalProjects = 0;
-
     knowledge.forEach((item) => {
       const projects = item.llm_answer.projects;
       const channel = item["channel name"];
       channelSet.add(channel);
-      totalProjects += projects.length;
 
       projects.forEach((project: RawProjectData) => {
         const projectName = project.coin_or_project;
@@ -114,22 +103,27 @@ export default function AnalyticsPage() {
           knowledge.find((item) =>
             item.llm_answer.projects.some((p) => p.coin_or_project === coin)
           )?.["channel name"] || "",
+        rpoints: projectMap.get(coin) || 0,
       }))
       .sort((a, b) => a.coin.localeCompare(b.coin));
 
     // Add channels
     data.channels = Array.from(channelSet).sort();
 
-    console.log(
-      `Processed ${totalProjects} total projects into ${data.coinCategories.length} unique coins`
-    );
-
     return data;
   }, [knowledge]);
 
+  // Initialize channels
+  useEffect(() => {
+    if (processedData.channels.length > 0 && selectedChannels.length === 0) {
+      setSelectedChannels(processedData.channels);
+      setTempSelectedChannels(processedData.channels);
+    }
+  }, [processedData.channels, selectedChannels.length]);
+
   return (
     <div className="min-h-screen pt-24 bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900">
-      <div className="container mx-auto px-4 space-y-8">
+      <div className="container mx-auto px-4 lg:px-20 space-y-8">
         {/* Channel Selector */}
         <div className="flex justify-end mb-4">
           <div className="relative">
@@ -242,29 +236,33 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
+        {/* Tables */}
         {activeTab === "market" && (
           <CombinedMarketTable
             processedData={processedData}
             selectedChannels={selectedChannels}
           />
         )}
+
         {activeTab === "graphs" && (
           <GraphsTab
             processedData={processedData}
-            knowledge={knowledge}
+            knowledge={knowledge || []}
             selectedProject={selectedProject}
             setSelectedProject={setSelectedProject}
-            windowWidth={windowWidth}
-            projectTrendData={
-              processedData.projectTrends.get(selectedProject) || []
-            }
           />
         )}
 
         {activeTab === "categories" && (
-          <CategoriesTab
-            categoryDistribution={processedData.categoryDistribution}
-          />
+          <>
+            <CategoryMarketTable
+              selectedChannels={selectedChannels}
+              processedData={processedData}
+            />
+            <CategoriesTab
+              categoryDistribution={processedData.categoryDistribution}
+            />
+          </>
         )}
       </div>
     </div>

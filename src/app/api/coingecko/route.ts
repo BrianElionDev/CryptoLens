@@ -12,6 +12,7 @@ interface CoinData {
   volume_24h: number;
   percent_change_24h: number;
   circulating_supply: number;
+  image: string;
 }
 
 interface CoinGeckoMarketResponse {
@@ -23,6 +24,7 @@ interface CoinGeckoMarketResponse {
   total_volume: number;
   price_change_percentage_24h: number;
   circulating_supply: number;
+  image: string;
 }
 
 // API Configuration
@@ -84,8 +86,12 @@ function findCoinMatch(
 ): CoinGeckoMarketResponse | null {
   const normalized = searchName.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-  // Direct mappings for major coins
+  // Skip invalid or too short names
+  if (normalized.length < 2) return null;
+
+  // Direct mappings for common variations
   const directMappings: Record<string, string> = {
+    // Existing mappings
     bitcoin: "bitcoin",
     btc: "bitcoin",
     ethereum: "ethereum",
@@ -102,6 +108,40 @@ function findCoinMatch(
     dot: "polkadot",
     chainlink: "chainlink",
     link: "chainlink",
+    // Additional mappings
+    avax: "avalanche-2",
+    avalanche: "avalanche-2",
+    bnb: "binancecoin",
+    usdt: "tether",
+    usdc: "usd-coin",
+    tron: "tron",
+    trx: "tron",
+    xlm: "stellar",
+    stellar: "stellar",
+    aave: "aave",
+    algo: "algorand",
+    algorand: "algorand",
+    apt: "aptos",
+    aptos: "aptos",
+    arb: "arbitrum",
+    arbitrum: "arbitrum",
+    op: "optimism",
+    optimism: "optimism",
+    matic: "matic-network",
+    polygon: "matic-network",
+    near: "near",
+    ftm: "fantom",
+    fantom: "fantom",
+    sand: "the-sandbox",
+    sandbox: "the-sandbox",
+    imx: "immutable-x",
+    axs: "axie-infinity",
+    blur: "blur",
+    mantle: "mantle",
+    celestia: "celestia",
+    sei: "sei-network",
+    base: "coinbase-wrapped-staked-eth",
+    weth: "weth",
   };
 
   // Check direct mappings first
@@ -112,12 +152,19 @@ function findCoinMatch(
     if (match) return match;
   }
 
+  // Remove common suffixes for matching
+  const cleanName = normalized
+    .replace(/coin$/, "")
+    .replace(/token$/, "")
+    .replace(/protocol$/, "")
+    .replace(/network$/, "");
+
   // Try exact matches
   const exactMatch = marketData.find(
     (coin) =>
-      coin.id === normalized ||
-      coin.symbol.toLowerCase() === normalized ||
-      coin.id.replace(/-/g, "") === normalized
+      coin.id === cleanName ||
+      coin.symbol.toLowerCase() === cleanName ||
+      coin.id.replace(/-/g, "") === cleanName
   );
   if (exactMatch) return exactMatch;
 
@@ -125,9 +172,9 @@ function findCoinMatch(
   return (
     marketData.find(
       (coin) =>
-        coin.id.includes(normalized) ||
-        coin.symbol.toLowerCase().includes(normalized) ||
-        coin.id.replace(/-/g, "").includes(normalized)
+        coin.id.includes(cleanName) ||
+        coin.symbol.toLowerCase().includes(cleanName) ||
+        coin.id.replace(/-/g, "").includes(cleanName)
     ) || null
   );
 }
@@ -150,6 +197,7 @@ export async function POST(request: Request) {
           volume_24h: match.total_volume,
           percent_change_24h: match.price_change_percentage_24h,
           circulating_supply: match.circulating_supply || 0,
+          image: match.image || "",
         };
       }
     }
@@ -159,8 +207,8 @@ export async function POST(request: Request) {
       timestamp: Date.now(),
       isFresh,
     });
-  } catch (error) {
-    console.error("API Error:", error);
+  } catch {
+    // API Error
     return NextResponse.json(
       { error: "Failed to fetch price data", timestamp: Date.now() },
       { status: 500 }
