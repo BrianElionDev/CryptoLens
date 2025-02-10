@@ -1,11 +1,18 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import axios from "axios";
 import { formatNumber } from "@/lib/utils";
+import Image from "next/image";
+import { CategoryMarketTable } from "./CategoryMarketTable";
 
 interface CombinedMarketTableProps {
   processedData: {
     projectDistribution: { name: string; value: number }[];
-    coinCategories: { coin: string; categories: string[]; channel: string }[];
+    coinCategories: {
+      coin: string;
+      categories: string[];
+      channel: string;
+      rpoints: number;
+    }[];
     channels: string[];
   };
   selectedChannels: string[];
@@ -20,6 +27,7 @@ interface CoinMarketData {
   volume_24h: number;
   percent_change_24h: number;
   circulating_supply: number;
+  image?: string;
 }
 
 type TableTab = "all" | "nfts" | "categories";
@@ -61,13 +69,16 @@ export const CombinedMarketTable = ({
     "rpoints",
     "categories",
   ]);
-  const [isStale, setIsStale] = useState(false);
 
   // Store coin list in ref to prevent unnecessary fetches
   const coinListRef = useRef<string[]>([]);
 
   // Update coin list when processedData changes
   useEffect(() => {
+    if (!processedData.coinCategories.length) {
+      return;
+    }
+
     const uniqueCoins = Array.from(
       new Set(processedData.coinCategories.map((coin) => coin.coin))
     );
@@ -104,41 +115,18 @@ export const CombinedMarketTable = ({
               );
             });
 
-            if (hasChanges) {
-              const samples = Object.entries(updatedData).slice(0, 3);
-              console.log(
-                `Market data updated (${new Date().toLocaleTimeString()}) with changes:`,
-                samples
-                  .map((entry) => {
-                    const [coin, data] = entry as [string, CoinMarketData];
-                    return `${coin}: $${
-                      data.price
-                    } (${data.percent_change_24h.toFixed(2)}%)`;
-                  })
-                  .join(", ")
-              );
-              return updatedData;
-            }
-            return prevData;
+            return hasChanges ? updatedData : prevData;
           });
         }
-      } catch (error) {
-        console.error("Failed to fetch market data:", error);
-      } finally {
-        if (mounted) {
-          setIsStale(false);
-        }
+      } catch {
+        // Failed to fetch market data
       }
     };
 
-    setIsStale(true);
     fetchMarketData();
 
     const interval = setInterval(() => {
-      if (mounted) {
-        setIsStale(true);
-        fetchMarketData();
-      }
+      fetchMarketData();
     }, 15000);
 
     return () => {
@@ -146,7 +134,7 @@ export const CombinedMarketTable = ({
       clearInterval(interval);
       setMarketData({});
     };
-  }, []); // No dependencies - polling is independent
+  }, []);
 
   // Top categories (most frequent)
   const topCategories = useMemo(() => {
@@ -294,34 +282,9 @@ export const CombinedMarketTable = ({
 
   return (
     <div className="space-y-6">
-      {isStale && (
-        <div className="text-yellow-400 text-sm flex items-center gap-2 justify-end">
-          <svg
-            className="animate-spin h-4 w-4"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            />
-          </svg>
-          Refreshing prices...
-        </div>
-      )}
       {/* Top Navigation */}
       <div className="flex flex-col gap-4">
-        <div className="flex items-center gap-4 overflow-x-auto pb-2">
+        <div className="flex items-center gap-4 overflow-x-auto pb-2 no-scrollbar">
           <button
             onClick={() => {
               setActiveTab("all");
@@ -361,310 +324,355 @@ export const CombinedMarketTable = ({
           >
             Categories
           </button>
-          {topCategories.map((category) => (
-            <button
-              key={category}
-              onClick={() => {
-                setActiveTab("categories");
-                setSelectedCategory(category);
-              }}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                selectedCategory === category
-                  ? "bg-blue-500/20 text-blue-300 border border-blue-500/50"
-                  : "text-gray-400 hover:text-gray-300"
-              }`}
-            >
-              {category}
-            </button>
-          ))}
+
+          {activeTab !== "categories" &&
+            topCategories.map((category) => (
+              <button
+                key={category}
+                onClick={() => {
+                  setActiveTab("categories");
+                  setSelectedCategory(category);
+                }}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                  selectedCategory === category
+                    ? "bg-blue-500/20 text-blue-300 border border-blue-500/50"
+                    : "text-gray-400 hover:text-gray-300"
+                }`}
+              >
+                {category}
+              </button>
+            ))}
+
+          <style jsx global>{`
+            .no-scrollbar {
+              -ms-overflow-style: none;
+              scrollbar-width: none;
+            }
+            .no-scrollbar::-webkit-scrollbar {
+              display: none;
+            }
+          `}</style>
         </div>
       </div>
 
       {/* Table Controls */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="flex items-center gap-4">
-          <input
-            type="text"
-            placeholder="Search coins or categories..."
-            className="w-64 bg-gray-900/60 border border-gray-700/50 rounded-lg py-2 px-4 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <div className="relative">
-            <button
-              onClick={() => {
-                setShowColumnMenu(!showColumnMenu);
-                setTempVisibleColumns(visibleColumns);
-              }}
-              className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-900/60 border border-gray-700/50 text-gray-200 hover:bg-gray-800/60"
-            >
-              Columns
-            </button>
-            {showColumnMenu && (
-              <div className="absolute top-full left-0 mt-2 w-64 bg-gray-900/95 border border-gray-700/50 rounded-lg shadow-lg backdrop-blur-sm z-10 p-4">
-                <div className="flex justify-between mb-4">
-                  <button
-                    onClick={handleSelectAllColumns}
-                    className="text-xs text-blue-400 hover:text-blue-300"
-                  >
-                    Select All
-                  </button>
-                  <button
-                    onClick={handleDeselectAllColumns}
-                    className="text-xs text-blue-400 hover:text-blue-300"
-                  >
-                    Deselect All
-                  </button>
-                </div>
-                <div className="space-y-2 mb-4">
-                  {[
-                    { id: "price", label: "Price" },
-                    { id: "24h", label: "24h %" },
-                    { id: "market_cap", label: "Market Cap" },
-                    { id: "volume", label: "Volume" },
-                    { id: "supply", label: "Circulating Supply" },
-                    { id: "rpoints", label: "R-Points" },
-                    { id: "categories", label: "Categories" },
-                  ].map(({ id, label }) => (
-                    <label
-                      key={id}
-                      className="flex items-center px-4 py-2 hover:bg-gray-800/60 cursor-pointer rounded"
+      {activeTab !== "categories" && (
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto">
+            <input
+              type="text"
+              placeholder="Search coins or categories..."
+              className="w-full sm:w-64 bg-gray-900/60 border border-gray-700/50 rounded-lg py-2 px-4 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <div className="relative w-full sm:w-auto">
+              <button
+                onClick={() => {
+                  setShowColumnMenu(!showColumnMenu);
+                  setTempVisibleColumns(visibleColumns);
+                }}
+                className="w-full sm:w-auto px-4 py-2 rounded-lg text-sm font-medium bg-gray-900/60 border border-gray-700/50 text-gray-200 hover:bg-gray-800/60"
+              >
+                Columns
+              </button>
+              {showColumnMenu && (
+                <div className="absolute top-full left-0 mt-2 w-64 bg-gray-900/95 border border-gray-700/50 rounded-lg shadow-lg backdrop-blur-sm z-10 p-4">
+                  <div className="flex justify-between mb-4">
+                    <button
+                      onClick={handleSelectAllColumns}
+                      className="text-xs text-blue-400 hover:text-blue-300"
                     >
-                      <input
-                        type="checkbox"
-                        checked={tempVisibleColumns.includes(id as Column)}
-                        onChange={() => toggleColumn(id as Column)}
-                        className="mr-2"
-                      />
-                      <span className="text-sm text-gray-200">{label}</span>
-                    </label>
-                  ))}
+                      Select All
+                    </button>
+                    <button
+                      onClick={handleDeselectAllColumns}
+                      className="text-xs text-blue-400 hover:text-blue-300"
+                    >
+                      Deselect All
+                    </button>
+                  </div>
+                  <div className="space-y-2 mb-4">
+                    {[
+                      { id: "price", label: "Price" },
+                      { id: "24h", label: "24h %" },
+                      { id: "market_cap", label: "Market Cap" },
+                      { id: "volume", label: "Volume" },
+                      { id: "supply", label: "Circulating Supply" },
+                      { id: "rpoints", label: "R-Points" },
+                      { id: "categories", label: "Categories" },
+                    ].map(({ id, label }) => (
+                      <label
+                        key={id}
+                        className="flex items-center px-4 py-2 hover:bg-gray-800/60 cursor-pointer rounded"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={tempVisibleColumns.includes(id as Column)}
+                          onChange={() => toggleColumn(id as Column)}
+                          className="mr-2"
+                        />
+                        <span className="text-sm text-gray-200">{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      onClick={handleSaveColumns}
+                      className="px-4 py-2 bg-blue-500/20 text-blue-300 rounded hover:bg-blue-500/30 text-sm"
+                    >
+                      Apply Changes
+                    </button>
+                  </div>
                 </div>
-                <div className="flex justify-end">
-                  <button
-                    onClick={handleSaveColumns}
-                    className="px-4 py-2 bg-blue-500/20 text-blue-300 rounded hover:bg-blue-500/30 text-sm"
-                  >
-                    Apply Changes
-                  </button>
-                </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Table */}
-      <div className="overflow-hidden rounded-xl bg-gradient-to-r from-blue-900/20 via-purple-900/20 to-pink-900/20 border border-blue-500/20 backdrop-blur-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="border-b border-gray-800">
-                <th className="py-4 px-6 text-left text-sm font-medium text-gray-400 bg-gray-900/40">
-                  #
-                </th>
-                <th className="py-4 px-6 text-left text-sm font-medium text-gray-400 bg-gray-900/40">
-                  Coin
-                </th>
-                {visibleColumns.includes("price") && (
-                  <th
-                    className="py-4 px-6 text-left text-sm font-medium text-gray-400 bg-gray-900/40 cursor-pointer"
-                    onClick={() => {
-                      setSortBy("price");
-                      setSortOrder(
-                        sortBy === "price" && sortOrder === "desc"
-                          ? "asc"
-                          : "desc"
-                      );
-                    }}
-                  >
-                    Price
-                  </th>
-                )}
-                {visibleColumns.includes("24h") && (
-                  <th
-                    className="py-4 px-6 text-left text-sm font-medium text-gray-400 bg-gray-900/40 cursor-pointer"
-                    onClick={() => {
-                      setSortBy("24h");
-                      setSortOrder(
-                        sortBy === "24h" && sortOrder === "desc"
-                          ? "asc"
-                          : "desc"
-                      );
-                    }}
-                  >
-                    24h %
-                  </th>
-                )}
-                {visibleColumns.includes("market_cap") && (
-                  <th
-                    className="py-4 px-6 text-left text-sm font-medium text-gray-400 bg-gray-900/40 cursor-pointer"
-                    onClick={() => {
-                      setSortBy("market_cap");
-                      setSortOrder(
-                        sortBy === "market_cap" && sortOrder === "desc"
-                          ? "asc"
-                          : "desc"
-                      );
-                    }}
-                  >
-                    Market Cap
-                  </th>
-                )}
-                {visibleColumns.includes("volume") && (
-                  <th
-                    className="py-4 px-6 text-left text-sm font-medium text-gray-400 bg-gray-900/40 cursor-pointer"
-                    onClick={() => {
-                      setSortBy("volume");
-                      setSortOrder(
-                        sortBy === "volume" && sortOrder === "desc"
-                          ? "asc"
-                          : "desc"
-                      );
-                    }}
-                  >
-                    Volume(24h)
-                  </th>
-                )}
-                {visibleColumns.includes("supply") && (
-                  <th
-                    className="py-4 px-6 text-left text-sm font-medium text-gray-400 bg-gray-900/40 cursor-pointer"
-                    onClick={() => {
-                      setSortBy("supply");
-                      setSortOrder(
-                        sortBy === "supply" && sortOrder === "desc"
-                          ? "asc"
-                          : "desc"
-                      );
-                    }}
-                  >
-                    Circulating Supply
-                  </th>
-                )}
-                {visibleColumns.includes("rpoints") && (
-                  <th
-                    className="py-4 px-6 text-left text-sm font-medium text-gray-400 bg-gray-900/40 cursor-pointer"
-                    onClick={() => {
-                      setSortBy("rpoints");
-                      setSortOrder(
-                        sortBy === "rpoints" && sortOrder === "desc"
-                          ? "asc"
-                          : "desc"
-                      );
-                    }}
-                  >
-                    R-Points
-                  </th>
-                )}
-                {visibleColumns.includes("categories") &&
-                  activeTab !== "all" && (
-                    <th className="py-4 px-6 text-left text-sm font-medium text-gray-400 bg-gray-900/40">
-                      Categories
+      {/* Tables */}
+      {activeTab === "categories" ? (
+        <CategoryMarketTable
+          selectedChannels={selectedChannels}
+          processedData={processedData}
+        />
+      ) : (
+        <div className="overflow-hidden rounded-xl bg-gradient-to-r from-blue-900/20 via-purple-900/20 to-pink-900/20 border border-blue-500/20 backdrop-blur-sm">
+          <div className="overflow-x-auto min-w-full">
+            <div className="inline-block min-w-full align-middle">
+              <table className="min-w-full divide-y divide-gray-800">
+                <thead>
+                  <tr className="border-b border-gray-800">
+                    <th className="sticky left-0 z-10 bg-gray-900/40 py-4 px-4 lg:px-6 text-left text-sm font-medium text-gray-400">
+                      #
                     </th>
-                  )}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-800">
-              {combinedData.map((coin, index) => (
-                <tr
-                  key={coin.coin}
-                  className="hover:bg-blue-500/10 transition-colors"
-                >
-                  <td className="py-4 px-6 whitespace-nowrap text-gray-400">
-                    {index + 1}
-                  </td>
-                  <td className="py-4 px-6 whitespace-nowrap">
-                    <div className="flex items-center gap-3">
-                      <span className="w-2 h-2 rounded-full bg-blue-500" />
-                      <span className="text-gray-200 font-medium">
-                        {coin.coin}
-                      </span>
-                    </div>
-                  </td>
-                  {visibleColumns.includes("price") && (
-                    <td className="py-4 px-6 whitespace-nowrap">
-                      <span className="text-gray-200">
-                        ${formatNumber(coin.marketData?.price || 0, "price")}
-                      </span>
-                    </td>
-                  )}
-                  {visibleColumns.includes("24h") && (
-                    <td className="py-4 px-6 whitespace-nowrap">
-                      <span
-                        className={`${
-                          (coin.marketData?.percent_change_24h || 0) >= 0
-                            ? "text-green-400"
-                            : "text-red-400"
-                        }`}
+                    <th className="sticky left-[60px] lg:left-[76px] z-10 bg-gray-900/40 py-4 px-4 lg:px-6 text-left text-sm font-medium text-gray-400">
+                      Coin
+                    </th>
+                    {visibleColumns.includes("price") && (
+                      <th
+                        className="py-4 px-6 text-left text-sm font-medium text-gray-400 bg-gray-900/40 cursor-pointer"
+                        onClick={() => {
+                          setSortBy("price");
+                          setSortOrder(
+                            sortBy === "price" && sortOrder === "desc"
+                              ? "asc"
+                              : "desc"
+                          );
+                        }}
                       >
-                        {formatNumber(
-                          coin.marketData?.percent_change_24h || 0,
-                          "percentage"
-                        )}
-                      </span>
-                    </td>
-                  )}
-                  {visibleColumns.includes("market_cap") && (
-                    <td className="py-4 px-6 whitespace-nowrap">
-                      <span className="text-gray-200">
-                        $
-                        {formatNumber(
-                          coin.marketData?.market_cap || 0,
-                          "marketcap"
-                        )}
-                      </span>
-                    </td>
-                  )}
-                  {visibleColumns.includes("volume") && (
-                    <td className="py-4 px-6 whitespace-nowrap">
-                      <span className="text-gray-200">
-                        $
-                        {formatNumber(
-                          coin.marketData?.volume_24h || 0,
-                          "volume"
-                        )}
-                      </span>
-                    </td>
-                  )}
-                  {visibleColumns.includes("supply") && (
-                    <td className="py-4 px-6 whitespace-nowrap">
-                      <span className="text-gray-200">
-                        {formatNumber(
-                          coin.marketData?.circulating_supply || 0,
-                          "volume"
-                        )}{" "}
-                        {coin.marketData?.symbol}
-                      </span>
-                    </td>
-                  )}
-                  {visibleColumns.includes("rpoints") && (
-                    <td className="py-4 px-6 whitespace-nowrap">
-                      <span className="text-cyan-200 font-bold">
-                        {coin.rpoints}
-                      </span>
-                    </td>
-                  )}
-                  {visibleColumns.includes("categories") &&
-                    activeTab !== "all" && (
-                      <td className="py-4 px-6">
-                        <div className="flex flex-wrap gap-2">
-                          {coin.categories.map((category) => (
-                            <span
-                              key={category}
-                              className="px-2 py-1 text-xs rounded-full bg-blue-500/20 text-blue-300"
-                            >
-                              {category}
-                            </span>
-                          ))}
+                        Price
+                      </th>
+                    )}
+                    {visibleColumns.includes("24h") && (
+                      <th
+                        className="py-4 px-6 text-left text-sm font-medium text-gray-400 bg-gray-900/40 cursor-pointer"
+                        onClick={() => {
+                          setSortBy("24h");
+                          setSortOrder(
+                            sortBy === "24h" && sortOrder === "desc"
+                              ? "asc"
+                              : "desc"
+                          );
+                        }}
+                      >
+                        24h %
+                      </th>
+                    )}
+                    {visibleColumns.includes("market_cap") && (
+                      <th
+                        className="py-4 px-6 text-left text-sm font-medium text-gray-400 bg-gray-900/40 cursor-pointer"
+                        onClick={() => {
+                          setSortBy("market_cap");
+                          setSortOrder(
+                            sortBy === "market_cap" && sortOrder === "desc"
+                              ? "asc"
+                              : "desc"
+                          );
+                        }}
+                      >
+                        Market Cap
+                      </th>
+                    )}
+                    {visibleColumns.includes("volume") && (
+                      <th
+                        className="py-4 px-6 text-left text-sm font-medium text-gray-400 bg-gray-900/40 cursor-pointer"
+                        onClick={() => {
+                          setSortBy("volume");
+                          setSortOrder(
+                            sortBy === "volume" && sortOrder === "desc"
+                              ? "asc"
+                              : "desc"
+                          );
+                        }}
+                      >
+                        Volume(24h)
+                      </th>
+                    )}
+                    {visibleColumns.includes("supply") && (
+                      <th
+                        className="py-4 px-6 text-left text-sm font-medium text-gray-400 bg-gray-900/40 cursor-pointer"
+                        onClick={() => {
+                          setSortBy("supply");
+                          setSortOrder(
+                            sortBy === "supply" && sortOrder === "desc"
+                              ? "asc"
+                              : "desc"
+                          );
+                        }}
+                      >
+                        Circulating Supply
+                      </th>
+                    )}
+                    {visibleColumns.includes("rpoints") && (
+                      <th
+                        className="py-4 px-6 text-left text-sm font-medium text-gray-400 bg-gray-900/40 cursor-pointer"
+                        onClick={() => {
+                          setSortBy("rpoints");
+                          setSortOrder(
+                            sortBy === "rpoints" && sortOrder === "desc"
+                              ? "asc"
+                              : "desc"
+                          );
+                        }}
+                      >
+                        R-Points
+                      </th>
+                    )}
+                    {visibleColumns.includes("categories") &&
+                      activeTab !== "all" && (
+                        <th className="py-4 px-6 text-left text-sm font-medium text-gray-400 bg-gray-900/40">
+                          Categories
+                        </th>
+                      )}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-800">
+                  {combinedData.map((coin, index) => (
+                    <tr
+                      key={coin.coin}
+                      className="hover:bg-blue-500/10 transition-colors"
+                    >
+                      <td className="sticky left-0 z-10 bg-gray-900/40 py-4 px-6 whitespace-nowrap text-gray-400">
+                        {index + 1}
+                      </td>
+                      <td className="sticky left-[40px] lg:left-[50px] z-10 bg-gray-900/40 py-4 px-6 whitespace-nowrap">
+                        <div className="flex items-center gap-3">
+                          {coin.marketData?.image ? (
+                            <Image
+                              src={coin.marketData.image}
+                              alt={coin.coin}
+                              width={30}
+                              height={30}
+                              className="rounded-full"
+                            />
+                          ) : (
+                            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center">
+                              <span className="text-xs text-blue-300">
+                                {coin.coin.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                          )}
+                          <span className="text-gray-200 font-medium">
+                            {coin.coin}
+                          </span>
                         </div>
                       </td>
-                    )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      {visibleColumns.includes("price") && (
+                        <td className="py-4 px-6 whitespace-nowrap">
+                          <span className="text-gray-200">
+                            $
+                            {formatNumber(coin.marketData?.price || 0, "price")}
+                          </span>
+                        </td>
+                      )}
+                      {visibleColumns.includes("24h") && (
+                        <td className="py-4 px-6 whitespace-nowrap">
+                          <span
+                            className={`${
+                              (coin.marketData?.percent_change_24h || 0) <= 0
+                                ? "text-red-400"
+                                : "text-green-400"
+                            } flex items-center gap-1`}
+                          >
+                            <span className="text-[10px]">
+                              {(coin.marketData?.percent_change_24h || 0) <= 0
+                                ? "▼"
+                                : "▲"}
+                            </span>
+                            {formatNumber(
+                              Math.abs(
+                                coin.marketData?.percent_change_24h ?? 0
+                              ),
+                              "percentage"
+                            )}
+                          </span>
+                        </td>
+                      )}
+                      {visibleColumns.includes("market_cap") && (
+                        <td className="py-4 px-6 whitespace-nowrap">
+                          <span className="text-gray-200">
+                            $
+                            {formatNumber(
+                              coin.marketData?.market_cap || 0,
+                              "marketcap"
+                            )}
+                          </span>
+                        </td>
+                      )}
+                      {visibleColumns.includes("volume") && (
+                        <td className="py-4 px-6 whitespace-nowrap">
+                          <span className="text-gray-200">
+                            $
+                            {formatNumber(
+                              coin.marketData?.volume_24h || 0,
+                              "volume"
+                            )}
+                          </span>
+                        </td>
+                      )}
+                      {visibleColumns.includes("supply") && (
+                        <td className="py-4 px-6 whitespace-nowrap">
+                          <span className="text-gray-200">
+                            {formatNumber(
+                              coin.marketData?.circulating_supply || 0,
+                              "volume"
+                            )}{" "}
+                            {coin.marketData?.symbol}
+                          </span>
+                        </td>
+                      )}
+                      {visibleColumns.includes("rpoints") && (
+                        <td className="py-4 px-6 whitespace-nowrap">
+                          <span className="text-cyan-200 font-bold">
+                            {coin.rpoints}
+                          </span>
+                        </td>
+                      )}
+                      {visibleColumns.includes("categories") &&
+                        activeTab !== "all" && (
+                          <td className="py-4 px-6">
+                            <div className="flex flex-wrap gap-2">
+                              {coin.categories.map((category) => (
+                                <span
+                                  key={category}
+                                  className="px-2 py-1 text-xs rounded-full bg-blue-500/20 text-blue-300"
+                                >
+                                  {category}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                        )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

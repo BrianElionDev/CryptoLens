@@ -21,10 +21,6 @@ interface ChannelAnalyticsProps {
 }
 
 export const ChannelAnalytics = ({ knowledge }: ChannelAnalyticsProps) => {
-  const [windowWidth, setWindowWidth] = useState(
-    typeof window !== "undefined" ? window.innerWidth : 1200
-  );
-
   // Process data for all selected channels
   const processedData = useMemo(() => {
     const data = {
@@ -127,22 +123,12 @@ export const ChannelAnalytics = ({ knowledge }: ChannelAnalyticsProps) => {
   // Initialize with first coin as default
   const [selectedProject, setSelectedProject] = useState(topCoin.name);
 
-  useEffect(() => {
-    const handleResize = () => setWindowWidth(window.innerWidth);
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
   // Update selected project if distribution changes
   useEffect(() => {
     if (processedData.coinDistribution.length > 0) {
       setSelectedProject(processedData.coinDistribution[0].name);
     }
   }, [processedData.coinDistribution]);
-
-  const projectTrendData = useMemo(() => {
-    return processedData.projectTrends.get(selectedProject) || [];
-  }, [processedData.projectTrends, selectedProject]);
 
   return (
     <div className="space-y-8">
@@ -253,8 +239,6 @@ export const ChannelAnalytics = ({ knowledge }: ChannelAnalyticsProps) => {
             knowledge={knowledge}
             selectedProject={selectedProject}
             setSelectedProject={setSelectedProject}
-            windowWidth={windowWidth}
-            projectTrendData={projectTrendData}
           />
         </TabsContent>
 
