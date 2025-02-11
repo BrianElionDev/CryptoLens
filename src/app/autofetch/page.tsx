@@ -21,10 +21,15 @@ export default function AutofetchPage() {
 
     const promise = axios.post(
       "https://hook.us2.make.com/ngpyvadtax553g1rlsn2cs5soca8ilnv",
+
       {
         channel_handler: channelHandler.trim(),
-        published_before: new Date(publishedBefore).toISOString(),
-        published_after: new Date(publishedAfter).toISOString(),
+        published_before: new Date(
+          new Date(publishedBefore).setUTCHours(0, 0, 0, 0)
+        ).toISOString(),
+        published_after: new Date(
+          new Date(publishedAfter).setUTCHours(0, 0, 0, 0)
+        ).toISOString(),
       }
     );
 
