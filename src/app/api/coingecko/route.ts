@@ -13,6 +13,7 @@ interface CoinData {
   percent_change_24h: number;
   circulating_supply: number;
   image: string;
+  coingecko_id: string;
 }
 
 interface CoinGeckoMarketResponse {
@@ -190,7 +191,7 @@ export async function POST(request: Request) {
       if (match) {
         allCoinData[symbol] = {
           id: match.id,
-          name: symbol,
+          name: match.name,
           symbol: match.symbol,
           price: match.current_price,
           market_cap: match.market_cap,
@@ -198,6 +199,7 @@ export async function POST(request: Request) {
           percent_change_24h: match.price_change_percentage_24h,
           circulating_supply: match.circulating_supply || 0,
           image: match.image || "",
+          coingecko_id: match.id,
         };
       }
     }
