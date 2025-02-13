@@ -3,6 +3,7 @@ import axios from "axios";
 import { formatNumber } from "@/lib/utils";
 import Image from "next/image";
 import { CategoryMarketTable } from "./CategoryMarketTable";
+import { useRouter } from "next/navigation";
 
 interface CombinedMarketTableProps {
   processedData: {
@@ -28,6 +29,7 @@ interface CoinMarketData {
   percent_change_24h: number;
   circulating_supply: number;
   image?: string;
+  coingecko_id?: string;
 }
 
 type TableTab = "all" | "categories";
@@ -73,6 +75,8 @@ export const CombinedMarketTable = ({
 
   // Store coin list in ref to prevent unnecessary fetches
   const coinListRef = useRef<string[]>([]);
+
+  const router = useRouter();
 
   // Update coin list when processedData changes
   useEffect(() => {
@@ -290,6 +294,14 @@ export const CombinedMarketTable = ({
     selectedCategory,
     selectedChannels,
   ]);
+
+  const handleCoinClick = (coin: string, marketData: CoinMarketData) => {
+    // Base64 encode the market data to pass in URL
+    const encodedData = btoa(JSON.stringify(marketData));
+    // Use coingeckoId if available, otherwise fallback to coin name
+    const urlParam = marketData.coingecko_id || coin.toLowerCase();
+    router.push(`/coin/${urlParam}?data=${encodedData}`);
+  };
 
   return (
     <div className="space-y-6">
@@ -583,7 +595,10 @@ export const CombinedMarketTable = ({
                       {combinedData.map((coin, index) => (
                         <tr
                           key={coin.coin}
-                          className="hover:bg-blue-500/10 transition-colors"
+                          className="hover:bg-blue-500/10 transition-colors cursor-pointer"
+                          onClick={() =>
+                            handleCoinClick(coin.coin, coin.marketData)
+                          }
                         >
                           <td className="sticky left-0 z-10 bg-gray-900/40 py-4 px-6 whitespace-nowrap text-gray-400">
                             {index + 1}
@@ -611,7 +626,7 @@ export const CombinedMarketTable = ({
                             </div>
                           </td>
                           {visibleColumns.includes("price") && (
-                            <td className="py-4 px-6 whitespace-nowrap">
+                            <td className="py-4 px-6 whitespace-nowrap text-right">
                               <span className="text-gray-200">
                                 $
                                 {formatNumber(
@@ -622,14 +637,14 @@ export const CombinedMarketTable = ({
                             </td>
                           )}
                           {visibleColumns.includes("24h") && (
-                            <td className="py-4 px-6 whitespace-nowrap">
+                            <td className="py-4 px-6 whitespace-nowrap text-right">
                               <span
                                 className={`${
                                   (coin.marketData?.percent_change_24h || 0) <=
                                   0
                                     ? "text-red-400"
                                     : "text-green-400"
-                                } flex items-center gap-1`}
+                                } flex items-center gap-1 justify-end`}
                               >
                                 <span className="text-[10px]">
                                   {(coin.marketData?.percent_change_24h || 0) <=
@@ -647,29 +662,27 @@ export const CombinedMarketTable = ({
                             </td>
                           )}
                           {visibleColumns.includes("market_cap") && (
-                            <td className="py-4 px-6 whitespace-nowrap">
+                            <td className="py-4 px-6 whitespace-nowrap text-right">
                               <span className="text-gray-200">
                                 $
-                                {formatNumber(
-                                  coin.marketData?.market_cap || 0,
-                                  "marketcap"
+                                {new Intl.NumberFormat("en-US").format(
+                                  coin.marketData?.market_cap || 0
                                 )}
                               </span>
                             </td>
                           )}
                           {visibleColumns.includes("volume") && (
-                            <td className="py-4 px-6 whitespace-nowrap">
+                            <td className="py-4 px-6 whitespace-nowrap text-right">
                               <span className="text-gray-200">
                                 $
-                                {formatNumber(
-                                  coin.marketData?.volume_24h || 0,
-                                  "volume"
+                                {new Intl.NumberFormat("en-US").format(
+                                  coin.marketData?.volume_24h || 0
                                 )}
                               </span>
                             </td>
                           )}
                           {visibleColumns.includes("supply") && (
-                            <td className="py-4 px-6 whitespace-nowrap">
+                            <td className="py-4 px-6 whitespace-nowrap text-right">
                               <span className="text-gray-200">
                                 {formatNumber(
                                   coin.marketData?.circulating_supply || 0,
@@ -680,7 +693,7 @@ export const CombinedMarketTable = ({
                             </td>
                           )}
                           {visibleColumns.includes("rpoints") && (
-                            <td className="py-4 px-6 whitespace-nowrap">
+                            <td className="py-4 px-6 whitespace-nowrap text-right">
                               <span className="text-cyan-200 font-bold">
                                 {coin.rpoints}
                               </span>

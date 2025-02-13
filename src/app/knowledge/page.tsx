@@ -13,7 +13,7 @@ function KnowledgePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { knowledge, isLoading, error } = useKnowledge();
-  const itemsPerPage = 25;
+  const itemsPerPage = 99;
 
   const {
     searchTerm,
