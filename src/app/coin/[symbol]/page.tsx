@@ -50,8 +50,8 @@ interface TooltipProps {
 }
 
 interface CoinPageProps {
-  symbol?: string;
-  data?: string;
+  symbol: string;
+  data: string;
   isModal?: boolean;
 }
 
@@ -82,17 +82,25 @@ export default function CoinPage({
         setChartData(null); // Reset data on timeframe change
         setError(null);
 
+        // Create an AbortController for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
         const response = await fetch(
           `/api/coin/${encodeURIComponent(
             coinData?.coingecko_id || symbol.toLowerCase()
           )}/history?days=${selectedTimeframe}`,
-          { signal: AbortSignal.timeout(30000) } // 30s timeout
+          { signal: controller.signal }
         );
+
+        clearTimeout(timeoutId); // Clear timeout if request completes
 
         if (!isMounted) return;
 
         if (!response.ok) {
-          const errorData = await response.json();
+          const errorData = await response
+            .json()
+            .catch(() => ({ error: "Failed to fetch data" }));
           throw new Error(errorData.error || "Failed to fetch data");
         }
 
@@ -108,13 +116,20 @@ export default function CoinPage({
         } else {
           throw new Error("No data received");
         }
-      } catch (err) {
+      } catch (err: unknown) {
         if (!isMounted) return;
         console.error("Error fetching chart data:", err);
 
+        // Handle abort error specifically
+        if (err instanceof Error && err.name === "AbortError") {
+          setError("Request timed out. Please try again.");
+          return;
+        }
+
         // If rate limited and we haven't exceeded retries, try again
         if (
-          (err as Error)?.message?.includes("Rate limit exceeded") &&
+          err instanceof Error &&
+          err.message.includes("Rate limit exceeded") &&
           retryCount < maxRetries
         ) {
           retryCount++;
