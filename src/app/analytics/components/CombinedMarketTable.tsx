@@ -3,7 +3,6 @@ import axios from "axios";
 import { formatNumber } from "@/lib/utils";
 import Image from "next/image";
 import { CategoryMarketTable } from "./CategoryMarketTable";
-import { useRouter } from "next/navigation";
 
 interface CombinedMarketTableProps {
   processedData: {
@@ -17,6 +16,7 @@ interface CombinedMarketTableProps {
     channels: string[];
   };
   selectedChannels: string[];
+  onCoinSelect?: (coin: { symbol: string; data: string }) => void;
 }
 
 interface CoinMarketData {
@@ -45,6 +45,7 @@ type Column =
 export const CombinedMarketTable = ({
   processedData,
   selectedChannels,
+  onCoinSelect,
 }: CombinedMarketTableProps) => {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<TableTab>("all");
@@ -75,8 +76,6 @@ export const CombinedMarketTable = ({
 
   // Store coin list in ref to prevent unnecessary fetches
   const coinListRef = useRef<string[]>([]);
-
-  const router = useRouter();
 
   // Update coin list when processedData changes
   useEffect(() => {
@@ -296,11 +295,12 @@ export const CombinedMarketTable = ({
   ]);
 
   const handleCoinClick = (coin: string, marketData: CoinMarketData) => {
-    // Base64 encode the market data to pass in URL
-    const encodedData = btoa(JSON.stringify(marketData));
-    // Use coingeckoId if available, otherwise fallback to coin name
-    const urlParam = marketData.coingecko_id || coin.toLowerCase();
-    router.push(`/coin/${urlParam}?data=${encodedData}`);
+    if (onCoinSelect) {
+      onCoinSelect({
+        symbol: coin,
+        data: btoa(JSON.stringify(marketData)),
+      });
+    }
   };
 
   return (
@@ -595,10 +595,10 @@ export const CombinedMarketTable = ({
                       {combinedData.map((coin, index) => (
                         <tr
                           key={coin.coin}
-                          className="hover:bg-blue-500/10 transition-colors cursor-pointer"
                           onClick={() =>
                             handleCoinClick(coin.coin, coin.marketData)
                           }
+                          className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors cursor-pointer"
                         >
                           <td className="sticky left-0 z-10 bg-gray-900/40 py-4 px-6 whitespace-nowrap text-gray-400">
                             {index + 1}

@@ -6,6 +6,8 @@ import { GraphsTab } from "./components/GraphsTab";
 import { CategoriesTab } from "./components/CategoriesTab";
 import { CombinedMarketTable } from "./components/CombinedMarketTable";
 import { CategoryMarketTable } from "./components/CategoryMarketTable";
+import { motion, AnimatePresence } from "framer-motion";
+import CoinDetails from "@/app/coin/[symbol]/page";
 
 // Add type for tab
 type TabType = "market" | "graphs" | "categories";
@@ -27,6 +29,10 @@ export default function AnalyticsPage() {
   const [tempSelectedChannels, setTempSelectedChannels] = useState<string[]>(
     []
   );
+  const [selectedCoin, setSelectedCoin] = useState<{
+    symbol: string;
+    data: string;
+  } | null>(null);
 
   const processedData = useMemo(() => {
     const data = {
@@ -241,6 +247,7 @@ export default function AnalyticsPage() {
           <CombinedMarketTable
             processedData={processedData}
             selectedChannels={selectedChannels}
+            onCoinSelect={setSelectedCoin}
           />
         )}
 
@@ -265,6 +272,65 @@ export default function AnalyticsPage() {
           </>
         )}
       </div>
+
+      {/* Sliding Modal for Coin Details */}
+      <AnimatePresence>
+        {selectedCoin && (
+          <div className="fixed inset-0 z-50 overflow-hidden">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={() => setSelectedCoin(null)}
+            />
+            <motion.div
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              className="absolute right-0 top-0 h-full w-full md:w-[80%] lg:w-[70%] xl:w-[60%] bg-gradient-to-b from-gray-900/95 to-gray-800/95 backdrop-blur-xl shadow-2xl"
+            >
+              {/* Modal Header with Close Button */}
+              <div className="sticky top-0 z-50 bg-gray-900/80 backdrop-blur-xl border-b border-gray-800/50">
+                <div className="flex items-center justify-between p-4">
+                  <h2 className="text-xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400">
+                    Coin Details
+                  </h2>
+                  <button
+                    onClick={() => setSelectedCoin(null)}
+                    className="p-2 hover:bg-gray-800/50 rounded-lg transition-colors group"
+                  >
+                    <svg
+                      className="w-6 h-6 text-gray-400 group-hover:text-gray-300 transition-colors"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              {/* Modal Content with Scrolling */}
+              <div className="overflow-y-auto h-[calc(100%-64px)]">
+                <div className="relative max-w-[1400px] mx-auto">
+                  <CoinDetails
+                    symbol={selectedCoin.symbol}
+                    data={selectedCoin.data}
+                    isModal={true}
+                  />
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

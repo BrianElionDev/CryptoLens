@@ -201,11 +201,11 @@ function KnowledgePageContent() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col space-y-4">
             {/* Top Bar */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-              <h1 className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500">
-                Knowledge Base
-              </h1>
-              <div className="flex items-center space-x-3">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500">
+                  Knowledge Base
+                </h1>
                 <div className="px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50 backdrop-blur-sm">
                   <span className="text-sm text-gray-400">
                     {filteredAndSortedItems.length} items
@@ -214,9 +214,10 @@ function KnowledgePageContent() {
               </div>
             </div>
 
-            {/* Search Bar */}
-            <div className="w-full">
-              <div className="relative group mb-6">
+            {/* Controls Bar */}
+            <div className="flex items-center gap-3">
+              {/* Search */}
+              <div className="relative group flex-1">
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg blur opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                 <div className="relative flex items-center">
                   <input
@@ -224,10 +225,10 @@ function KnowledgePageContent() {
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Search knowledge..."
-                    className="w-full bg-gray-900/60 bg-gradient-to-r from-blue-600/10 to-purple-600/10 border border-blue-500/30 rounded-lg py-3 pl-12 pr-4 text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all duration-200 hover:from-blue-600/20 hover:to-purple-600/20"
+                    className="w-full bg-gray-900/60 bg-gradient-to-r from-blue-600/10 to-purple-600/10 border border-blue-500/30 rounded-lg py-2 pl-10 pr-4 text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all duration-200 hover:from-blue-600/20 hover:to-purple-600/20"
                   />
                   <svg
-                    className="absolute left-4 w-5 h-5 text-gray-400"
+                    className="absolute left-3 w-5 h-5 text-gray-400"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -241,77 +242,24 @@ function KnowledgePageContent() {
                   </svg>
                 </div>
               </div>
-            </div>
-
-            {/* Filters */}
-            <div className="flex flex-col sm:flex-row gap-4">
-              {/* Date Filter */}
-              <div className="flex-1 min-w-[200px] relative group">
-                <div className="absolute inset-0 bg-gradient-to-r from-green-500/20 to-emerald-500/20 rounded-lg blur opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                <select
-                  value={dateFilter}
-                  onChange={(e) =>
-                    setDateFilter(e.target.value as DateFilterType)
-                  }
-                  className="relative z-10 w-full appearance-none bg-gray-900/60 bg-gradient-to-r from-green-600/10 to-emerald-600/10 border border-green-500/30 rounded-lg py-2 px-4 text-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-400/50 transition-all duration-200 hover:from-green-600/20 hover:to-emerald-600/20"
-                >
-                  <option value="all" className="bg-gray-900 text-gray-200">
-                    All Time
-                  </option>
-                  <option value="today" className="bg-gray-900 text-gray-200">
-                    Today
-                  </option>
-                  <option value="week" className="bg-gray-900 text-gray-200">
-                    Recent 7 Days
-                  </option>
-                  <option value="month" className="bg-gray-900 text-gray-200">
-                    Recent 30 Days
-                  </option>
-                  <option value="year" className="bg-gray-900 text-gray-200">
-                    Recent 12 Months
-                  </option>
-                </select>
-                <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none z-20">
-                  <svg
-                    className="w-4 h-4 text-green-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 9l-7 7-7-7"
-                    />
-                  </svg>
-                </div>
-              </div>
 
               {/* Channel Filter */}
-              <div className="flex-1 min-w-[200px] relative group">
-                <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-lg blur opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              <div className="relative w-48">
                 <select
                   value={filterChannel}
                   onChange={(e) => setFilterChannel(e.target.value)}
-                  className="relative z-10 w-full appearance-none bg-gray-900/60 bg-gradient-to-r from-purple-600/10 to-pink-600/10 border border-purple-500/30 rounded-lg py-2 px-4 text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-400/50 transition-all duration-200 hover:from-purple-600/20 hover:to-pink-600/20"
+                  className="w-full appearance-none bg-gray-900/60 border border-gray-700/50 rounded-lg py-2 px-4 pr-8 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 hover:bg-gray-800/60 transition-colors"
                 >
-                  <option value="all" className="bg-gray-900 text-gray-200">
-                    All Channels
-                  </option>
+                  <option value="all">All Channels</option>
                   {channels.map((channel) => (
-                    <option
-                      key={channel}
-                      value={channel}
-                      className="bg-gray-900 text-gray-200"
-                    >
+                    <option key={channel} value={channel}>
                       {channel}
                     </option>
                   ))}
                 </select>
-                <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none z-20">
+                <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
                   <svg
-                    className="w-4 h-4 text-purple-400"
+                    className="w-4 h-4 text-gray-400"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -326,38 +274,101 @@ function KnowledgePageContent() {
                 </div>
               </div>
 
-              {/* Sort */}
-              <div className="flex-1 min-w-[200px] relative group">
-                <div className="absolute inset-0 bg-gradient-to-r from-pink-500/20 to-red-500/20 rounded-lg blur opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as SortByType)}
-                  className="relative z-10 w-full appearance-none bg-gray-900/60 bg-gradient-to-r from-pink-600/10 to-red-600/10 border border-pink-500/30 rounded-lg py-2 px-4 text-gray-200 focus:outline-none focus:ring-2 focus:ring-pink-500/50 focus:border-pink-400/50 transition-all duration-200 hover:from-pink-600/20 hover:to-red-600/20"
-                >
-                  <option value="date" className="bg-gray-900 text-gray-200">
-                    Sort by Date
-                  </option>
-                  <option value="title" className="bg-gray-900 text-gray-200">
-                    Sort by Title
-                  </option>
-                  <option value="channel" className="bg-gray-900 text-gray-200">
-                    Sort by Channel
-                  </option>
-                </select>
-                <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none z-20">
-                  <svg
-                    className="w-4 h-4 text-pink-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+              {/* Sort Controls */}
+              <div className="flex items-center gap-2">
+                {/* Sort Type */}
+                <div className="relative w-32">
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as SortByType)}
+                    className="w-full appearance-none bg-gray-900/60 border border-gray-700/50 rounded-lg py-2 px-3 pr-8 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 hover:bg-gray-800/60 transition-colors"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 9l-7 7-7-7"
-                    />
-                  </svg>
+                    <option value="title">Sort by Title</option>
+                    <option value="channel">Sort by Channel</option>
+                    <option value="date">Sort by Date</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-2 flex items-center pointer-events-none">
+                    <svg
+                      className="w-4 h-4 text-gray-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 9l-7 7-7-7"
+                      />
+                    </svg>
+                  </div>
+                </div>
+
+                {/* Filter Button with Modern Hover Menu */}
+                <div className="relative group">
+                  <button className="p-2 rounded-lg bg-gray-900/60 border border-gray-700/50 text-gray-400 hover:text-gray-300 hover:bg-gray-800/60 transition-colors flex items-center gap-2">
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
+                      />
+                    </svg>
+                    <span className="text-sm">Filter</span>
+                    {dateFilter !== "all" && (
+                      <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                    )}
+                  </button>
+                  <div className="absolute right-0 mt-2 w-64 p-4 bg-gray-900/95 border border-gray-700/50 rounded-lg shadow-lg backdrop-blur-sm opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-400 mb-2">
+                          Date Range
+                        </label>
+                        <div className="space-y-2">
+                          {[
+                            { value: "all", label: "All Time" },
+                            { value: "today", label: "Today" },
+                            { value: "week", label: "Last 7 Days" },
+                            { value: "month", label: "Last 30 Days" },
+                            { value: "year", label: "Last 12 Months" },
+                          ].map((option) => (
+                            <label
+                              key={option.value}
+                              className="flex items-center px-3 py-2 rounded-lg hover:bg-gray-800/60 cursor-pointer group/option"
+                            >
+                              <input
+                                type="radio"
+                                name="dateFilter"
+                                value={option.value}
+                                checked={dateFilter === option.value}
+                                onChange={(e) =>
+                                  setDateFilter(
+                                    e.target.value as DateFilterType
+                                  )
+                                }
+                                className="hidden"
+                              />
+                              <div className="w-4 h-4 rounded-full border-2 border-gray-600 group-hover/option:border-blue-400 flex items-center justify-center">
+                                {dateFilter === option.value && (
+                                  <div className="w-2 h-2 rounded-full bg-blue-400" />
+                                )}
+                              </div>
+                              <span className="ml-3 text-sm text-gray-300 group-hover/option:text-gray-200">
+                                {option.label}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
