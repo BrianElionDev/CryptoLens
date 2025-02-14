@@ -7,7 +7,7 @@ import { CategoriesTab } from "./components/CategoriesTab";
 import { CombinedMarketTable } from "./components/CombinedMarketTable";
 import { CategoryMarketTable } from "./components/CategoryMarketTable";
 import { motion, AnimatePresence } from "framer-motion";
-import CoinDetails from "@/app/coin/[symbol]/page";
+import CoinDetailsModal from "@/components/CoinDetailsModal";
 
 // Add type for tab
 type TabType = "market" | "graphs" | "categories";
@@ -320,9 +320,9 @@ export default function AnalyticsPage() {
               {/* Modal Content with Scrolling */}
               <div className="overflow-y-auto h-[calc(100%-64px)]">
                 <div className="relative max-w-[1400px] mx-auto">
-                  <CoinDetails
+                  <CoinDetailsModal
                     symbol={selectedCoin.symbol}
-                    data={selectedCoin.data}
+                    coinData={JSON.parse(atob(selectedCoin.data))}
                     isModal={true}
                   />
                 </div>

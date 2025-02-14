@@ -75,9 +75,9 @@ const CACHE_DURATION = {
 
 // Global request tracking - extremely conservative for CoinGecko free tier
 let lastRequestTime = 0;
-const REQUEST_DELAY = 30000; // 30 seconds between requests
+const REQUEST_DELAY = 35000; // 35 seconds between requests to be safe
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute window
-const MAX_REQUESTS_PER_WINDOW = 3; // Max 3 requests per minute
+const MAX_REQUESTS_PER_WINDOW = 2; // Max 2 requests per minute to be safe
 let requestsInWindow = 0;
 let windowStart = Date.now();
 
@@ -89,11 +89,8 @@ let consecutiveFailures = 0;
 const historyCache = new Map<string, CacheEntry>();
 
 function getBackoffDelay() {
-  // More gradual backoff: 30s, 1min, 2min, 4min
-  const backoffSeconds = Math.min(
-    30 * Math.pow(2, consecutiveFailures - 1),
-    240
-  );
+  // More gradual backoff: 35s, 70s, 140s, 280s
+  const backoffSeconds = Math.min(35 * Math.pow(2, consecutiveFailures), 280);
   return backoffSeconds * 1000;
 }
 
@@ -136,7 +133,7 @@ async function makeRateLimitedRequest(url: string, config: AxiosRequestConfig) {
   try {
     const response = await axios.get(url, {
       ...config,
-      timeout: 10000, // Add 10s timeout
+      timeout: 35000, // Increase timeout to 35s
       headers: {
         ...config.headers,
         "Accept-Encoding": "gzip,deflate,compress",
@@ -237,7 +234,7 @@ export async function GET(
         Accept: "application/json",
         "Accept-Encoding": "gzip,deflate,compress",
       },
-      timeout: days === "1" ? 10000 : 30000, // Longer timeout for larger datasets
+      timeout: 35000,
     });
 
     // Cache the new data
