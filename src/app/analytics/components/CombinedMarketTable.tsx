@@ -56,7 +56,7 @@ export const CombinedMarketTable = ({
     {}
   );
   const [showColumnMenu, setShowColumnMenu] = useState(false);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [tempVisibleColumns, setTempVisibleColumns] = useState<Column[]>([
     "price",
     "24h",
@@ -80,9 +80,11 @@ export const CombinedMarketTable = ({
   // Update coin list when processedData changes
   useEffect(() => {
     if (!processedData.coinCategories.length) {
+      setIsLoading(false);
       return;
     }
 
+    setIsLoading(true);
     const uniqueCoins = Array.from(
       new Set(processedData.coinCategories.map((coin) => coin.coin))
     );
@@ -93,9 +95,12 @@ export const CombinedMarketTable = ({
   useEffect(() => {
     let mounted = true;
     const fetchMarketData = async () => {
-      try {
-        if (coinListRef.current.length === 0) return;
+      if (coinListRef.current.length === 0) {
+        setIsLoading(false);
+        return;
+      }
 
+      try {
         const response = await axios.post("/api/coingecko", {
           symbols: coinListRef.current,
           forceRefresh: true,
@@ -106,26 +111,12 @@ export const CombinedMarketTable = ({
 
         if (response.data?.data) {
           const newData = response.data.data as Record<string, CoinMarketData>;
-          const updatedData = JSON.parse(JSON.stringify(newData));
-
-          setMarketData((prevData) => {
-            const hasChanges = Object.entries(updatedData).some((entry) => {
-              const [coin, data] = entry as [string, CoinMarketData];
-              const current = prevData[coin];
-              return (
-                !current ||
-                current.price !== data.price ||
-                current.percent_change_24h !== data.percent_change_24h
-              );
-            });
-
-            return hasChanges ? updatedData : prevData;
-          });
+          setMarketData(newData);
+          if (mounted) setIsLoading(false);
         }
-      } catch {
-        // Failed to fetch market data
-      } finally {
-        if (mounted) setIsInitialLoading(false);
+      } catch (error) {
+        console.error("Failed to fetch market data:", error);
+        if (mounted) setIsLoading(false);
       }
     };
 
@@ -141,6 +132,14 @@ export const CombinedMarketTable = ({
       setMarketData({});
     };
   }, []);
+
+  // Memoize whether we have data to display
+  const hasData = useMemo(() => {
+    return (
+      processedData.coinCategories.length > 0 &&
+      Object.keys(marketData).length > 0
+    );
+  }, [processedData.coinCategories.length, marketData]);
 
   // Top categories (most frequent)
   const topCategories = useMemo(() => {
@@ -305,7 +304,7 @@ export const CombinedMarketTable = ({
 
   return (
     <div className="space-y-6">
-      {isInitialLoading ? (
+      {isLoading || !hasData ? (
         <div className="flex flex-col items-center justify-center p-12 min-h-[500px] rounded-xl bg-gradient-to-r from-blue-900/20 via-purple-900/20 to-pink-900/20 border border-blue-500/20 backdrop-blur-sm relative overflow-hidden">
           <div className="absolute inset-0">
             <div className="absolute top-1/4 -left-20 w-[500px] h-[500px] bg-blue-500/20 rounded-full mix-blend-multiply filter blur-xl animate-pulse" />
@@ -321,7 +320,9 @@ export const CombinedMarketTable = ({
 
             <div className="mt-8 text-center">
               <p className="text-xl font-medium bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 animate-pulse">
-                Syncing Market Data
+                {processedData.coinCategories.length
+                  ? "Loading Market Data..."
+                  : "Syncing Market Data"}
               </p>
               <div className="flex items-center gap-1 mt-2 text-gray-400">
                 <span className="w-2 h-2 bg-blue-400 rounded-full animate-[bounce_1s_infinite]"></span>
