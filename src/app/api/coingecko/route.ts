@@ -31,6 +31,15 @@ interface CoinGeckoMarketResponse {
 // API Configuration
 const API_TIMEOUT = 30000;
 
+// Rate limiting configuration
+const REQUEST_DELAY = 30000; // 30 seconds between requests
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute window
+const MAX_REQUESTS_PER_WINDOW = 3; // Max 3 requests per minute
+
+let lastRequestTime = 0;
+let requestsInWindow = 0;
+let windowStart = Date.now();
+
 // Cache for error fallback only
 interface MarketCache {
   data: CoinGeckoMarketResponse[];
@@ -44,6 +53,35 @@ async function fetchAllMarketData(): Promise<{
   isFresh: boolean;
 }> {
   try {
+    const now = Date.now();
+
+    // Reset window if needed
+    if (now - windowStart >= RATE_LIMIT_WINDOW) {
+      windowStart = now;
+      requestsInWindow = 0;
+    }
+
+    // Check if we've exceeded rate limit
+    if (requestsInWindow >= MAX_REQUESTS_PER_WINDOW) {
+      if (marketCache) {
+        return { data: marketCache.data, isFresh: false };
+      }
+      throw new Error("Rate limit exceeded");
+    }
+
+    // Enforce delay between requests
+    const timeSinceLastRequest = now - lastRequestTime;
+    if (timeSinceLastRequest < REQUEST_DELAY) {
+      if (marketCache) {
+        return { data: marketCache.data, isFresh: false };
+      }
+      const waitTime = REQUEST_DELAY - timeSinceLastRequest;
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
+    }
+
+    lastRequestTime = Date.now();
+    requestsInWindow++;
+
     const timestamp = Date.now();
     const response = await axios.get(`${COINGECKO_BASE_URL}/coins/markets`, {
       params: {

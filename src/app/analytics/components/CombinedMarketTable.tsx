@@ -133,7 +133,7 @@ export const CombinedMarketTable = ({
 
     const interval = setInterval(() => {
       fetchMarketData();
-    }, 15000);
+    }, 30000);
 
     return () => {
       mounted = false;
