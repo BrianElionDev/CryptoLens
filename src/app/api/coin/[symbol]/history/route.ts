@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import axios, { AxiosRequestConfig, AxiosError } from "axios";
 
 interface ChartData {
@@ -11,6 +10,16 @@ interface RawChartData {
   prices: unknown[];
   market_caps: unknown[];
   total_volumes: unknown[];
+}
+
+interface CacheEntry {
+  data: ChartData;
+  timestamp: number;
+}
+
+interface ApiResponse {
+  data: ChartData;
+  stale?: boolean;
 }
 
 // Validate and transform chart data
@@ -59,16 +68,16 @@ function validateChartData(data: unknown): ChartData {
 
 // Much longer cache duration for free API
 const CACHE_DURATION = {
-  "1": 8 * 60 * 60 * 1000, // 8 hours for 24h data
-  "7": 24 * 60 * 60 * 1000, // 24 hours for 7d data
-  "30": 48 * 60 * 60 * 1000, // 48 hours for 30d data
+  "1": 15 * 60 * 1000, // 15 minutes for 1 day data
+  "7": 240 * 60 * 1000, // 4 hours for 7 day data
+  "30": 480 * 60 * 1000, // 8 hours for 30 day data
 };
 
 // Global request tracking - extremely conservative for CoinGecko free tier
 let lastRequestTime = 0;
-const REQUEST_DELAY = 60000; // 60 seconds between requests
-const RATE_LIMIT_WINDOW = 300 * 1000; // 5 minute window
-const MAX_REQUESTS_PER_WINDOW = 2; // Max 2 requests per 5 minutes
+const REQUEST_DELAY = 30000; // 30 seconds between requests
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute window
+const MAX_REQUESTS_PER_WINDOW = 3; // Max 3 requests per minute
 let requestsInWindow = 0;
 let windowStart = Date.now();
 
@@ -77,43 +86,33 @@ let isRateLimited = false;
 let rateLimitResetTime = 0;
 let consecutiveFailures = 0;
 
-// Typed cache for historical data
-const historyCache = new Map<
-  string,
-  {
-    data: ChartData;
-    timestamp: number;
-    staleTimestamp?: number;
-  }
->();
+const historyCache = new Map<string, CacheEntry>();
 
 function getBackoffDelay() {
-  // More aggressive backoff: 2min, 4min, 8min, 16min, max 30min
-  const backoffMinutes = Math.min(Math.pow(2, consecutiveFailures), 30);
-  return backoffMinutes * 60 * 1000;
+  // More gradual backoff: 30s, 1min, 2min, 4min
+  const backoffSeconds = Math.min(
+    30 * Math.pow(2, consecutiveFailures - 1),
+    240
+  );
+  return backoffSeconds * 1000;
 }
 
 async function makeRateLimitedRequest(url: string, config: AxiosRequestConfig) {
   const now = Date.now();
-
-  // Check if we're currently rate limited
-  if (isRateLimited && now < rateLimitResetTime) {
-    const remainingTime = Math.ceil((rateLimitResetTime - now) / 1000);
-    throw new Error(
-      `Rate limit exceeded - Please wait ${remainingTime} seconds`
-    );
-  }
 
   // Reset window if needed
   if (now - windowStart >= RATE_LIMIT_WINDOW) {
     windowStart = now;
     requestsInWindow = 0;
     isRateLimited = false;
-    consecutiveFailures = Math.max(0, consecutiveFailures - 1); // Slowly reduce failures
+    consecutiveFailures = Math.max(0, consecutiveFailures - 1);
   }
 
   // Check if we've exceeded rate limit
-  if (requestsInWindow >= MAX_REQUESTS_PER_WINDOW) {
+  if (
+    requestsInWindow >= MAX_REQUESTS_PER_WINDOW ||
+    (isRateLimited && now < rateLimitResetTime)
+  ) {
     isRateLimited = true;
     const backoffDelay = getBackoffDelay();
     rateLimitResetTime = now + backoffDelay;
@@ -127,22 +126,27 @@ async function makeRateLimitedRequest(url: string, config: AxiosRequestConfig) {
   // Enforce delay between requests
   const timeSinceLastRequest = now - lastRequestTime;
   if (timeSinceLastRequest < REQUEST_DELAY) {
-    await new Promise((resolve) =>
-      setTimeout(resolve, REQUEST_DELAY - timeSinceLastRequest)
-    );
+    const waitTime = REQUEST_DELAY - timeSinceLastRequest;
+    await new Promise((resolve) => setTimeout(resolve, waitTime));
   }
 
   lastRequestTime = Date.now();
   requestsInWindow++;
 
   try {
-    const response = await axios.get(url, config);
-    console.log(
-      "Raw API Response:",
-      JSON.stringify(response.data).slice(0, 200) + "..."
-    );
+    const response = await axios.get(url, {
+      ...config,
+      timeout: 10000, // Add 10s timeout
+      headers: {
+        ...config.headers,
+        "Accept-Encoding": "gzip,deflate,compress",
+      },
+    });
 
-    // Validate response data
+    if (response.status === 429) {
+      throw new Error("Rate limit exceeded by CoinGecko");
+    }
+
     const chartData = validateChartData(response.data);
     console.log("Validated Chart Data Points:", {
       prices: chartData.prices.length,
@@ -153,8 +157,11 @@ async function makeRateLimitedRequest(url: string, config: AxiosRequestConfig) {
     consecutiveFailures = Math.max(0, consecutiveFailures - 1);
     return { data: chartData };
   } catch (error) {
-    console.error("Data validation error:", error);
-    if (error instanceof AxiosError && error.response?.status === 429) {
+    console.error("API or validation error:", error);
+    if (
+      error instanceof AxiosError &&
+      (error.response?.status === 429 || error.code === "ECONNABORTED")
+    ) {
       consecutiveFailures++;
       isRateLimited = true;
       const backoffDelay = getBackoffDelay();
@@ -166,115 +173,107 @@ async function makeRateLimitedRequest(url: string, config: AxiosRequestConfig) {
 }
 
 export async function GET(
-  request: Request,
+  req: Request,
   context: { params: Promise<{ symbol: string }> }
 ) {
   try {
     const params = await context.params;
-    const { searchParams } = new URL(request.url);
+    const { searchParams } = new URL(req.url);
     const days = searchParams.get("days") || "1";
-    const coinId = decodeURIComponent(params.symbol);
+    const coinId = params.symbol.toLowerCase();
 
     console.log("Fetching data for:", { coinId, days });
 
-    // Check cache first
+    // Generate cache key that includes both coin and timeframe
     const cacheKey = `${coinId}-${days}`;
-    const cached = historyCache.get(cacheKey);
     const now = Date.now();
+    const cached = historyCache.get(cacheKey);
     const cacheDuration =
       CACHE_DURATION[days as keyof typeof CACHE_DURATION] ||
       CACHE_DURATION["1"];
 
-    if (cached) {
-      const age = now - cached.timestamp;
-      const isStale = age >= cacheDuration;
-
-      // Log cache status
+    // Return cached data if it's still valid
+    if (cached && now - cached.timestamp < cacheDuration) {
+      const response: ApiResponse = { data: cached.data };
       console.log("Cache stats:", {
-        age: Math.round(age / 1000) + "s",
-        isStale,
+        age: `${Math.round((now - cached.timestamp) / 1000)}s`,
+        isStale: false,
         dataPoints: cached.data.prices.length,
-        rateLimited: isRateLimited,
+        rateLimited: false,
       });
-
-      // Return cache if rate limited or fresh
-      if (isRateLimited || !isStale) {
-        return NextResponse.json({
-          data: cached.data,
-          cached: true,
-          stale: isStale,
-          rateLimited: isRateLimited,
-          resetIn: isRateLimited
-            ? Math.ceil((rateLimitResetTime - now) / 1000)
-            : undefined,
-        });
-      }
-
-      // Mark as stale but still try to fetch fresh data
-      cached.staleTimestamp = cached.staleTimestamp || now;
+      return Response.json(response, { status: 200 });
     }
 
+    // Check rate limit and return stale cache if available
+    if (
+      (rateLimitResetTime > now ||
+        requestsInWindow >= MAX_REQUESTS_PER_WINDOW) &&
+      cached
+    ) {
+      const response: ApiResponse = { data: cached.data, stale: true };
+      console.log("Rate limited, returning stale cache:", {
+        age: `${Math.round((now - cached.timestamp) / 1000)}s`,
+        isStale: true,
+        dataPoints: cached.data.prices.length,
+        rateLimited: true,
+        waitTime: Math.ceil((rateLimitResetTime - now) / 1000),
+      });
+      return Response.json(response, { status: 200 });
+    }
+
+    // If we're rate limited and don't have cache, wait before retrying
+    if (
+      rateLimitResetTime > now ||
+      requestsInWindow >= MAX_REQUESTS_PER_WINDOW
+    ) {
+      const waitTime = Math.max(rateLimitResetTime - now, REQUEST_DELAY);
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
+    }
+
+    // Make the API request with rate limiting
     const url = `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=${days}`;
-    const response = await makeRateLimitedRequest(url, {
+    const { data } = await makeRateLimitedRequest(url, {
       headers: {
         Accept: "application/json",
+        "Accept-Encoding": "gzip,deflate,compress",
       },
+      timeout: days === "1" ? 10000 : 30000, // Longer timeout for larger datasets
     });
 
-    const chartData = response.data;
+    // Cache the new data
+    historyCache.set(cacheKey, { data, timestamp: now });
+    console.log(`Returning fresh data with points: ${data.prices.length}`);
 
-    // Additional validation
-    if (
-      !chartData ||
-      !Array.isArray(chartData.prices) ||
-      chartData.prices.length === 0
-    ) {
-      console.error("Invalid or empty chart data:", chartData);
-      throw new Error("No price data available");
-    }
-
-    // Log successful data
-    console.log("Returning fresh data with points:", chartData.prices.length);
-
-    // Cache the successful response
-    historyCache.set(cacheKey, {
-      data: chartData,
-      timestamp: now,
-    });
-
-    return NextResponse.json({
-      data: chartData,
-      cached: false,
-      dataPoints: chartData.prices.length,
-      firstPoint: chartData.prices[0],
-      lastPoint: chartData.prices[chartData.prices.length - 1],
-    });
+    const response: ApiResponse = { data };
+    return Response.json(response, { status: 200 });
   } catch (error) {
     console.error("Error fetching historical data:", error);
-    const errorMessage =
-      error instanceof Error
-        ? error.message
-        : "Failed to fetch historical data";
 
-    // Try to return stale cache on error
-    const params = await context.params;
-    const { searchParams } = new URL(request.url);
-    const days = searchParams.get("days") || "1";
-    const coinId = decodeURIComponent(params.symbol);
-    const cached = historyCache.get(`${coinId}-${days}`);
-
-    if (cached) {
-      return NextResponse.json({
-        data: cached.data,
-        cached: true,
-        error: errorMessage,
-        stale: true,
-      });
+    try {
+      // Try to return stale cache on error if available
+      const params = await context.params;
+      const { searchParams } = new URL(req.url);
+      const cacheKey = `${params.symbol.toLowerCase()}-${
+        searchParams.get("days") || "1"
+      }`;
+      const cached = historyCache.get(cacheKey);
+      if (cached) {
+        console.log("Returning stale cache after error");
+        return Response.json(
+          { data: cached.data, stale: true },
+          { status: 200 }
+        );
+      }
+    } catch {
+      // Ignore cache recovery errors
     }
 
-    return new NextResponse(JSON.stringify({ error: errorMessage }), {
-      status: error instanceof AxiosError ? error.response?.status || 500 : 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return Response.json(
+      {
+        error:
+          error instanceof Error ? error.message : "Unknown error occurred",
+      },
+      { status: 500 }
+    );
   }
 }
