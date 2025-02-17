@@ -2,27 +2,18 @@ import { ReactNode } from "react";
 
 interface StatCardProps {
   title: string;
-  value: number | string;
-  icon: ReactNode;
+  value: string | number;
+  icon?: ReactNode;
 }
 
-export const StatCard = ({ title, value, icon }: StatCardProps) => {
+export function StatCard({ title, value, icon }: StatCardProps) {
   return (
-    <div className="relative group">
-      <div className="absolute -inset-[1px] bg-gradient-to-r from-indigo-500/20 to-purple-500/20 rounded-xl blur opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-      <div className="relative bg-gray-900/40 backdrop-blur-sm rounded-xl border border-gray-800/50 p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-gray-400">{title}</p>
-            <p className="text-2xl font-semibold text-indigo-300 mt-1">
-              {value.toLocaleString()}
-            </p>
-          </div>
-          <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400">
-            {icon}
-          </div>
-        </div>
+    <div className="p-4 rounded-xl bg-gray-800/50 border border-gray-700/50">
+      <div className="flex items-center gap-3">
+        {icon && <div className="text-blue-400">{icon}</div>}
+        <span className="text-sm text-gray-400">{title}</span>
       </div>
+      <p className="mt-2 text-xl font-semibold text-gray-200">{value}</p>
     </div>
   );
-};
+}

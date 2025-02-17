@@ -4,31 +4,53 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { Toaster, toast } from "react-hot-toast";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, Calendar as CalendarIcon } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
 
 export default function AutofetchPage() {
   const router = useRouter();
   const [channelHandler, setChannelHandler] = useState("");
-
-  const [publishedBefore, setPublishedBefore] = useState("");
-  const [publishedAfter, setPublishedAfter] = useState("");
+  const [publishedBefore, setPublishedBefore] = useState<Date>();
+  const [publishedAfter, setPublishedAfter] = useState<Date>();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!publishedBefore || !publishedAfter) {
+      setError("Please select both dates");
+      return;
+    }
     setIsSubmitting(true);
     setError("");
 
     const promise = axios.post(
       "https://hook.us2.make.com/ngpyvadtax553g1rlsn2cs5soca8ilnv",
-
       {
         channel_handler: channelHandler.trim(),
         published_before: new Date(
-          new Date(publishedBefore).setUTCHours(0, 0, 0, 0)
+          publishedBefore.setUTCHours(0, 0, 0, 0)
         ).toISOString(),
         published_after: new Date(
-          new Date(publishedAfter).setUTCHours(0, 0, 0, 0)
+          publishedAfter.setUTCHours(0, 0, 0, 0)
         ).toISOString(),
       }
     );
@@ -39,7 +61,7 @@ export default function AutofetchPage() {
         setTimeout(() => {
           router.push("/knowledge");
         }, 5000);
-        return "Automation started successfully! It is runnning in the background and will take a few minutes to complete.";
+        return "Automation started successfully! It is running in the background and will take a few minutes to complete.";
       },
       error: "Failed to start automation",
     });
@@ -55,7 +77,7 @@ export default function AutofetchPage() {
   };
 
   return (
-    <div className="min-h-screen pt-24 bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900 relative overflow-hidden">
+    <div className="min-h-screen pt-32 bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900">
       <Toaster
         position="top-center"
         toastOptions={{
@@ -87,115 +109,199 @@ export default function AutofetchPage() {
         }}
       />
 
-      {/* Animated background elements */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute inset-0">
-          <div className="absolute top-1/4 -left-20 w-[500px] h-[500px] bg-blue-500/30 rounded-full mix-blend-multiply filter blur-xl animate-pulse" />
-          <div className="absolute top-1/3 -right-20 w-[600px] h-[600px] bg-purple-500/30 rounded-full mix-blend-multiply filter blur-xl animate-pulse delay-700" />
-          <div className="absolute -bottom-32 left-1/3 w-[600px] h-[600px] bg-pink-500/30 rounded-full mix-blend-multiply filter blur-xl animate-pulse delay-1000" />
-        </div>
-        <div className="absolute inset-0 bg-gradient-to-t from-gray-900/90 via-gray-900/50 to-transparent" />
-        <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
-      </div>
-
-      {/* Content */}
-      <div className="relative z-10 w-[95%] max-w-md mx-auto pt-10 px-4">
+      <div className="container max-w-md mx-auto px-4">
         <div className="relative group">
-          {/* Card glow effect */}
-          <div className="absolute -inset-1 bg-gradient-to-r from-blue-600/50 via-purple-600/50 to-pink-600/50 rounded-2xl blur-lg group-hover:blur-xl transition-all duration-300 opacity-70"></div>
+          <div className="absolute -inset-1 bg-gradient-to-r from-blue-600/25 via-purple-600/25 to-pink-600/25 rounded-2xl blur-xl opacity-60 transition-opacity duration-500 group-hover:opacity-100"></div>
+          <div className="absolute -inset-1 bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-2xl blur-lg opacity-75"></div>
 
-          <div className="relative bg-gray-900/80 backdrop-blur-xl border border-gray-700/50 rounded-2xl p-4 sm:p-8 shadow-2xl">
-            <div className="absolute right-4 top-4 w-20 h-20 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-full flex items-center justify-center">
-              <svg
-                className="w-10 h-10 text-blue-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                />
-              </svg>
-            </div>
-
-            <h1 className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 mb-2">
-              Autofetch
-            </h1>
-            <p className="text-gray-400 mb-8">
-              Automate content fetching from YouTube channels
-            </p>
-
-            {error && (
-              <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
-                {error}
+          <Card className="relative border-gray-800/40 bg-black/40 backdrop-blur-xl shadow-2xl transition-all duration-300 group-hover:translate-y-[-2px] group-hover:shadow-blue-500/10">
+            <CardHeader className="pb-4">
+              <div className="flex justify-between items-start">
+                <div className="space-y-2">
+                  <CardTitle className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 pb-1">
+                    Autofetch
+                  </CardTitle>
+                  <CardDescription className="text-gray-100 text-base">
+                    Automate content fetching from YouTube channels
+                  </CardDescription>
+                </div>
+                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 flex items-center justify-center border border-gray-800/40 shadow-inner">
+                  <svg
+                    className="w-7 h-7 text-blue-400/90"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                    />
+                  </svg>
+                </div>
               </div>
-            )}
+            </CardHeader>
 
-            <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
-              <div>
-                <label
-                  htmlFor="channel"
-                  className="block text-sm font-medium text-gray-300 mb-2"
+            <CardContent className="relative">
+              <div className="absolute -top-6 -right-6 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl pointer-events-none"></div>
+              <div className="absolute -bottom-6 -left-6 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl pointer-events-none"></div>
+
+              {error && (
+                <Alert
+                  variant="destructive"
+                  className="mb-6 border border-red-500/20 bg-red-500/5"
                 >
-                  Channel Handler
-                </label>
-                <input
-                  type="text"
-                  id="channel"
-                  value={channelHandler}
-                  onChange={(e) => setChannelHandler(e.target.value)}
-                  placeholder="@channel_name"
-                  className="relative z-10 w-full bg-gray-900/60 border border-gray-700/50 rounded-lg py-3 px-4 text-gray-200"
-                  required
-                />
-              </div>
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
 
-              <div>
-                <label
-                  htmlFor="after"
-                  className="block text-sm font-medium text-gray-300 mb-2"
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="channel"
+                    className="text-gray-100 font-medium"
+                  >
+                    Channel Handler
+                  </Label>
+                  <Input
+                    id="channel"
+                    value={channelHandler}
+                    onChange={(e) => setChannelHandler(e.target.value)}
+                    placeholder="@channel_name"
+                    className="bg-gray-900/60 border-gray-700/50 text-white placeholder:text-gray-500 h-11 px-4 transition-colors focus:border-blue-500/50 focus:ring-blue-500/20"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-gray-100 font-medium">From Date</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal h-11",
+                          "bg-gray-900/60 border-gray-700/50 text-gray-100",
+                          "hover:bg-gray-800/80 hover:border-gray-600/50",
+                          "focus:ring-offset-0 focus:ring-1 focus:ring-gray-600/50 focus:border-gray-600/50",
+                          !publishedAfter && "text-gray-500"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4 opacity-70" />
+                        {publishedAfter ? (
+                          format(publishedAfter, "PPP")
+                        ) : (
+                          <span>Pick a date</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 bg-white border-gray-200 shadow-xl">
+                      <Calendar
+                        mode="single"
+                        selected={publishedAfter}
+                        onSelect={setPublishedAfter}
+                        disabled={{ after: new Date() }}
+                        initialFocus
+                        className={cn(
+                          "bg-white border border-gray-200",
+                          "[&_.rdp-day]:text-gray-700 [&_.rdp-day]:font-medium",
+                          "[&_.rdp-day_:hover]:bg-blue-50",
+                          "[&_.rdp-day_:focus]:bg-blue-50",
+                          "[&_.rdp-day_:focus]:text-blue-700",
+                          "[&_.rdp-day_:hover]:text-blue-700",
+                          "[&_.rdp-head_cell]:text-gray-500 [&_.rdp-head_cell]:font-medium",
+                          "[&_.rdp-button:hover]:bg-blue-50",
+                          "[&_.rdp-button:hover]:text-blue-700",
+                          "[&_.rdp-nav_button:hover]:bg-blue-50",
+                          "[&_.rdp-nav_button:hover]:text-blue-700",
+                          "[&_.rdp-nav_button]:text-gray-600",
+                          "[&_.rdp-caption]:text-gray-700 [&_.rdp-caption]:font-medium",
+                          "[&_.rdp-day_today]:bg-blue-50 [&_.rdp-day_today]:text-blue-700 [&_.rdp-day_today]:font-bold",
+                          "[&_.rdp-day_selected]:bg-blue-600 [&_.rdp-day_selected]:text-white [&_.rdp-day_selected]:font-bold",
+                          "[&_.rdp-day_selected]:hover:bg-blue-700",
+                          "[&_.rdp-day.rdp-day_outside]:text-gray-300",
+                          "[&_.rdp]:p-3 [&_.rdp]:rounded-lg [&_.rdp]:shadow-lg"
+                        )}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-gray-100 font-medium">To Date</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal h-11",
+                          "bg-gray-900/60 border-gray-700/50 text-gray-100",
+                          "hover:bg-gray-800/80 hover:border-gray-600/50",
+                          "focus:ring-offset-0 focus:ring-1 focus:ring-gray-600/50 focus:border-gray-600/50",
+                          !publishedBefore && "text-gray-500"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4 opacity-70" />
+                        {publishedBefore ? (
+                          format(publishedBefore, "PPP")
+                        ) : (
+                          <span>Pick a date</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 bg-white border-gray-200 shadow-xl">
+                      <Calendar
+                        mode="single"
+                        selected={publishedBefore}
+                        onSelect={setPublishedBefore}
+                        disabled={{
+                          after: new Date(),
+                          before: publishedAfter, // Prevent selecting dates before the "From Date"
+                        }}
+                        initialFocus
+                        className={cn(
+                          "bg-white border border-gray-200",
+                          "[&_.rdp-day]:text-gray-700 [&_.rdp-day]:font-medium",
+                          "[&_.rdp-day_:hover]:bg-blue-50",
+                          "[&_.rdp-day_:focus]:bg-blue-50",
+                          "[&_.rdp-day_:focus]:text-blue-700",
+                          "[&_.rdp-day_:hover]:text-blue-700",
+                          "[&_.rdp-head_cell]:text-gray-500 [&_.rdp-head_cell]:font-medium",
+                          "[&_.rdp-button:hover]:bg-blue-50",
+                          "[&_.rdp-button:hover]:text-blue-700",
+                          "[&_.rdp-nav_button:hover]:bg-blue-50",
+                          "[&_.rdp-nav_button:hover]:text-blue-700",
+                          "[&_.rdp-nav_button]:text-gray-600",
+                          "[&_.rdp-caption]:text-gray-700 [&_.rdp-caption]:font-medium",
+                          "[&_.rdp-day_today]:bg-blue-50 [&_.rdp-day_today]:text-blue-700 [&_.rdp-day_today]:font-bold",
+                          "[&_.rdp-day_selected]:bg-blue-600 [&_.rdp-day_selected]:text-white [&_.rdp-day_selected]:font-bold",
+                          "[&_.rdp-day_selected]:hover:bg-blue-700",
+                          "[&_.rdp-day.rdp-day_outside]:text-gray-300",
+                          "[&_.rdp]:p-3 [&_.rdp]:rounded-lg [&_.rdp]:shadow-lg"
+                        )}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full h-11 bg-gradient-to-r from-blue-500 to-purple-500 text-white font-medium hover:from-blue-600 hover:to-purple-600 transition-all duration-300 shadow-lg shadow-blue-500/20"
                 >
-                  From Date
-                </label>
-                <input
-                  type="date"
-                  id="after"
-                  value={publishedAfter}
-                  onChange={(e) => setPublishedAfter(e.target.value)}
-                  className="relative z-10 w-full bg-gray-900/60 border border-gray-700/50 rounded-lg py-3 px-4 text-gray-200 [color-scheme:dark]"
-                  required
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="before"
-                  className="block text-sm font-medium text-gray-300 mb-2"
-                >
-                  To Date
-                </label>
-                <input
-                  type="date"
-                  id="before"
-                  value={publishedBefore}
-                  onChange={(e) => setPublishedBefore(e.target.value)}
-                  className="relative z-10 w-full bg-gray-900/60 border border-gray-700/50 rounded-lg py-3 px-4 text-gray-200 [color-scheme:dark]"
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg py-3 px-4"
-              >
-                {isSubmitting ? "Starting Automation..." : "Start Automation"}
-              </button>
-            </form>
-          </div>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Starting Automation...
+                    </>
+                  ) : (
+                    "Start Automation"
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
