@@ -7,8 +7,7 @@ import { CategoriesTab } from "@/app/analytics/components/CategoriesTab";
 import { GraphsTab } from "@/app/analytics/components/GraphsTab";
 import type { KnowledgeItem } from "@/types/knowledge";
 import { CurrencyDollarIcon, TagIcon } from "../../../components/icons/icons";
-
-import { StatCard } from "../../../components/ui/stat-card";
+import { StatCard } from "@/components/ui/stat-card";
 
 interface Project {
   coin_or_project: string;
@@ -33,10 +32,15 @@ export const ChannelAnalytics = ({ knowledge }: ChannelAnalyticsProps) => {
       timelineData: new Map<string, number>(),
       projectDistribution: [] as { name: string; value: number }[],
       projectTrends: new Map<string, { date: string; rpoints: number }[]>(),
-      coinCategories: [] as { coin: string; categories: string[] }[],
+      coinCategories: [] as {
+        coin: string;
+        categories: string[];
+        channel: string;
+      }[],
     };
 
     knowledge.forEach((item) => {
+      const channelName = item["channel name"];
       if (item.llm_answer?.projects) {
         const date = new Date(item.date).toISOString().split("T")[0];
         const projects = Array.isArray(item.llm_answer.projects)
@@ -48,6 +52,18 @@ export const ChannelAnalytics = ({ knowledge }: ChannelAnalyticsProps) => {
           const rpoints = project.rpoints || 0;
           const categories = project.category || [];
 
+          // Update project trends with channel info
+          if (!data.projectTrends.has(coin)) {
+            data.projectTrends.set(coin, []);
+          }
+          const trendData = data.projectTrends.get(coin)!;
+          const existingDateIndex = trendData.findIndex((d) => d.date === date);
+          if (existingDateIndex >= 0) {
+            trendData[existingDateIndex].rpoints += rpoints;
+          } else {
+            trendData.push({ date, rpoints });
+          }
+
           data.totalRPoints += rpoints;
           data.totalMentions++;
           data.uniqueCoins.add(coin);
@@ -56,56 +72,47 @@ export const ChannelAnalytics = ({ knowledge }: ChannelAnalyticsProps) => {
           const currentRPoints = data.coinDistribution.get(coin) || 0;
           data.coinDistribution.set(coin, currentRPoints + rpoints);
 
-          // Update timeline data
-          const currentDatePoints = data.timelineData.get(date) || 0;
-          data.timelineData.set(date, currentDatePoints + rpoints);
+          // Update coinCategories with channel info
+          const existingCoin = data.coinCategories.find(
+            (c) => c.coin === coin && c.channel === channelName
+          );
+          if (existingCoin) {
+            existingCoin.categories = Array.from(
+              new Set([...existingCoin.categories, ...(categories || [])])
+            );
+          } else {
+            data.coinCategories.push({
+              coin,
+              categories: categories || [],
+              channel: channelName,
+            });
+          }
 
           // Update categories
-          if (categories.length > 0) {
-            categories.forEach((category) => {
-              data.uniqueCategories.add(category);
-              const currentCount = data.categoryDistribution.get(category) || 0;
-              data.categoryDistribution.set(category, currentCount + 1);
-            });
-
-            // Update coinCategories
-            const existingCoin = data.coinCategories.find(
-              (c) => c.coin === coin
-            );
-            if (existingCoin) {
-              existingCoin.categories = Array.from(
-                new Set([...existingCoin.categories, ...categories])
-              );
-            } else {
-              data.coinCategories.push({ coin, categories: [...categories] });
-            }
-          }
-
-          // Update project trends
-          if (!data.projectTrends.has(coin)) {
-            data.projectTrends.set(coin, []);
-          }
-          const trendData = data.projectTrends.get(coin)!;
-          trendData.push({ date, rpoints });
+          categories.forEach((category) => {
+            data.uniqueCategories.add(category);
+            const currentCount = data.categoryDistribution.get(category) || 0;
+            data.categoryDistribution.set(category, currentCount + 1);
+          });
         });
       }
     });
 
-    // Convert project distribution
-    data.projectDistribution = Array.from(data.coinDistribution.entries())
+    // Sort and convert data
+    const sortedDistribution = Array.from(data.coinDistribution.entries())
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
 
     return {
       ...data,
+      projectDistribution: sortedDistribution,
+      projectTrends: data.projectTrends,
       uniqueCoins: Array.from(data.uniqueCoins),
       uniqueCategories: Array.from(data.uniqueCategories),
       categoryDistribution: Array.from(data.categoryDistribution.entries())
         .map(([name, value]) => ({ name, value }))
         .sort((a, b) => b.value - a.value),
-      coinDistribution: Array.from(data.coinDistribution.entries())
-        .map(([name, value]) => ({ name, value }))
-        .sort((a, b) => b.value - a.value),
+      coinDistribution: sortedDistribution,
       timelineData: Array.from(data.timelineData.entries())
         .map(([date, value]) => ({ date, value }))
         .sort(
@@ -161,17 +168,17 @@ export const ChannelAnalytics = ({ knowledge }: ChannelAnalyticsProps) => {
 
       {/* Analytics Tabs */}
       <Tabs defaultValue="graphs" className="w-full">
-        <TabsList className="grid grid-cols-3 w-full gap-2 mb-4">
+        <TabsList className="grid w-full grid-cols-3 gap-2 mb-8 bg-transparent">
           <TabsTrigger
             value="graphs"
-            className="flex items-center justify-center gap-2 py-3 px-6 rounded-xl bg-[#12141f] border border-white/5
-            transition-all duration-300
-            data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-500/20 data-[state=active]:to-purple-500/20
-            data-[state=active]:border-indigo-500/30
-            hover:bg-white/5"
+            className="relative px-8 py-3 rounded-lg flex items-center justify-center gap-2 transition-all duration-300
+            data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500/20 data-[state=active]:to-purple-500/20
+            data-[state=active]:border data-[state=active]:border-blue-500/50
+            data-[state=active]:shadow-[0_0_20px_rgba(59,130,246,0.15)]
+            hover:bg-gray-700/30 text-gray-400 data-[state=active]:text-gray-100"
           >
             <svg
-              className="w-4 h-4 text-indigo-300"
+              className="w-4 h-4"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -183,18 +190,18 @@ export const ChannelAnalytics = ({ knowledge }: ChannelAnalyticsProps) => {
                 d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
               />
             </svg>
-            <span className="font-medium text-indigo-100">Graphs</span>
+            <span className="font-medium">Graphs</span>
           </TabsTrigger>
           <TabsTrigger
             value="categories"
-            className="flex items-center justify-center gap-2 py-3 px-6 rounded-xl bg-[#12141f] border border-white/5
-            transition-all duration-300
-            data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-500/20 data-[state=active]:to-purple-500/20
-            data-[state=active]:border-indigo-500/30
-            hover:bg-white/5"
+            className="relative px-8 py-3 rounded-lg flex items-center justify-center gap-2 transition-all duration-300
+            data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500/20 data-[state=active]:to-purple-500/20
+            data-[state=active]:border data-[state=active]:border-blue-500/50
+            data-[state=active]:shadow-[0_0_20px_rgba(59,130,246,0.15)]
+            hover:bg-gray-700/30 text-gray-400 data-[state=active]:text-gray-100"
           >
             <svg
-              className="w-4 h-4 text-indigo-300"
+              className="w-4 h-4"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -206,18 +213,18 @@ export const ChannelAnalytics = ({ knowledge }: ChannelAnalyticsProps) => {
                 d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
               />
             </svg>
-            <span className="font-medium text-indigo-100">Coin Categories</span>
+            <span className="font-medium">Coin Categories</span>
           </TabsTrigger>
           <TabsTrigger
             value="categories-overview"
-            className="flex items-center justify-center gap-2 py-3 px-6 rounded-xl bg-[#12141f] border border-white/5
-            transition-all duration-300
-            data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-500/20 data-[state=active]:to-purple-500/20
-            data-[state=active]:border-indigo-500/30
-            hover:bg-white/5"
+            className="relative px-8 py-3 rounded-lg flex items-center justify-center gap-2 transition-all duration-300
+            data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500/20 data-[state=active]:to-purple-500/20
+            data-[state=active]:border data-[state=active]:border-blue-500/50
+            data-[state=active]:shadow-[0_0_20px_rgba(59,130,246,0.15)]
+            hover:bg-gray-700/30 text-gray-400 data-[state=active]:text-gray-100"
           >
             <svg
-              className="w-4 h-4 text-indigo-300"
+              className="w-4 h-4"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -229,28 +236,68 @@ export const ChannelAnalytics = ({ knowledge }: ChannelAnalyticsProps) => {
                 d="M4 6h16M4 10h16M4 14h16M4 18h16"
               />
             </svg>
-            <span className="font-medium text-indigo-100">Categories</span>
+            <span className="font-medium">Categories</span>
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="graphs">
-          <GraphsTab
-            processedData={processedData}
-            knowledge={knowledge}
-            selectedProject={selectedProject}
-            setSelectedProject={setSelectedProject}
-          />
-        </TabsContent>
+        <div className="mt-6 space-y-6">
+          <TabsContent value="graphs" className="focus:outline-none">
+            <div className="md:bg-gradient-to-r from-blue-500/5 via-purple-500/5 to-pink-500/5 p-0">
+              <div className="md:bg-gray-900/40 md:backdrop-blur-sm rounded-lg bg-transparent">
+                <GraphsTab
+                  processedData={{
+                    projectDistribution: processedData.projectDistribution,
+                    projectTrends: processedData.projectTrends,
+                    coinCategories: processedData.coinCategories.map(
+                      (coin) => ({
+                        coin: coin.coin,
+                        channel: coin.channel,
+                      })
+                    ),
+                  }}
+                  knowledge={knowledge}
+                  selectedProject={selectedProject}
+                  setSelectedProject={setSelectedProject}
+                  selectedChannels={[knowledge[0]?.["channel name"] || ""]}
+                />
+              </div>
+            </div>
+          </TabsContent>
 
-        <TabsContent value="categories">
-          <CoinCategoriesTab processedData={processedData} />
-        </TabsContent>
+          <TabsContent value="categories" className="focus:outline-none">
+            <div className="md:bg-gradient-to-r from-blue-500/5 via-purple-500/5 to-pink-500/5 p-0">
+              <div className="md:bg-gray-900/40 md:backdrop-blur-sm rounded-lg bg-transparent">
+                <CoinCategoriesTab processedData={processedData} />
+              </div>
+            </div>
+          </TabsContent>
 
-        <TabsContent value="categories-overview">
-          <CategoriesTab
-            categoryDistribution={processedData.categoryDistribution}
-          />
-        </TabsContent>
+          <TabsContent
+            value="categories-overview"
+            className="focus:outline-none"
+          >
+            <div className="md:bg-gradient-to-r from-blue-500/5 via-purple-500/5 to-pink-500/5 p-0">
+              <div className="md:bg-gray-900/40 md:backdrop-blur-sm rounded-lg bg-transparent">
+                <CategoriesTab
+                  processedData={{
+                    categoryDistribution: processedData.categoryDistribution,
+                    coinCategories: processedData.coinCategories.map(
+                      (coin) => ({
+                        ...coin,
+                        channel: knowledge[0]?.["channel name"] || "",
+                        rpoints:
+                          processedData.coinDistribution.find(
+                            (c) => c.name === coin.coin
+                          )?.value || 0,
+                      })
+                    ),
+                  }}
+                  selectedChannels={[knowledge[0]?.["channel name"] || ""]}
+                />
+              </div>
+            </div>
+          </TabsContent>
+        </div>
       </Tabs>
     </div>
   );

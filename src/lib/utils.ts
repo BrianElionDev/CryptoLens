@@ -5,43 +5,37 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export function formatCurrency(
+  value: number,
+  options: Intl.NumberFormatOptions = {}
+) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    ...options,
+  }).format(value);
+}
+
+export function formatPercentage(value: number | undefined) {
+  if (value === undefined) return "0.00%";
+  return `${value.toFixed(2)}%`;
+}
+
 export function formatNumber(
   value: number,
-  type: "price" | "marketcap" | "volume" | "percentage"
-): string {
-  if (type === "percentage") {
-    return value.toFixed(1) + "%";
+  type: "price" | "default" = "default"
+) {
+  if (type === "price") {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 6,
+    }).format(value);
   }
 
-  if (value === 0) return "0";
-
-  switch (type) {
-    case "price":
-      if (value < 1) {
-        return value.toFixed(4);
-      }
-      if (value < 10) {
-        return value.toFixed(3);
-      }
-      return value.toLocaleString("en-US", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      });
-
-    case "marketcap":
-    case "volume":
-      if (value >= 1e9) {
-        return (value / 1e9).toFixed(2) + "B";
-      }
-      if (value >= 1e6) {
-        return (value / 1e6).toFixed(2) + "M";
-      }
-      if (value >= 1e3) {
-        return (value / 1e3).toFixed(2) + "K";
-      }
-      return value.toFixed(2);
-
-    default:
-      return value.toString();
-  }
+  return new Intl.NumberFormat("en-US", {
+    notation: "compact",
+    maximumFractionDigits: 2,
+  }).format(value);
 }

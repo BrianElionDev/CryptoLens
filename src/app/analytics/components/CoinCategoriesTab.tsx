@@ -105,9 +105,9 @@ export const CoinCategoriesTab = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800">
-            {filteredAndSortedData.map((coin) => (
+            {filteredAndSortedData.map((coin, index) => (
               <tr
-                key={coin.coin}
+                key={`${coin.coin}-${index}`}
                 className="hover:bg-blue-500/10 transition-colors"
               >
                 <td className="py-4 px-6 whitespace-nowrap">

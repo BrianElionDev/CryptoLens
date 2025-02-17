@@ -4,13 +4,12 @@ import { useKnowledge } from "@/contexts/KnowledgeContext";
 import { useState, useMemo, useEffect } from "react";
 import { GraphsTab } from "./components/GraphsTab";
 import { CategoriesTab } from "./components/CategoriesTab";
-import { CombinedMarketTable } from "./components/CombinedMarketTable";
-import { CategoryMarketTable } from "./components/CategoryMarketTable";
+import { CombinedMarketTable } from "@/components/tables/CombinedMarketTable";
 import { motion, AnimatePresence } from "framer-motion";
 import CoinDetailsModal from "@/components/CoinDetailsModal";
-
-// Add type for tab
-type TabType = "market" | "graphs" | "categories";
+import { ChannelSelector } from "./components/ChannelSelector";
+import { AnalyticsTabs, TabType } from "./components/AnalyticsTabs";
+import type { CoinData } from "@/hooks/useCoinData";
 
 // Add interface for raw project data
 interface RawProjectData {
@@ -23,15 +22,11 @@ interface RawProjectData {
 export default function AnalyticsPage() {
   const { knowledge } = useKnowledge();
   const [activeTab, setActiveTab] = useState<TabType>("market");
-  const [selectedProject, setSelectedProject] = useState<string>("");
-  const [showChannelMenu, setShowChannelMenu] = useState(false);
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
-  const [tempSelectedChannels, setTempSelectedChannels] = useState<string[]>(
-    []
-  );
   const [selectedCoin, setSelectedCoin] = useState<{
     symbol: string;
-    data: string;
+    coingecko_id: string;
+    data: CoinData;
   } | null>(null);
 
   const processedData = useMemo(() => {
@@ -61,11 +56,24 @@ export default function AnalyticsPage() {
     knowledge.forEach((item) => {
       const projects = item.llm_answer.projects;
       const channel = item["channel name"];
+      const date = new Date(item.date).toISOString().split("T")[0];
       channelSet.add(channel);
 
       projects.forEach((project: RawProjectData) => {
         const projectName = project.coin_or_project;
         const rpoints = Number(project.rpoints || project.Rpoints || 0);
+
+        // Update project trends
+        if (!data.projectTrends.has(projectName)) {
+          data.projectTrends.set(projectName, []);
+        }
+        const trendData = data.projectTrends.get(projectName)!;
+        const existingDateIndex = trendData.findIndex((d) => d.date === date);
+        if (existingDateIndex >= 0) {
+          trendData[existingDateIndex].rpoints += rpoints;
+        } else {
+          trendData.push({ date, rpoints });
+        }
 
         // Update project distribution
         const currentPoints = projectMap.get(projectName) || 0;
@@ -123,214 +131,66 @@ export default function AnalyticsPage() {
   useEffect(() => {
     if (processedData.channels.length > 0 && selectedChannels.length === 0) {
       setSelectedChannels(processedData.channels);
-      setTempSelectedChannels(processedData.channels);
     }
   }, [processedData.channels, selectedChannels.length]);
 
   return (
     <div className="min-h-screen pt-24 bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900">
-      <div className="container mx-auto px-4 lg:px-20 space-y-8">
+      <div className="container mx-auto px-4 2xl:px-0 max-w-[1400px] space-y-8">
         {/* Channel Selector */}
         <div className="flex justify-end mb-4">
-          <div className="relative">
-            <button
-              onClick={() => {
-                setShowChannelMenu(!showChannelMenu);
-                setTempSelectedChannels(selectedChannels);
-              }}
-              className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-900/60 border border-gray-700/50 text-gray-200 hover:bg-gray-800/60 flex items-center gap-2"
-            >
-              <span>Channels</span>
-              <span className="text-blue-400">
-                {selectedChannels.length ? `(${selectedChannels.length})` : ""}
-              </span>
-            </button>
-            {showChannelMenu && (
-              <div className="absolute top-full right-0 mt-2 w-64 bg-gray-900/95 border border-gray-700/50 rounded-lg shadow-lg backdrop-blur-sm z-10 p-4">
-                <div className="flex justify-between mb-4">
-                  <button
-                    onClick={() =>
-                      setTempSelectedChannels(processedData.channels)
-                    }
-                    className="text-xs text-blue-400 hover:text-blue-300"
-                  >
-                    Select All
-                  </button>
-                  <button
-                    onClick={() => setTempSelectedChannels([])}
-                    className="text-xs text-blue-400 hover:text-blue-300"
-                  >
-                    Deselect All
-                  </button>
-                </div>
-                <div className="space-y-2 mb-4 max-h-60 overflow-y-auto">
-                  {processedData.channels.map((channel) => (
-                    <label
-                      key={channel}
-                      className="flex items-center px-4 py-2 hover:bg-gray-800/60 cursor-pointer rounded"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={tempSelectedChannels.includes(channel)}
-                        onChange={(e) => {
-                          setTempSelectedChannels((prev) =>
-                            e.target.checked
-                              ? [...prev, channel]
-                              : prev.filter((ch) => ch !== channel)
-                          );
-                        }}
-                        className="mr-2"
-                      />
-                      <span className="text-sm text-gray-200">{channel}</span>
-                    </label>
-                  ))}
-                </div>
-                <div className="flex justify-end gap-2">
-                  <button
-                    onClick={() => setShowChannelMenu(false)}
-                    className="px-3 py-1 text-gray-400 hover:text-gray-300 text-sm"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSelectedChannels(tempSelectedChannels);
-                      setShowChannelMenu(false);
-                    }}
-                    className="px-4 py-2 bg-blue-500/20 text-blue-300 rounded hover:bg-blue-500/30 text-sm"
-                  >
-                    Apply
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="flex justify-center mb-8">
-          <div className="inline-flex rounded-lg bg-gray-900/50 p-1 backdrop-blur-sm">
-            <button
-              onClick={() => setActiveTab("market")}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeTab === "market"
-                  ? "bg-blue-500/20 text-blue-300"
-                  : "text-gray-400 hover:text-gray-300"
-              }`}
-            >
-              Market
-            </button>
-            <button
-              onClick={() => setActiveTab("graphs")}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeTab === "graphs"
-                  ? "bg-blue-500/20 text-blue-300"
-                  : "text-gray-400 hover:text-gray-300"
-              }`}
-            >
-              Graphs
-            </button>
-            <button
-              onClick={() => setActiveTab("categories")}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeTab === "categories"
-                  ? "bg-blue-500/20 text-blue-300"
-                  : "text-gray-400 hover:text-gray-300"
-              }`}
-            >
-              Categories
-            </button>
-          </div>
-        </div>
-
-        {/* Tables */}
-        {activeTab === "market" && (
-          <CombinedMarketTable
-            processedData={processedData}
+          <ChannelSelector
+            channels={processedData.channels}
             selectedChannels={selectedChannels}
-            onCoinSelect={setSelectedCoin}
+            onChannelsChange={setSelectedChannels}
           />
-        )}
+        </div>
 
-        {activeTab === "graphs" && (
-          <GraphsTab
-            processedData={processedData}
-            knowledge={knowledge || []}
-            selectedProject={selectedProject}
-            setSelectedProject={setSelectedProject}
+        <AnalyticsTabs activeTab={activeTab} onTabChange={setActiveTab} />
+
+        {/* Content */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.2 }}
+          >
+            {activeTab === "market" && (
+              <CombinedMarketTable
+                processedData={processedData}
+                selectedChannels={selectedChannels}
+                onCoinSelect={setSelectedCoin}
+              />
+            )}
+            {activeTab === "graphs" && (
+              <GraphsTab
+                processedData={{
+                  projectDistribution: processedData.projectDistribution,
+                  projectTrends: processedData.projectTrends,
+                  coinCategories: processedData.coinCategories,
+                }}
+                selectedChannels={selectedChannels}
+              />
+            )}
+            {activeTab === "categories" && (
+              <CategoriesTab
+                processedData={processedData}
+                selectedChannels={selectedChannels}
+              />
+            )}
+          </motion.div>
+        </AnimatePresence>
+
+        {selectedCoin && (
+          <CoinDetailsModal
+            coingecko_id={selectedCoin.coingecko_id}
+            data={selectedCoin.data}
+            onClose={() => setSelectedCoin(null)}
           />
-        )}
-
-        {activeTab === "categories" && (
-          <>
-            <CategoryMarketTable
-              selectedChannels={selectedChannels}
-              processedData={processedData}
-            />
-            <CategoriesTab
-              categoryDistribution={processedData.categoryDistribution}
-            />
-          </>
         )}
       </div>
-
-      {/* Sliding Modal for Coin Details */}
-      <AnimatePresence>
-        {selectedCoin && (
-          <div className="fixed inset-0 z-50 overflow-hidden">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-              onClick={() => setSelectedCoin(null)}
-            />
-            <motion.div
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="absolute right-0 top-0 h-full w-full md:w-[80%] lg:w-[70%] xl:w-[60%] bg-gradient-to-b from-gray-900/95 to-gray-800/95 backdrop-blur-xl shadow-2xl"
-            >
-              {/* Modal Header with Close Button */}
-              <div className="sticky top-0 z-50 bg-gray-900/80 backdrop-blur-xl border-b border-gray-800/50">
-                <div className="flex items-center justify-between p-4">
-                  <h2 className="text-xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400">
-                    Coin Details
-                  </h2>
-                  <button
-                    onClick={() => setSelectedCoin(null)}
-                    className="p-2 hover:bg-gray-800/50 rounded-lg transition-colors group"
-                  >
-                    <svg
-                      className="w-6 h-6 text-gray-400 group-hover:text-gray-300 transition-colors"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-              {/* Modal Content with Scrolling */}
-              <div className="overflow-y-auto h-[calc(100%-64px)]">
-                <div className="relative max-w-[1400px] mx-auto">
-                  <CoinDetailsModal
-                    symbol={selectedCoin.symbol}
-                    coinData={JSON.parse(atob(selectedCoin.data))}
-                    isModal={true}
-                  />
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

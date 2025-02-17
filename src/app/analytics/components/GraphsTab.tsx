@@ -1,4 +1,4 @@
-import { useMemo, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   LineChart,
   Line,
@@ -7,111 +7,185 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Area,
 } from "recharts";
-import { KnowledgeItem } from "@/types/knowledge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { KnowledgeItem } from "@/types/knowledge";
 
 interface GraphsTabProps {
   processedData: {
     projectDistribution: { name: string; value: number }[];
+    projectTrends: Map<string, { date: string; rpoints: number }[]>;
+    coinCategories: { coin: string; channel: string }[];
   };
-  knowledge: KnowledgeItem[];
-  selectedProject: string;
-  setSelectedProject: (project: string) => void;
+  selectedChannels: string[];
+  knowledge?: KnowledgeItem[];
+  selectedProject?: string;
+  setSelectedProject?: (project: string) => void;
 }
 
 export const GraphsTab = ({
   processedData,
-  knowledge,
-  selectedProject,
-  setSelectedProject,
+  selectedChannels,
 }: GraphsTabProps) => {
-  // Use the passed selectedProject instead of local state
+  const [selectedCoin, setSelectedCoin] = useState<string>("");
+
+  // Reset selected coin when channels change
   useEffect(() => {
-    if (processedData.projectDistribution.length > 0 && !selectedProject) {
-      setSelectedProject(processedData.projectDistribution[0].name);
+    setSelectedCoin("");
+  }, [selectedChannels]);
+
+  const top10Coins = useMemo(() => {
+    const channelFilteredCoins =
+      selectedChannels.length === 0
+        ? processedData.projectDistribution
+        : processedData.projectDistribution.filter((project) =>
+            processedData.coinCategories.some(
+              (coin) =>
+                coin.coin === project.name &&
+                selectedChannels.includes(coin.channel)
+            )
+          );
+
+    const filtered = channelFilteredCoins.slice(0, 10);
+
+    if (filtered.length > 0 && !selectedCoin) {
+      setTimeout(() => setSelectedCoin(filtered[0].name), 0);
     }
-  }, [processedData.projectDistribution, selectedProject, setSelectedProject]);
 
-  // Get trend data for selected project
-  const trendData = useMemo(() => {
-    if (!selectedProject || !knowledge) return [];
+    return filtered;
+  }, [processedData, selectedChannels, selectedCoin]);
 
-    // Create a map of dates to rpoints for the selected project
-    const trendMap = new Map<string, number>();
+  const chartData = useMemo(() => {
+    if (!selectedCoin) return [];
 
-    knowledge.forEach((entry) => {
-      const date = new Date(entry.date).toLocaleDateString();
-      entry.llm_answer.projects.forEach((project) => {
-        if (project.coin_or_project === selectedProject) {
-          const rpoints = Number(project.rpoints || 0);
-          trendMap.set(date, (trendMap.get(date) || 0) + rpoints);
-        }
-      });
-    });
+    const trendData =
+      Array.from(processedData.projectTrends.entries()).find(
+        ([coin]) => coin === selectedCoin
+      )?.[1] || [];
 
-    // Convert map to array and sort by date
-    return Array.from(trendMap.entries())
-      .map(([date, rpoints]) => ({ date, rpoints }))
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, [selectedProject, knowledge]);
+    // If no channels selected, show all data
+    if (selectedChannels.length === 0) {
+      return trendData
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        .map((d) => ({
+          date: new Date(d.date).toLocaleDateString(),
+          rpoints: Math.round(d.rpoints * 100) / 100,
+        }));
+    }
 
-  const top10Projects = processedData.projectDistribution.slice(0, 10);
+    // Get data only for selected channels
+    const relevantChannels = processedData.coinCategories
+      .filter(
+        (entry) =>
+          entry.coin === selectedCoin &&
+          selectedChannels.includes(entry.channel)
+      )
+      .map((entry) => entry.channel);
+
+    if (relevantChannels.length === 0) return [];
+
+    return trendData
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .map((d) => ({
+        date: new Date(d.date).toLocaleDateString(),
+        rpoints: Math.round(d.rpoints * 100) / 100,
+      }));
+  }, [
+    processedData.projectTrends,
+    processedData.coinCategories,
+    selectedCoin,
+    selectedChannels,
+  ]);
 
   return (
     <div className="space-y-8">
-      {/* Project Selection */}
-      <div className="bg-gray-900/50 rounded-xl p-6 backdrop-blur-sm border border-gray-800/50">
-        <h3 className="text-lg font-semibold text-cyan-200 mb-4">
-          Top 10 Projects by R-Points
-        </h3>
-        <select
-          value={selectedProject}
-          onChange={(e) => setSelectedProject(e.target.value)}
-          className="w-full bg-gray-800/50 text-gray-200 border border-gray-700/50 rounded-lg py-2 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-        >
-          {top10Projects.map((project) => (
-            <option key={project.name} value={project.name}>
-              {project.name} ({project.value} R-Points)
-            </option>
-          ))}
-        </select>
-      </div>
+      <div className="p-6 rounded-xl bg-gradient-to-r from-blue-900/10 via-purple-900/10 to-pink-900/10 border border-gray-800/20 backdrop-blur-sm">
+        {/* Coin Selection */}
+        <div className="mb-6 w-[200px]">
+          <Select value={selectedCoin} onValueChange={setSelectedCoin}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select a coin" />
+            </SelectTrigger>
+            <SelectContent>
+              {top10Coins.map((coin, index) => (
+                <SelectItem key={`${coin.name}-${index}`} value={coin.name}>
+                  {coin.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-      {/* Trend Chart */}
-      <div className="bg-gray-900/50 rounded-xl p-6 backdrop-blur-sm border border-gray-800/50">
-        <h3 className="text-lg font-semibold text-cyan-200 mb-4">
-          R-Points Trend for {selectedProject}
-        </h3>
+        {/* Chart */}
         <div className="h-[400px]">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart
-              data={trendData}
-              margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+            <LineChart data={chartData}>
+              <defs>
+                <linearGradient id="colorRpoints" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#2d374850" />
               <XAxis
                 dataKey="date"
-                stroke="#9ca3af"
-                tick={{ fill: "#9ca3af" }}
+                stroke="#94a3b8"
+                fontSize={12}
+                tickLine={false}
+                axisLine={false}
+                tickMargin={10}
               />
-              <YAxis stroke="#9ca3af" tick={{ fill: "#9ca3af" }} />
+              <YAxis
+                stroke="#94a3b8"
+                fontSize={12}
+                tickLine={false}
+                axisLine={false}
+                domain={["auto", "auto"]}
+                tickMargin={10}
+                tickFormatter={(value) => value.toLocaleString()}
+              />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: "rgba(17, 24, 39, 0.8)",
-                  border: "1px solid rgba(59, 130, 246, 0.5)",
+                  backgroundColor: "rgba(15, 23, 42, 0.9)",
+                  border: "1px solid rgba(59, 130, 246, 0.2)",
                   borderRadius: "0.5rem",
-                  backdropFilter: "blur(8px)",
+                  padding: "12px",
                 }}
-                labelStyle={{ color: "#e5e7eb" }}
-                itemStyle={{ color: "#93c5fd" }}
+                labelStyle={{ color: "#94a3b8", marginBottom: "4px" }}
+                itemStyle={{ color: "#3b82f6" }}
+                formatter={(value: number) => [
+                  value.toLocaleString(),
+                  "R-Points",
+                ]}
+              />
+              <Area
+                type="monotone"
+                dataKey="rpoints"
+                stroke="#3b82f6"
+                strokeWidth={2}
+                fillOpacity={1}
+                fill="url(#colorRpoints)"
               />
               <Line
                 type="monotone"
                 dataKey="rpoints"
                 stroke="#3b82f6"
                 strokeWidth={2}
-                dot={{ fill: "#3b82f6", r: 4 }}
-                activeDot={{ r: 6, fill: "#60a5fa" }}
+                dot={false}
+                name="R-Points"
+                activeDot={{
+                  r: 6,
+                  fill: "#3b82f6",
+                  stroke: "#1e3a8a",
+                  strokeWidth: 2,
+                }}
               />
             </LineChart>
           </ResponsiveContainer>
