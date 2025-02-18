@@ -19,6 +19,7 @@ interface RawDataItem {
   video_title: string;
   channel_name: string;
   link?: string;
+  summary?: string;
   llm_answer: {
     projects: Array<{
       coin_or_project: string;
@@ -149,6 +150,7 @@ export async function POST(request: Request) {
         video_title: item.video_title,
         "channel name": item.channel_name,
         link: item.link || "",
+        summary: item.summary || "",
         llm_answer: {
           projects: transformedProjects,
           total_count: llm_answer.total_count || 0,
@@ -159,29 +161,45 @@ export async function POST(request: Request) {
       };
     });
 
-    // Delete all existing data
-    const { error: deleteError } = await supabase
+    // Instead of deleting all data, let's check what's new
+    const { data: existingData, error: fetchError } = await supabase
       .from("knowledge")
-      .delete()
-      .not("id", "is", null);
+      .select("link")
+      .order("date", { ascending: false });
 
-    if (deleteError) {
-      console.error("Delete Error:", deleteError);
-      throw new Error(`Failed to delete existing data: ${deleteError.message}`);
+    if (fetchError) {
+      throw new Error(`Failed to fetch existing data: ${fetchError.message}`);
     }
 
-    // Before the insert, transform the data to match the table structure
-    const dbData = transformedData.map((item) => ({
+    // Create a unique key for comparison using YouTube links
+    const existingLinks = new Set(existingData.map((item) => item.link));
+
+    // Filter out only new items
+    const newData = transformedData.filter(
+      (item) => !existingLinks.has(item.link)
+    );
+
+    if (newData.length === 0) {
+      return NextResponse.json({
+        success: true,
+        message: "No new data to update",
+        dataSize: 0,
+      });
+    }
+
+    // Transform only the new data
+    const dbData = newData.map((item) => ({
       date: item.date,
       transcript: item.transcript,
       video_title: item.video_title,
       "channel name": item["channel name"],
       link: item.link,
+      summary: item.summary,
       llm_answer: item.llm_answer,
       created_at: item.created_at,
     }));
 
-    // Insert new data
+    // Insert only new data
     const { error: insertError } = await supabase
       .from("knowledge")
       .insert(dbData);
@@ -191,10 +209,18 @@ export async function POST(request: Request) {
       throw new Error(`Failed to insert new data: ${insertError.message}`);
     }
 
+    // Force revalidate the knowledge route to clear client caches
+    await fetch(
+      `${process.env.NEXT_PUBLIC_BASE_URL}/api/revalidate?path=/api/knowledge`,
+      {
+        method: "POST",
+      }
+    );
+
     return NextResponse.json({
       success: true,
-      message: "Data updated successfully",
-      dataSize: transformedData.length,
+      message: "New data added successfully",
+      dataSize: newData.length,
     });
   } catch (error: unknown) {
     console.error("POST Error:", error);

@@ -18,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useMemo, useEffect } from "react";
+import { useMemo } from "react";
 import { useCoinData } from "@/hooks/useCoinData";
 import Image from "next/image";
 
@@ -62,15 +62,7 @@ export function CombinedMarketTable({
       .map((project) => project.name);
   }, [processedData, selectedChannels]);
 
-  const { data: coinData, isLoading, refetch } = useCoinData(symbols);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      refetch();
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [refetch]);
+  const { data: coinData, isLoading } = useCoinData(symbols);
 
   const columns: ColumnDef<CoinData>[] = [
     {
@@ -194,10 +186,14 @@ export function CombinedMarketTable({
           columns={columns}
           data={coinData || []}
           onRowClick={(row: CoinData) => {
+            const latestData =
+              coinData?.find(
+                (coin) => coin.coingecko_id === row.coingecko_id
+              ) || row;
             onCoinSelect({
-              symbol: row.coingecko_id,
-              coingecko_id: row.coingecko_id,
-              data: row,
+              symbol: latestData.coingecko_id,
+              coingecko_id: latestData.coingecko_id,
+              data: latestData,
             });
           }}
         />

@@ -77,7 +77,7 @@ export function ChannelSelector({
             {channels.map((channel) => (
               <label
                 key={channel}
-                className="flex items-center px-4 py-2 hover:bg-gray-800/60 cursor-pointer rounded"
+                className="flex items-center px-4 py-2 hover:bg-gray-800/60 cursor-pointer rounded group"
               >
                 <Checkbox
                   checked={tempSelectedChannels.includes(channel)}
@@ -88,9 +88,11 @@ export function ChannelSelector({
                         : prev.filter((ch) => ch !== channel)
                     );
                   }}
-                  className="mr-2"
+                  className="mr-2 border-gray-500 data-[state=checked]:bg-blue-500 data-[state=checked]:border-blue-500"
                 />
-                <span className="text-sm text-gray-200">{channel}</span>
+                <span className="text-sm text-gray-200 group-hover:text-gray-100">
+                  {channel}
+                </span>
               </label>
             ))}
           </div>

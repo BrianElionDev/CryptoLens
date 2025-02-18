@@ -1,42 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
 
+const COINGECKO_BASE_URL = "https://api.coingecko.com/api/v3";
+
 // Rate limiting configuration
+const REQUEST_DELAY = 10000; // 10 seconds between requests
 let lastRequestTime = 0;
 
 export async function GET(
   request: NextRequest,
-  context: { params: { symbol: string } }
+  context: { params: Promise<{ symbol: string }> }
 ) {
   try {
-    const params = await context.params;
-    const searchParams = request.nextUrl.searchParams;
-    const days = searchParams.get("days") || "1"; // Default to 24h (1 day)
-
-    // Enforce delay between requests
     const now = Date.now();
     const timeSinceLastRequest = now - lastRequestTime;
-    if (timeSinceLastRequest < 30000) {
-      // 30 seconds minimum between requests
+    if (timeSinceLastRequest < REQUEST_DELAY) {
       await new Promise((resolve) =>
-        setTimeout(resolve, 30000 - timeSinceLastRequest)
+        setTimeout(resolve, REQUEST_DELAY - timeSinceLastRequest)
       );
     }
-    lastRequestTime = Date.now();
+    lastRequestTime = now;
 
-    // The symbol parameter should already be a valid CoinGecko ID from the frontend
-    const coinId = params.symbol.toLowerCase(); // Ensure lowercase for consistency
+    const searchParams = request.nextUrl.searchParams;
+    const days = searchParams.get("days") || "1";
+    const { symbol } = await context.params;
+    const coinId = symbol.toLowerCase();
+
     const response = await axios.get(
-      `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart`,
+      `${COINGECKO_BASE_URL}/coins/${coinId}/market_chart`,
       {
         params: {
           vs_currency: "usd",
           days: days,
         },
-        headers: {
-          Accept: "application/json",
-          "Cache-Control": "no-cache",
-        },
+        headers: { Accept: "application/json" },
         timeout: 10000,
       }
     );
@@ -53,7 +50,7 @@ export async function GET(
       })
     );
 
-    return NextResponse.json({ data: formattedData });
+    return NextResponse.json(formattedData);
   } catch (error) {
     console.error("Error fetching coin history:", error);
     if (axios.isAxiosError(error) && error.response?.status === 429) {

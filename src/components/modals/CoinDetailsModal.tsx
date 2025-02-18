@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState, useMemo } from "react";
+import { useCoinHistory, useCoinData } from "@/hooks/useCoinData";
+import type { CoinData } from "@/hooks/useCoinData";
 import {
   Sheet,
   SheetContent,
@@ -16,7 +18,6 @@ import {
   BarChart3,
   Coins,
   CoinsIcon,
-  X,
 } from "lucide-react";
 import {
   AreaChart,
@@ -29,26 +30,6 @@ import {
 } from "recharts";
 import Image from "next/image";
 
-interface CoinData {
-  id: string;
-  name: string;
-  symbol: string;
-  price: number;
-  market_cap: number;
-  volume_24h: number;
-  percent_change_24h: number;
-  circulating_supply: number;
-  image?: string;
-  coingecko_id?: string;
-}
-
-interface ChartData {
-  data: {
-    date: string;
-    price: number;
-  }[];
-}
-
 interface CoinDetailsModalProps {
   coingecko_id: string;
   data: CoinData;
@@ -57,63 +38,36 @@ interface CoinDetailsModalProps {
 
 export default function CoinDetailsModal({
   coingecko_id,
-  data: coinData,
+  data: initialData,
   onClose,
 }: CoinDetailsModalProps) {
-  const [timeframe, setTimeframe] = useState("1"); // Default to 24h
-  const [chartData, setChartData] = useState<ChartData | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [timeframe, setTimeframe] = useState("1");
 
-  // Function to fetch chart data
-  const fetchChartData = useCallback(
-    async (timeframe: string) => {
-      setIsLoading(true);
-      setChartData(null);
-      setError(null);
-
-      try {
-        const response = await fetch(
-          `/api/coin/${encodeURIComponent(
-            coingecko_id
-          )}/history?days=${timeframe}`
-        );
-
-        if (!response.ok) {
-          const errorData = await response
-            .json()
-            .catch(() => ({ error: "Failed to fetch data" }));
-          throw new Error(errorData.error || "Failed to fetch data");
-        }
-
-        const json = await response.json();
-
-        if (json.error) {
-          throw new Error(json.error);
-        }
-
-        if (json.data) {
-          setChartData(json);
-          setError(null);
-        } else {
-          throw new Error("No data received");
-        }
-      } catch (err: unknown) {
-        console.error("Error fetching chart data:", err);
-        setError(err instanceof Error ? err.message : "Failed to fetch data");
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [coingecko_id]
+  // Use the coin data hook directly for live updates
+  const { data: liveData } = useCoinData([coingecko_id]);
+  const { data: chartData, isLoading: isLoadingChart } = useCoinHistory(
+    coingecko_id,
+    timeframe
   );
 
-  // Initial fetch and timeframe changes
-  useEffect(() => {
-    if (coingecko_id) {
-      fetchChartData(timeframe);
+  // Use the latest data or fall back to initial data
+  const displayData = useMemo(() => {
+    if (liveData && liveData[0]) {
+      return liveData[0];
     }
-  }, [coingecko_id, fetchChartData, timeframe]);
+    return initialData;
+  }, [liveData, initialData]);
+
+  const isLoading = isLoadingChart;
+
+  // Format chart data
+  const formattedChartData = useMemo(() => {
+    if (!chartData) return [];
+    return chartData.map((point) => ({
+      date: point.date,
+      price: point.price,
+    }));
+  }, [chartData]);
 
   const getChartColor = () => {
     switch (timeframe) {
@@ -128,9 +82,9 @@ export default function CoinDetailsModal({
     }
   };
 
-  if (!coinData) {
+  if (!displayData) {
     return (
-      <Sheet open={true}>
+      <Sheet open={true} onOpenChange={onClose}>
         <SheetContent
           side="right"
           className="w-full sm:max-w-xl lg:max-w-3xl xl:max-w-4xl p-0 bg-gradient-to-b from-gray-900/95 to-gray-800/95 backdrop-blur-xl border-gray-800/50"
@@ -144,21 +98,21 @@ export default function CoinDetailsModal({
   }
 
   return (
-    <Sheet open={true}>
+    <Sheet open={true} onOpenChange={onClose}>
       <SheetContent
         side="right"
-        className="w-full sm:max-w-xl lg:max-w-3xl xl:max-w-4xl p-0 bg-gradient-to-b from-gray-900/95 to-gray-800/95 backdrop-blur-xl border-gray-800/50"
+        className="w-full sm:max-w-xl lg:max-w-3xl xl:max-w-4xl p-0 bg-gradient-to-b from-gray-900/95 to-gray-800/95 backdrop-blur-xl border-gray-800/50 [&>button]:p-2 [&>button]:text-white [&>button]:rounded-lg [&>button]:bg-gray-800/50 [&>button]:hover:bg-gray-700/50 [&>button]:transition-colors [&>button]:absolute [&>button]:right-6 [&>button]:top-6"
       >
         <div className="h-full flex flex-col">
           <SheetHeader className="flex-none p-6 pb-2">
             <div className="flex items-center justify-between">
               <SheetTitle className="flex items-center gap-2 text-xl">
                 <div className="flex items-center gap-3">
-                  {coinData.image ? (
+                  {displayData.image ? (
                     <div className="relative w-8 h-8">
                       <Image
-                        src={coinData.image}
-                        alt={coinData.name}
+                        src={displayData.image}
+                        alt={displayData.name}
                         fill
                         className="rounded-full object-cover"
                         sizes="40px"
@@ -168,16 +122,10 @@ export default function CoinDetailsModal({
                     <CoinsIcon className="w-8 h-8 text-blue-400" />
                   )}
                   <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400">
-                    {coinData.name} ({coinData.symbol.toUpperCase()})
+                    {displayData.name} ({displayData.symbol.toUpperCase()})
                   </span>
                 </div>
               </SheetTitle>
-              <button
-                onClick={onClose}
-                className="p-2 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-colors"
-              >
-                <X className="w-5 h-5 text-gray-400" />
-              </button>
             </div>
           </SheetHeader>
 
@@ -194,7 +142,7 @@ export default function CoinDetailsModal({
                 <CardContent>
                   <div className="text-xl font-bold text-gray-200">
                     $
-                    {coinData.price.toLocaleString(undefined, {
+                    {displayData.price.toLocaleString(undefined, {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,
                     })}
@@ -211,7 +159,7 @@ export default function CoinDetailsModal({
                 </CardHeader>
                 <CardContent>
                   <div className="text-xl font-bold text-gray-200">
-                    ${coinData.market_cap.toLocaleString()}
+                    ${displayData.market_cap.toLocaleString()}
                   </div>
                 </CardContent>
               </Card>
@@ -219,7 +167,7 @@ export default function CoinDetailsModal({
               <Card className="bg-gray-800/50 border-gray-700/50 backdrop-blur-sm">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-gray-400 flex items-center gap-2">
-                    {coinData.percent_change_24h >= 0 ? (
+                    {displayData.percent_change_24h >= 0 ? (
                       <TrendingUp className="w-4 h-4 text-green-400" />
                     ) : (
                       <TrendingDown className="w-4 h-4 text-red-400" />
@@ -230,12 +178,12 @@ export default function CoinDetailsModal({
                 <CardContent>
                   <div
                     className={`text-xl font-bold ${
-                      coinData.percent_change_24h >= 0
+                      displayData.percent_change_24h >= 0
                         ? "text-green-400"
                         : "text-red-400"
                     }`}
                   >
-                    {coinData.percent_change_24h.toLocaleString(undefined, {
+                    {displayData.percent_change_24h.toLocaleString(undefined, {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,
                     })}
@@ -253,7 +201,7 @@ export default function CoinDetailsModal({
                 </CardHeader>
                 <CardContent>
                   <div className="text-xl font-bold text-gray-200">
-                    {coinData.circulating_supply.toLocaleString()}
+                    {displayData.circulating_supply.toLocaleString()}
                   </div>
                 </CardContent>
               </Card>
@@ -282,13 +230,9 @@ export default function CoinDetailsModal({
                         Loading chart data...
                       </p>
                     </div>
-                  ) : error ? (
-                    <div className="h-full flex items-center justify-center">
-                      <p className="text-red-400">{error}</p>
-                    </div>
-                  ) : chartData?.data ? (
+                  ) : chartData ? (
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={chartData.data}>
+                      <AreaChart data={formattedChartData}>
                         <defs>
                           <linearGradient
                             id="colorPrice"

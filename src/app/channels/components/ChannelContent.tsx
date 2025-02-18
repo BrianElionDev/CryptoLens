@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useMemo, useState } from "react";
-import { useKnowledge } from "@/contexts/KnowledgeContext";
+import { useKnowledgeData } from "@/hooks/useCoinData";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -16,7 +16,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useChannelStore } from "@/stores/channelStore";
 
 export const ChannelContent = () => {
-  const { knowledge } = useKnowledge();
+  const { data: knowledge } = useKnowledgeData();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { selectedChannels, setSelectedChannels } = useChannelStore();
@@ -25,10 +25,10 @@ export const ChannelContent = () => {
   const [tempSelectedChannels, setTempSelectedChannels] =
     useState<string[]>(selectedChannels);
 
-  // Get unique channels
+  // Get unique channels with proper typing
   const channels = Array.from(
     new Set(knowledge?.map((item) => item["channel name"]) || [])
-  ).sort();
+  ).sort() as string[];
 
   // Initialize from URL params on first load
   useEffect(() => {
@@ -268,7 +268,9 @@ export const ChannelContent = () => {
                         d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
                       />
                     </svg>
-                    <span className="font-medium text-indigo-300">Analytics</span>
+                    <span className="font-medium text-indigo-300">
+                      Analytics
+                    </span>
                   </TabsTrigger>
                 </TabsList>
               </div>

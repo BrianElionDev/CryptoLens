@@ -1,15 +1,16 @@
 "use client";
 
-import { useKnowledge } from "@/contexts/KnowledgeContext";
 import { useState, useMemo, useEffect } from "react";
+import { useKnowledgeData } from "@/hooks/useCoinData";
 import { GraphsTab } from "./components/GraphsTab";
 import { CategoriesTab } from "./components/CategoriesTab";
 import { CombinedMarketTable } from "@/components/tables/CombinedMarketTable";
 import { motion, AnimatePresence } from "framer-motion";
-import CoinDetailsModal from "@/components/CoinDetailsModal";
+import CoinDetailsModal from "@/components/modals/CoinDetailsModal";
 import { ChannelSelector } from "./components/ChannelSelector";
 import { AnalyticsTabs, TabType } from "./components/AnalyticsTabs";
 import type { CoinData } from "@/hooks/useCoinData";
+import type { KnowledgeItem } from "@/types/knowledge";
 
 // Add interface for raw project data
 interface RawProjectData {
@@ -20,7 +21,7 @@ interface RawProjectData {
 }
 
 export default function AnalyticsPage() {
-  const { knowledge } = useKnowledge();
+  const { data: knowledge } = useKnowledgeData();
   const [activeTab, setActiveTab] = useState<TabType>("market");
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   const [selectedCoin, setSelectedCoin] = useState<{
@@ -53,7 +54,7 @@ export default function AnalyticsPage() {
     const categoryMap = new Map<string, number>();
     const channelSet = new Set<string>();
 
-    knowledge.forEach((item) => {
+    knowledge.forEach((item: KnowledgeItem) => {
       const projects = item.llm_answer.projects;
       const channel = item["channel name"];
       const date = new Date(item.date).toISOString().split("T")[0];
@@ -114,8 +115,10 @@ export default function AnalyticsPage() {
         coin,
         categories: Array.from(categories),
         channel:
-          knowledge.find((item) =>
-            item.llm_answer.projects.some((p) => p.coin_or_project === coin)
+          knowledge?.find((item: KnowledgeItem) =>
+            item.llm_answer.projects.some(
+              (p: RawProjectData) => p.coin_or_project === coin
+            )
           )?.["channel name"] || "",
         rpoints: projectMap.get(coin) || 0,
       }))

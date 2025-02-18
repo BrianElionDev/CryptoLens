@@ -1,18 +1,18 @@
 "use client";
 
-import { useEffect, Suspense } from "react";
+import { useEffect, Suspense, memo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useKnowledge } from "@/contexts/KnowledgeContext";
 import KnowledgeBase from "@/components/KnowledgeBase";
 import { useKnowledgeStore } from "@/stores/knowledgeStore";
+import { useKnowledgeData } from "@/hooks/useCoinData";
 
 type DateFilterType = "all" | "today" | "week" | "month" | "year";
 type SortByType = "date" | "title" | "channel";
 
-function KnowledgePageContent() {
+const KnowledgePageContent = memo(function KnowledgePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { knowledge, isLoading, error } = useKnowledge();
+  const { data: knowledge, isLoading, error } = useKnowledgeData();
   const itemsPerPage = 99;
 
   const {
@@ -45,14 +45,7 @@ function KnowledgePageContent() {
       setSortBy(sort as SortByType);
     }
     if (page) setCurrentPage(Number(page));
-  }, [
-    searchParams,
-    setSearchTerm,
-    setFilterChannel,
-    setDateFilter,
-    setSortBy,
-    setCurrentPage,
-  ]);
+  }, [searchParams, setSearchTerm, setFilterChannel, setDateFilter, setSortBy, setCurrentPage]);
 
   // Update URL when filters change
   useEffect(() => {
@@ -92,24 +85,16 @@ function KnowledgePageContent() {
       params.toString() ? `?${params.toString()}` : ""
     }`;
 
-    router.push(newUrl, { scroll: false });
-  }, [
-    searchTerm,
-    filterChannel,
-    dateFilter,
-    sortBy,
-    currentPage,
-    searchParams,
-    router,
-  ]);
+    router.replace(newUrl, { scroll: false });
+  }, [searchTerm, filterChannel, dateFilter, sortBy, currentPage, searchParams, router]);
 
   // Get unique channels from the channel name field
   const channels = Array.from(
-    new Set(knowledge.map((item) => item["channel name"] || "Unknown"))
+    new Set((knowledge || []).map((item) => item["channel name"] || "Unknown"))
   ).sort();
 
   // Filter and sort items
-  const filteredAndSortedItems = knowledge
+  const filteredAndSortedItems = (knowledge || [])
     .filter((item) => {
       const matchesSearch = item.video_title
         .toLowerCase()
@@ -180,7 +165,7 @@ function KnowledgePageContent() {
   }
 
   if (error) {
-    return <div className="text-red-500 text-center py-8">{error}</div>;
+    return <div className="text-red-500 text-center py-8">{error.message}</div>;
   }
 
   return (
@@ -455,7 +440,7 @@ function KnowledgePageContent() {
       </main>
     </div>
   );
-}
+});
 
 export default function KnowledgePage() {
   return (
