@@ -1,57 +1,39 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Plus_Jakarta_Sans, Fira_Code } from "next/font/google";
 import "./globals.css";
-import { KnowledgeProvider } from "@/contexts/KnowledgeContext";
 import Navbar from "@/components/Navbar";
 import { Toaster } from "react-hot-toast";
 import { QueryProvider } from "@/providers/QueryProvider";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
+  display: "swap",
+  variable: "--font-jakarta",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const firaCode = Fira_Code({
   subsets: ["latin"],
+  display: "swap",
+  variable: "--font-fira",
 });
 
 export const metadata: Metadata = {
-  title: "Crypto Lens",
-  description: "Crypto currency insights",
+  title: "CryptoLens",
+  description: "Crypto Analytics Platform",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-900`}
-      >
+    <html lang="en" className="dark">
+      <body className={`${jakarta.variable} ${firaCode.variable} font-jakarta`}>
         <QueryProvider>
-          <Toaster
-            position="top-center"
-            toastOptions={{
-              duration: 5000,
-              style: {
-                background: "#1F2937",
-                color: "#E5E7EB",
-                border: "1px solid rgba(59, 130, 246, 0.5)",
-                backdropFilter: "blur(8px)",
-                fontSize: "1rem",
-                padding: "16px",
-                maxWidth: "400px",
-                boxShadow: "0 8px 16px rgba(0, 0, 0, 0.3)",
-              },
-            }}
-          />
           <Navbar />
-          <div className="pt-0">
-            <KnowledgeProvider>{children}</KnowledgeProvider>
-          </div>
+          <Toaster position="bottom-right" />
+          {children}
         </QueryProvider>
       </body>
     </html>

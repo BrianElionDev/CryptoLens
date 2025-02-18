@@ -1,7 +1,7 @@
 export interface KnowledgeItem {
   id: string;
   date: string;
-  transcript: string;
+  transcript?: string;
   video_title: string;
   "channel name": string;
   link: string;
