@@ -6,6 +6,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import type { KnowledgeItem, Project } from "@/types/knowledge";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LoadingState, CardSkeleton } from "@/components/LoadingState";
+import { Button } from "@/components/ui/button";
+import { Filter, X } from "lucide-react";
 
 type CategoryData = {
   name: string;
@@ -27,9 +29,9 @@ function CategoriesContent() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<SortOption>("rpoints");
-  const [selectedCategory, setSelectedCategory] = useState<CategoryData | null>(
-    null
-  );
+  const [selectedCategoryData, setSelectedCategoryData] =
+    useState<CategoryData | null>(null);
+  const [showCategorySelector, setShowCategorySelector] = useState(false);
 
   // Process data to get category insights
   const categoryData = useMemo(() => {
@@ -153,6 +155,78 @@ function CategoriesContent() {
       });
   }, [categoryData, searchTerm, sortBy, selectedCategories]);
 
+  // Category selector modal
+  const CategorySelectorModal = () => {
+    if (!showCategorySelector) return null;
+
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+        onClick={() => setShowCategorySelector(false)}
+      >
+        <motion.div
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.95, opacity: 0 }}
+          className="bg-gray-800/90 backdrop-blur-xl rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-700/50"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-semibold text-gray-200">
+              Select Categories
+            </h2>
+            <button
+              onClick={() => setShowCategorySelector(false)}
+              className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5 text-gray-400" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <button
+              onClick={() => setSelectedCategories([])}
+              className={`p-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                selectedCategories.length === 0
+                  ? "bg-blue-500 text-white"
+                  : "bg-gray-800/50 text-gray-400 hover:text-white hover:bg-gray-700/50"
+              }`}
+            >
+              All Categories
+            </button>
+            {categoryTypes.map((category) => (
+              <button
+                key={category}
+                onClick={() => {
+                  setSelectedCategories((prev) =>
+                    prev.includes(category)
+                      ? prev.filter((c) => c !== category)
+                      : [...prev, category]
+                  );
+                }}
+                className={`p-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  selectedCategories.includes(category)
+                    ? "bg-blue-500 text-white"
+                    : "bg-gray-800/50 text-gray-400 hover:text-white hover:bg-gray-700/50"
+                }`}
+              >
+                {category}
+                {selectedCategories.includes(category) && (
+                  <span className="ml-2 text-xs bg-blue-600 px-1.5 py-0.5 rounded">
+                    Selected
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </motion.div>
+      </motion.div>
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -221,36 +295,39 @@ function CategoriesContent() {
                 </div>
 
                 {/* Category Filters */}
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => setSelectedCategories([])}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-                      selectedCategories.length === 0
-                        ? "bg-blue-500 text-white"
-                        : "bg-gray-800/50 text-gray-400 hover:text-white hover:bg-gray-700/50"
-                    }`}
+                <div className="flex flex-wrap gap-2 items-center">
+                  <Button
+                    onClick={() => setShowCategorySelector(true)}
+                    className="bg-gray-800/50 text-gray-300 hover:bg-gray-700/50 hover:text-white"
                   >
-                    All
-                  </button>
-                  {categoryTypes.map((category) => (
-                    <button
-                      key={category}
-                      onClick={() => {
-                        setSelectedCategories((prev) =>
-                          prev.includes(category)
-                            ? prev.filter((c) => c !== category)
-                            : [...prev, category]
-                        );
-                      }}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-                        selectedCategories.includes(category)
-                          ? "bg-blue-500 text-white"
-                          : "bg-gray-800/50 text-gray-400 hover:text-white hover:bg-gray-700/50"
-                      }`}
-                    >
-                      {category}
-                    </button>
-                  ))}
+                    <Filter className="w-4 h-4 mr-2" />
+                    Filter Categories
+                  </Button>
+
+                  {selectedCategories.length > 0 ? (
+                    selectedCategories.map((category) => (
+                      <span
+                        key={category}
+                        className="px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-2"
+                      >
+                        {category}
+                        <button
+                          onClick={() =>
+                            setSelectedCategories((prev) =>
+                              prev.filter((c) => c !== category)
+                            )
+                          }
+                          className="hover:text-blue-200"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-sm text-gray-400">
+                      All Categories
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -263,7 +340,7 @@ function CategoriesContent() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.1 }}
                     className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 hover:border-blue-500/50 transition-all duration-300 cursor-pointer hover:bg-gray-800/70"
-                    onClick={() => setSelectedCategory(category)}
+                    onClick={() => setSelectedCategoryData(category)}
                   >
                     <div className="flex items-center justify-between mb-4">
                       <h2 className="text-xl font-semibold text-cyan-200">
@@ -354,15 +431,20 @@ function CategoriesContent() {
               </div>
             </div>
 
+            {/* Category Selector Modal */}
+            <AnimatePresence>
+              {showCategorySelector && <CategorySelectorModal />}
+            </AnimatePresence>
+
             {/* Category Detail Modal */}
             <AnimatePresence>
-              {selectedCategory && (
+              {selectedCategoryData && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-                  onClick={() => setSelectedCategory(null)}
+                  onClick={() => setSelectedCategoryData(null)}
                 >
                   <motion.div
                     initial={{ scale: 0.95, opacity: 0 }}
@@ -374,10 +456,10 @@ function CategoriesContent() {
                     {/* Modal Header */}
                     <div className="flex items-center justify-between mb-6">
                       <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500">
-                        {selectedCategory.name}
+                        {selectedCategoryData.name}
                       </h2>
                       <button
-                        onClick={() => setSelectedCategory(null)}
+                        onClick={() => setSelectedCategoryData(null)}
                         className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors"
                       >
                         <svg
@@ -405,19 +487,19 @@ function CategoriesContent() {
                             Total Coins
                           </div>
                           <div className="text-xl font-semibold text-blue-300">
-                            {selectedCategory.coins.length}
+                            {selectedCategoryData.coins.length}
                           </div>
                         </div>
                         <div className="bg-gray-900/50 rounded-lg p-4">
                           <div className="text-sm text-gray-400">R-Points</div>
                           <div className="text-xl font-semibold text-purple-300">
-                            {selectedCategory.totalRpoints.toLocaleString()}
+                            {selectedCategoryData.totalRpoints.toLocaleString()}
                           </div>
                         </div>
                         <div className="bg-gray-900/50 rounded-lg p-4">
                           <div className="text-sm text-gray-400">Mentions</div>
                           <div className="text-xl font-semibold text-pink-300">
-                            {selectedCategory.mentions}
+                            {selectedCategoryData.mentions}
                           </div>
                         </div>
                         <div className="bg-gray-900/50 rounded-lg p-4">
@@ -425,7 +507,7 @@ function CategoriesContent() {
                             Recent Activity
                           </div>
                           <div className="text-xl font-semibold text-cyan-300">
-                            {selectedCategory.recentActivity}
+                            {selectedCategoryData.recentActivity}
                           </div>
                         </div>
                       </div>
@@ -437,7 +519,7 @@ function CategoriesContent() {
                         </h3>
                         <div className="grid grid-cols-3 gap-4">
                           {Object.entries(
-                            selectedCategory.marketCapDistribution
+                            selectedCategoryData.marketCapDistribution
                           ).map(([cap, count]) => (
                             <div
                               key={cap}
@@ -466,7 +548,7 @@ function CategoriesContent() {
                           All Coins
                         </h3>
                         <div className="flex flex-wrap gap-2">
-                          {selectedCategory.coins.map((coin: string) => (
+                          {selectedCategoryData.coins.map((coin: string) => (
                             <span
                               key={coin}
                               className="px-3 py-1.5 rounded-full text-sm bg-gray-900/50 text-gray-300 border border-gray-700/50"
