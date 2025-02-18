@@ -5,6 +5,7 @@ export interface KnowledgeItem {
   video_title: string;
   "channel name": string;
   link: string;
+  summary?: string;
   llm_answer: LLMAnswer;
 }
 
