@@ -1,17 +1,30 @@
 import { QueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 
 export const queryConfig = {
   defaultOptions: {
     queries: {
-      staleTime: Infinity,
-      gcTime: 1000 * 60 * 60,
-      refetchOnWindowFocus: false,
-      refetchOnMount: false,
-      refetchOnReconnect: false,
-      retry: 1,
+      staleTime: 1000 * 60, // 1 minute
+      gcTime: 1000 * 60 * 60, // 1 hour
+      refetchOnWindowFocus: true,
+      refetchOnMount: true,
+      refetchOnReconnect: true,
+      retry: 3,
+      retryDelay: (attemptIndex: number) =>
+        Math.min(1000 * 2 ** attemptIndex, 30000),
+      onError: (error: Error) => {
+        console.error("Query error:", error);
+        toast.error("Failed to fetch data. Please try again.");
+      },
     },
     mutations: {
-      retry: 1,
+      retry: 2,
+      retryDelay: (attemptIndex: number) =>
+        Math.min(1000 * 2 ** attemptIndex, 30000),
+      onError: (error: Error) => {
+        console.error("Mutation error:", error);
+        toast.error("Operation failed. Please try again.");
+      },
     },
   },
 };

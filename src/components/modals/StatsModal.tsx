@@ -183,7 +183,7 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
             renderLLMAnswer(item.llm_answer)
           ) : (
             <div className="flex items-center justify-center h-full min-h-[300px] rounded-xl bg-gray-900/40 border border-gray-700/50">
-              <p className="text-gray-400">Summary coming soon...</p>
+              <p className="text-gray-400">{item.summary}</p>
             </div>
           )}
         </div>

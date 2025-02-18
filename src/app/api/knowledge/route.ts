@@ -95,7 +95,6 @@ export async function POST(request: Request) {
       throw new Error("Invalid data format: expected an object");
     }
 
-    // Update the data transformation
     const dataArray = Array.isArray(data)
       ? data
       : Object.entries(data).map(([id, item]) => ({
@@ -110,10 +109,10 @@ export async function POST(request: Request) {
 
       // Check for required fields
       const missingFields = [];
-      if (!item.transcript) missingFields.push("transcript");
       if (!item.video_title) missingFields.push("video_title");
       if (!item.channel_name) missingFields.push("channel_name");
       if (!item.llm_answer) missingFields.push("llm_answer");
+      if (!item.transcript) missingFields.push("transcript");
 
       if (missingFields.length > 0) {
         throw new Error(
@@ -143,14 +142,14 @@ export async function POST(request: Request) {
         })
       );
 
-      // Update the return object
+      // Update the return object with required transcript
       return {
         date: item.date || new Date().toISOString(),
         transcript: item.transcript,
         video_title: item.video_title,
         "channel name": item.channel_name,
         link: item.link || "",
-        summary: item.summary || "",
+        ...(item.summary && { summary: item.summary }),
         llm_answer: {
           projects: transformedProjects,
           total_count: llm_answer.total_count || 0,
