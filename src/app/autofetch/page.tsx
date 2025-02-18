@@ -196,33 +196,13 @@ export default function AutofetchPage() {
                         )}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 bg-white border-gray-200 shadow-xl">
+                    <PopoverContent className="w-auto p-0">
                       <Calendar
                         mode="single"
                         selected={publishedAfter}
                         onSelect={setPublishedAfter}
                         disabled={{ after: new Date() }}
                         initialFocus
-                        className={cn(
-                          "bg-white border border-gray-200",
-                          "[&_.rdp-day]:text-gray-700 [&_.rdp-day]:font-medium",
-                          "[&_.rdp-day_:hover]:bg-blue-50",
-                          "[&_.rdp-day_:focus]:bg-blue-50",
-                          "[&_.rdp-day_:focus]:text-blue-700",
-                          "[&_.rdp-day_:hover]:text-blue-700",
-                          "[&_.rdp-head_cell]:text-gray-500 [&_.rdp-head_cell]:font-medium",
-                          "[&_.rdp-button:hover]:bg-blue-50",
-                          "[&_.rdp-button:hover]:text-blue-700",
-                          "[&_.rdp-nav_button:hover]:bg-blue-50",
-                          "[&_.rdp-nav_button:hover]:text-blue-700",
-                          "[&_.rdp-nav_button]:text-gray-600",
-                          "[&_.rdp-caption]:text-gray-700 [&_.rdp-caption]:font-medium",
-                          "[&_.rdp-day_today]:bg-blue-50 [&_.rdp-day_today]:text-blue-700 [&_.rdp-day_today]:font-bold",
-                          "[&_.rdp-day_selected]:bg-blue-600 [&_.rdp-day_selected]:text-white [&_.rdp-day_selected]:font-bold",
-                          "[&_.rdp-day_selected]:hover:bg-blue-700",
-                          "[&_.rdp-day.rdp-day_outside]:text-gray-300",
-                          "[&_.rdp]:p-3 [&_.rdp]:rounded-lg [&_.rdp]:shadow-lg"
-                        )}
                       />
                     </PopoverContent>
                   </Popover>
@@ -250,36 +230,16 @@ export default function AutofetchPage() {
                         )}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 bg-white border-gray-200 shadow-xl">
+                    <PopoverContent className="w-auto p-0">
                       <Calendar
                         mode="single"
                         selected={publishedBefore}
                         onSelect={setPublishedBefore}
                         disabled={{
                           after: new Date(),
-                          before: publishedAfter, // Prevent selecting dates before the "From Date"
+                          before: publishedAfter,
                         }}
                         initialFocus
-                        className={cn(
-                          "bg-white border border-gray-200",
-                          "[&_.rdp-day]:text-gray-700 [&_.rdp-day]:font-medium",
-                          "[&_.rdp-day_:hover]:bg-blue-50",
-                          "[&_.rdp-day_:focus]:bg-blue-50",
-                          "[&_.rdp-day_:focus]:text-blue-700",
-                          "[&_.rdp-day_:hover]:text-blue-700",
-                          "[&_.rdp-head_cell]:text-gray-500 [&_.rdp-head_cell]:font-medium",
-                          "[&_.rdp-button:hover]:bg-blue-50",
-                          "[&_.rdp-button:hover]:text-blue-700",
-                          "[&_.rdp-nav_button:hover]:bg-blue-50",
-                          "[&_.rdp-nav_button:hover]:text-blue-700",
-                          "[&_.rdp-nav_button]:text-gray-600",
-                          "[&_.rdp-caption]:text-gray-700 [&_.rdp-caption]:font-medium",
-                          "[&_.rdp-day_today]:bg-blue-50 [&_.rdp-day_today]:text-blue-700 [&_.rdp-day_today]:font-bold",
-                          "[&_.rdp-day_selected]:bg-blue-600 [&_.rdp-day_selected]:text-white [&_.rdp-day_selected]:font-bold",
-                          "[&_.rdp-day_selected]:hover:bg-blue-700",
-                          "[&_.rdp-day.rdp-day_outside]:text-gray-300",
-                          "[&_.rdp]:p-3 [&_.rdp]:rounded-lg [&_.rdp]:shadow-lg"
-                        )}
                       />
                     </PopoverContent>
                   </Popover>
