@@ -1,3 +1,5 @@
+"use client";
+
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { KnowledgeItem } from "@/types/knowledge";
@@ -71,6 +73,7 @@ export async function GET() {
       video_title: item.video_title,
       "channel name": item["channel name"],
       link: item.link || "",
+      summary: item.summary || "",
       llm_answer: item.llm_answer,
     }));
 
@@ -142,14 +145,14 @@ export async function POST(request: Request) {
         })
       );
 
-      // Update the return object with required transcript
+      // Update the return object with required transcript and optional summary
       return {
         date: item.date || new Date().toISOString(),
         transcript: item.transcript,
         video_title: item.video_title,
         "channel name": item.channel_name,
         link: item.link || "",
-        ...(item.summary && { summary: item.summary }),
+        summary: item.summary || null, // Explicitly handle summary
         llm_answer: {
           projects: transformedProjects,
           total_count: llm_answer.total_count || 0,
@@ -193,7 +196,7 @@ export async function POST(request: Request) {
       video_title: item.video_title,
       "channel name": item["channel name"],
       link: item.link,
-      summary: item.summary,
+      summary: item.summary, // Make sure summary is included
       llm_answer: item.llm_answer,
       created_at: item.created_at,
     }));
@@ -208,13 +211,8 @@ export async function POST(request: Request) {
       throw new Error(`Failed to insert new data: ${insertError.message}`);
     }
 
-    // Force revalidate the knowledge route to clear client caches
-    await fetch(
-      `${process.env.NEXT_PUBLIC_BASE_URL}/api/revalidate?path=/api/knowledge`,
-      {
-        method: "POST",
-      }
-    );
+    // Remove revalidation since it's not needed in Next.js 13+ App Router
+    // The App Router automatically handles revalidation
 
     return NextResponse.json({
       success: true,
