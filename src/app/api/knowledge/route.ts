@@ -11,7 +11,6 @@ if (!supabaseUrl || !supabaseServiceKey) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// Add interface for raw data
 interface RawDataItem {
   id?: string;
   date: string;
@@ -19,8 +18,8 @@ interface RawDataItem {
   video_title: string;
   channel_name: string;
   link?: string;
-  summary?: string;
-  llm_answer: {
+  answer?: string;
+  llm_answer: Array<{
     projects: Array<{
       coin_or_project: string;
       Marketcap?: string;
@@ -34,10 +33,9 @@ interface RawDataItem {
     total_count?: number;
     total_Rpoints?: number;
     total_rpoints?: number;
-  }[];
+  }>;
 }
 
-// Add interface for project structure
 interface RawProject {
   coin_or_project: string;
   Marketcap?: string;
@@ -71,6 +69,7 @@ export async function GET() {
       video_title: item.video_title,
       "channel name": item["channel name"],
       link: item.link || "",
+      answer: item.answer || "",
       summary: item.summary || "",
       llm_answer: item.llm_answer,
     }));
@@ -123,42 +122,47 @@ export async function POST(request: Request) {
         );
       }
 
-      // Parse llm_answer if it's an array
-      const llm_answer = Array.isArray(item.llm_answer)
-        ? item.llm_answer[0]
-        : item.llm_answer;
+      // Transform llm_answer to match database structure
+      const llm_answer = {
+        projects:
+          Array.isArray(item.llm_answer) && item.llm_answer[0]?.projects
+            ? item.llm_answer[0].projects.map((project: RawProject) => ({
+                coin_or_project: project.coin_or_project,
+                marketcap: (
+                  project.Marketcap ||
+                  project.marketcap ||
+                  ""
+                ).toLowerCase(),
+                rpoints: Number(project.Rpoints || project.rpoints || 0),
+                total_count: Number(
+                  project["Total count"] || project.total_count || 0
+                ),
+                category: Array.isArray(project.category)
+                  ? project.category
+                  : [],
+              }))
+            : [],
+        total_count: Number(item.llm_answer?.[0]?.total_count || 0),
+        total_rpoints: Number(
+          item.llm_answer?.[0]?.total_Rpoints ||
+            item.llm_answer?.[0]?.total_rpoints ||
+            0
+        ),
+      };
 
-      // Update project transformation
-      const transformedProjects = llm_answer.projects.map(
-        (project: RawProject) => ({
-          coin_or_project: project.coin_or_project,
-          marketcap: (
-            project.Marketcap ||
-            project.marketcap ||
-            ""
-          ).toLowerCase(),
-          rpoints: project.Rpoints || project.rpoints || 0,
-          total_count: project["Total count"] || project.total_count || 0,
-          category: project.category || [],
-        })
-      );
-
-      // Update the return object with required transcript and optional summary
-      return {
+      // Clean the data structure
+      const cleanedData = {
         date: item.date || new Date().toISOString(),
         transcript: item.transcript,
         video_title: item.video_title,
         "channel name": item.channel_name,
         link: item.link || "",
-        summary: item.summary || null, // Explicitly handle summary
-        llm_answer: {
-          projects: transformedProjects,
-          total_count: llm_answer.total_count || 0,
-          total_rpoints:
-            llm_answer.total_Rpoints || llm_answer.total_rpoints || 0,
-        },
+        summary: item.answer || "",
+        llm_answer: JSON.parse(JSON.stringify(llm_answer)), // Ensure clean JSON
         created_at: new Date().toISOString(),
       };
+
+      return cleanedData;
     });
 
     // Instead of deleting all data, let's check what's new
@@ -194,7 +198,7 @@ export async function POST(request: Request) {
       video_title: item.video_title,
       "channel name": item["channel name"],
       link: item.link,
-      summary: item.summary, // Make sure summary is included
+      summary: item.summary,
       llm_answer: item.llm_answer,
       created_at: item.created_at,
     }));
@@ -208,9 +212,6 @@ export async function POST(request: Request) {
       console.error("Insert Error:", insertError);
       throw new Error(`Failed to insert new data: ${insertError.message}`);
     }
-
-    // Remove revalidation since it's not needed in Next.js 13+ App Router
-    // The App Router automatically handles revalidation
 
     return NextResponse.json({
       success: true,

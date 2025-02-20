@@ -182,8 +182,68 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
           {activeTab === "stats" ? (
             renderLLMAnswer(item.llm_answer)
           ) : (
-            <div className="flex items-center justify-center h-full min-h-[300px] rounded-xl bg-gray-900/40 border border-gray-700/50">
-              <p className="text-gray-400">{item.summary}</p>
+            <div className="p-6 rounded-xl bg-gray-900/40 border border-gray-700/50">
+              <div className="prose prose-invert max-w-none">
+                {(item.summary || "").split("\n").map((paragraph, index) => {
+                  // Handle headers
+                  if (paragraph.startsWith("###")) {
+                    return (
+                      <h3
+                        key={index}
+                        className="text-xl font-bold text-cyan-200 mb-4"
+                      >
+                        {paragraph.replace(/###/g, "").trim()}
+                      </h3>
+                    );
+                  }
+                  if (paragraph.startsWith("####")) {
+                    return (
+                      <h4
+                        key={index}
+                        className="text-lg font-semibold text-blue-300 mb-3"
+                      >
+                        {paragraph.replace(/####/g, "").trim()}
+                      </h4>
+                    );
+                  }
+                  // Handle bullet points
+                  if (paragraph.startsWith("-")) {
+                    return (
+                      <div
+                        key={index}
+                        className="flex items-start space-x-2 mb-2"
+                      >
+                        <span className="text-blue-400 mt-1.5">•</span>
+                        <p className="text-gray-200">
+                          {paragraph.replace("-", "").trim()}
+                        </p>
+                      </div>
+                    );
+                  }
+                  // Handle bold text
+                  if (paragraph.includes("**")) {
+                    return (
+                      <p key={index} className="text-gray-200 mb-2">
+                        {paragraph.split("**").map((part, i) =>
+                          i % 2 === 0 ? (
+                            <span key={i}>{part}</span>
+                          ) : (
+                            <strong key={i} className="text-cyan-200">
+                              {part}
+                            </strong>
+                          )
+                        )}
+                      </p>
+                    );
+                  }
+                  // Regular paragraphs
+                  return paragraph ? (
+                    <p key={index} className="text-gray-200 mb-2">
+                      {paragraph}
+                    </p>
+                  ) : null;
+                })}
+              </div>
             </div>
           )}
         </div>
