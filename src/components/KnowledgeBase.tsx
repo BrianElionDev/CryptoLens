@@ -18,9 +18,9 @@ export default function KnowledgeBase({ items }: KnowledgeBaseProps) {
   return (
     <div className="space-y-6">
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {items.map((item) => (
+        {items.map((item, index) => (
           <motion.div
-            key={item.id}
+            key={`${item.id || ""}-${item.link || ""}-${index}`}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
@@ -40,8 +40,8 @@ export default function KnowledgeBase({ items }: KnowledgeBaseProps) {
               </h3>
 
               {/* Date and Watch Video */}
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-400">
+              <div className="flex flex-wrap items-center gap-2 justify-between">
+                <span className="text-sm text-gray-400 shrink-0">
                   {new Date(item.date).toLocaleDateString()}
                 </span>
                 <button
@@ -49,13 +49,13 @@ export default function KnowledgeBase({ items }: KnowledgeBaseProps) {
                     e.stopPropagation();
                     setActiveVideo(item.link);
                   }}
-                  className="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                  className="flex items-center gap-1.5 px-2 py-1 text-sm text-blue-400 hover:text-blue-300 transition-colors bg-blue-500/10 rounded-md hover:bg-blue-500/20"
                 >
                   <PlayCircle className="w-4 h-4" />
-                  Watch Video
+                  <span>Watch</span>
                 </button>
                 {/* Coin Count */}
-                <div className="text-sm text-gray-400">
+                <div className="text-sm text-gray-400 bg-gray-900/40 px-2 py-1 rounded-md shrink-0">
                   {item.llm_answer.projects.length} coins
                 </div>
               </div>
