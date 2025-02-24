@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import type { KnowledgeItem } from "@/types/knowledge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState } from "react";
+import React from "react";
 
 interface StatsModalProps {
   item: KnowledgeItem;
@@ -55,7 +56,7 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
                     );
                     return (
                       <tr
-                        key={index}
+                        key={`${project.coin_or_project}-${index}`}
                         className={`transition-all duration-200 backdrop-blur-sm ${
                           isTopProject
                             ? "bg-blue-900/10"
@@ -106,7 +107,7 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
                           <div className="flex flex-wrap gap-1">
                             {project.category?.map((cat: string, i: number) => (
                               <span
-                                key={i}
+                                key={`${project.coin_or_project}-${cat}-${i}`}
                                 className="px-2 py-0.5 rounded-full text-xs bg-gray-900/50 text-gray-300 border border-gray-700/50"
                               >
                                 {cat}
@@ -189,7 +190,7 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
                   if (paragraph.startsWith("###")) {
                     return (
                       <h3
-                        key={index}
+                        key={`h3-${index}-${paragraph.slice(0, 20)}`}
                         className="text-xl font-bold text-cyan-200 mb-4"
                       >
                         {paragraph.replace(/###/g, "").trim()}
@@ -199,7 +200,7 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
                   if (paragraph.startsWith("####")) {
                     return (
                       <h4
-                        key={index}
+                        key={`h4-${index}-${paragraph.slice(0, 20)}`}
                         className="text-lg font-semibold text-blue-300 mb-3"
                       >
                         {paragraph.replace(/####/g, "").trim()}
@@ -210,7 +211,7 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
                   if (paragraph.startsWith("-")) {
                     return (
                       <div
-                        key={index}
+                        key={`bullet-${index}-${paragraph.slice(0, 20)}`}
                         className="flex items-start space-x-2 mb-2"
                       >
                         <span className="text-blue-400 mt-1.5">•</span>
@@ -223,22 +224,22 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
                   // Handle bold text
                   if (paragraph.includes("**")) {
                     return (
-                      <p key={index} className="text-gray-200 mb-2">
-                        {paragraph.split("**").map((part, i) =>
-                          i % 2 === 0 ? (
-                            <span key={i}>{part}</span>
-                          ) : (
-                            <strong key={i} className="text-cyan-200">
-                              {part}
-                            </strong>
-                          )
-                        )}
+                      <p key={`bold-${index}-${paragraph.slice(0, 20)}`} className="text-gray-200 mb-2">
+                        {paragraph.split("**").map((part, i) => (
+                          <React.Fragment key={`${index}-${i}-${part.slice(0, 10)}`}>
+                            {i % 2 === 0 ? (
+                              <span>{part}</span>
+                            ) : (
+                              <strong className="text-cyan-200">{part}</strong>
+                            )}
+                          </React.Fragment>
+                        ))}
                       </p>
                     );
                   }
                   // Regular paragraphs
                   return paragraph ? (
-                    <p key={index} className="text-gray-200 mb-2">
+                    <p key={`p-${index}-${paragraph.slice(0, 20)}`} className="text-gray-200 mb-2">
                       {paragraph}
                     </p>
                   ) : null;

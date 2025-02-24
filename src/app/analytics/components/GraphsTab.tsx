@@ -110,12 +110,16 @@ export const GraphsTab = ({
         {/* Coin Selection */}
         <div className="mb-6 w-[200px]">
           <Select value={selectedCoin} onValueChange={setSelectedCoin}>
-            <SelectTrigger>
+            <SelectTrigger className="w-full bg-gray-900/50 border border-gray-700/50 text-gray-200 hover:bg-gray-800/50 transition-colors">
               <SelectValue placeholder="Select a coin" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-gray-900/95 border border-gray-700/50 text-gray-200 backdrop-blur-lg">
               {top10Coins.map((coin, index) => (
-                <SelectItem key={`${coin.name}-${index}`} value={coin.name}>
+                <SelectItem
+                  key={`${coin.name}-${index}`}
+                  value={coin.name}
+                  className="hover:bg-blue-500/20 focus:bg-blue-500/20 focus:text-blue-200"
+                >
                   {coin.name}
                 </SelectItem>
               ))}
