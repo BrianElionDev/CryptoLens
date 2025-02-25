@@ -213,6 +213,18 @@ export async function POST(request: Request) {
       throw new Error(`Failed to insert new data: ${insertError.message}`);
     }
 
+    // Trigger revalidation
+    try {
+      await fetch(
+        `${process.env.NEXT_PUBLIC_APP_URL}/api/revalidate?path=/knowledge`,
+        {
+          method: "POST",
+        }
+      );
+    } catch (revalidateError) {
+      console.error("Revalidation error:", revalidateError);
+    }
+
     return NextResponse.json({
       success: true,
       message: "New data added successfully",
