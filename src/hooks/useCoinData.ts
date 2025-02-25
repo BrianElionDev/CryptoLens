@@ -2,6 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { API_ENDPOINTS } from "@/config/api";
 import type { KnowledgeItem } from "@/types/knowledge";
+import { toast } from "react-hot-toast";
+import { useRef } from "react";
 
 export interface CoinData {
   id: string;
@@ -66,6 +68,8 @@ export function useCoinHistory(symbol: string, timeframe: string = "1") {
 }
 
 export function useKnowledgeData() {
+  const prevDataLength = useRef<number>(0);
+
   return useQuery({
     queryKey: ["knowledge"],
     queryFn: async () => {
@@ -75,7 +79,16 @@ export function useKnowledgeData() {
           tags: "knowledge",
         },
       });
-      return response.data.knowledge as KnowledgeItem[];
+      const data = response.data.knowledge as KnowledgeItem[];
+
+      // Check if we have new data
+      if (prevDataLength.current > 0 && data.length > prevDataLength.current) {
+        const newItemsCount = data.length - prevDataLength.current;
+        toast.success(`${newItemsCount} new items added to the database!`);
+      }
+
+      prevDataLength.current = data.length;
+      return data;
     },
     staleTime: Infinity,
     gcTime: 1000 * 60 * 60,

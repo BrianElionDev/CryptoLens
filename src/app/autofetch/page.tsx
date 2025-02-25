@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
-import { Toaster, toast } from "react-hot-toast";
+import { toast } from "react-hot-toast";
 import {
   Card,
   CardContent,
@@ -15,30 +15,95 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, Calendar as CalendarIcon } from "lucide-react";
+import { Loader2, Calendar as CalendarIcon, Info } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 
 export default function AutofetchPage() {
   const router = useRouter();
   const [channelHandler, setChannelHandler] = useState("");
-  const [publishedBefore, setPublishedBefore] = useState<Date>();
-  const [publishedAfter, setPublishedAfter] = useState<Date>();
+  const [publishedBefore, setPublishedBefore] = useState<string>("");
+  const [publishedAfter, setPublishedAfter] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  const formatDateInput = (input: string) => {
+    // Remove any non-digit characters
+    const numbers = input.replace(/\D/g, "");
+
+    // Format as YYYY-MM-DD
+    if (numbers.length <= 4) {
+      return numbers;
+    } else if (numbers.length <= 6) {
+      return numbers.slice(0, 4) + "-" + numbers.slice(4);
+    } else {
+      return (
+        numbers.slice(0, 4) +
+        "-" +
+        numbers.slice(4, 6) +
+        "-" +
+        numbers.slice(6, 8)
+      );
+    }
+  };
+
+  const validateDateInput = (date: string) => {
+    if (date.length !== 10) return false;
+
+    const [year, month, day] = date.split("-").map(Number);
+
+    // Check year is reasonable (1900-current year)
+    if (year < 1900 || year > new Date().getFullYear()) return false;
+
+    // Check month is valid
+    if (month < 1 || month > 12) return false;
+
+    // Check day is valid for the month
+    const lastDayOfMonth = new Date(year, month, 0).getDate();
+    if (day < 1 || day > lastDayOfMonth) return false;
+
+    return true;
+  };
+
+  const handleDateChange = (value: string, setter: (value: string) => void) => {
+    const formatted = formatDateInput(value);
+    setter(formatted);
+
+    if (formatted.length === 10) {
+      if (!validateDateInput(formatted)) {
+        setError("Invalid date format or date");
+      } else {
+        setError("");
+      }
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!publishedBefore || !publishedAfter) {
-      setError("Please select both dates");
+      setError("Please enter both dates");
       return;
     }
+
+    const beforeDate = new Date(publishedBefore);
+    const afterDate = new Date(publishedAfter);
+    const today = new Date();
+
+    if (beforeDate < afterDate) {
+      setError("To Date must be after From Date");
+      return;
+    }
+
+    if (beforeDate > today || afterDate > today) {
+      setError("Dates cannot be in the future");
+      return;
+    }
+
     setIsSubmitting(true);
     setError("");
 
@@ -47,10 +112,10 @@ export default function AutofetchPage() {
       {
         channel_handler: channelHandler.trim(),
         published_before: new Date(
-          publishedBefore.setUTCHours(0, 0, 0, 0)
+          beforeDate.setUTCHours(0, 0, 0, 0)
         ).toISOString(),
         published_after: new Date(
-          publishedAfter.setUTCHours(0, 0, 0, 0)
+          afterDate.setUTCHours(0, 0, 0, 0)
         ).toISOString(),
       }
     );
@@ -60,10 +125,10 @@ export default function AutofetchPage() {
       success: () => {
         setTimeout(() => {
           router.push("/knowledge");
-        }, 5000);
-        return "Automation started successfully! It is running in the background and will take a few minutes to complete.";
+        }, 6000);
+        return "🚀 Automation started successfully! It is running in the background and will take a few minutes to complete.";
       },
-      error: "Failed to start automation",
+      error: "❌ Failed to start automation",
     });
 
     try {
@@ -78,37 +143,6 @@ export default function AutofetchPage() {
 
   return (
     <div className="min-h-screen pt-32 bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900">
-      <Toaster
-        position="top-center"
-        toastOptions={{
-          duration: 4000,
-          style: {
-            background: "#1F2937",
-            color: "#E5E7EB",
-            border: "1px solid rgba(59, 130, 246, 0.5)",
-            backdropFilter: "blur(8px)",
-            fontSize: "1rem",
-            padding: "16px",
-            maxWidth: "400px",
-            boxShadow: "0 8px 16px rgba(0, 0, 0, 0.3)",
-          },
-          success: {
-            icon: "🚀",
-            style: {
-              background: "rgba(16, 185, 129, 0.2)",
-              border: "1px solid rgba(16, 185, 129, 0.5)",
-            },
-          },
-          error: {
-            icon: "❌",
-            style: {
-              background: "rgba(239, 68, 68, 0.2)",
-              border: "1px solid rgba(239, 68, 68, 0.5)",
-            },
-          },
-        }}
-      />
-
       <div className="container max-w-md mx-auto px-4">
         <div className="relative group">
           <div className="absolute -inset-1 bg-gradient-to-r from-blue-600/25 via-purple-600/25 to-pink-600/25 rounded-2xl blur-xl opacity-60 transition-opacity duration-500 group-hover:opacity-100"></div>
@@ -176,74 +210,134 @@ export default function AutofetchPage() {
 
                 <div className="space-y-2">
                   <Label className="text-gray-100 font-medium">From Date</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal h-11",
-                          "bg-gray-900/60 border-gray-700/50 text-gray-100",
-                          "hover:bg-gray-800/80 hover:border-gray-600/50",
-                          "focus:ring-offset-0 focus:ring-1 focus:ring-gray-600/50 focus:border-gray-600/50",
-                          !publishedAfter && "text-gray-500"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4 opacity-70" />
-                        {publishedAfter ? (
-                          format(publishedAfter, "PPP")
-                        ) : (
-                          <span>Pick a date</span>
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={publishedAfter}
-                        onSelect={setPublishedAfter}
-                        disabled={{ after: new Date() }}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  <div className="relative">
+                    <Input
+                      placeholder="YYYY-MM-DD"
+                      value={publishedAfter}
+                      onChange={(e) =>
+                        handleDateChange(e.target.value, setPublishedAfter)
+                      }
+                      maxLength={10}
+                      className="bg-gray-900/60 border-gray-700/50 text-white h-11 px-4 pr-12 transition-colors focus:border-blue-500/50 focus:ring-blue-500/20"
+                    />
+                    <div className="absolute inset-y-0 right-0 flex items-center">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="h-full aspect-square p-2 text-gray-400 hover:text-gray-300"
+                          >
+                            <CalendarIcon className="h-4 w-4" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="end">
+                          <Calendar
+                            mode="single"
+                            selected={
+                              publishedAfter
+                                ? new Date(publishedAfter)
+                                : undefined
+                            }
+                            onSelect={(date) => {
+                              setPublishedAfter(
+                                date ? date.toISOString().split("T")[0] : ""
+                              );
+                              setError("");
+                            }}
+                            disabled={(date) => date > new Date()}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </div>
+                  <span className="text-xs text-gray-400">
+                    Just type numbers (YYYYMMDD) or use calendar
+                  </span>
                 </div>
 
                 <div className="space-y-2">
                   <Label className="text-gray-100 font-medium">To Date</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal h-11",
-                          "bg-gray-900/60 border-gray-700/50 text-gray-100",
-                          "hover:bg-gray-800/80 hover:border-gray-600/50",
-                          "focus:ring-offset-0 focus:ring-1 focus:ring-gray-600/50 focus:border-gray-600/50",
-                          !publishedBefore && "text-gray-500"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4 opacity-70" />
-                        {publishedBefore ? (
-                          format(publishedBefore, "PPP")
-                        ) : (
-                          <span>Pick a date</span>
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={publishedBefore}
-                        onSelect={setPublishedBefore}
-                        disabled={{
-                          after: new Date(),
-                          before: publishedAfter,
-                        }}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  <div className="relative">
+                    <Input
+                      placeholder="YYYY-MM-DD"
+                      value={publishedBefore}
+                      onChange={(e) =>
+                        handleDateChange(e.target.value, setPublishedBefore)
+                      }
+                      maxLength={10}
+                      className="bg-gray-900/60 border-gray-700/50 text-white h-11 px-4 pr-12 transition-colors focus:border-blue-500/50 focus:ring-blue-500/20"
+                    />
+                    <div className="absolute inset-y-0 right-0 flex items-center">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="h-full aspect-square p-2 text-gray-400 hover:text-gray-300"
+                          >
+                            <CalendarIcon className="h-4 w-4" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="end">
+                          <Calendar
+                            mode="single"
+                            selected={
+                              publishedBefore
+                                ? new Date(publishedBefore)
+                                : undefined
+                            }
+                            onSelect={(date) => {
+                              setPublishedBefore(
+                                date ? date.toISOString().split("T")[0] : ""
+                              );
+                              setError("");
+                            }}
+                            disabled={(date) =>
+                              date > new Date() ||
+                              (publishedAfter
+                                ? date < new Date(publishedAfter)
+                                : false)
+                            }
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </div>
+                  <span className="text-xs text-gray-400">
+                    Just type numbers (YYYYMMDD) or use calendar
+                  </span>
                 </div>
+
+                {(publishedAfter || publishedBefore) &&
+                  validateDateInput(publishedAfter) &&
+                  validateDateInput(publishedBefore) && (
+                    <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                      <div className="flex items-start gap-2">
+                        <Info className="w-4 h-4 text-blue-400 mt-0.5" />
+                        <div className="space-y-1">
+                          <p className="text-sm text-blue-200">
+                            Selected Range:
+                          </p>
+                          <p className="text-xs text-blue-300">
+                            From:{" "}
+                            {publishedAfter
+                              ? format(new Date(publishedAfter), "MMMM d, yyyy")
+                              : ""}
+                            {publishedAfter && publishedBefore ? " to " : ""}
+                            {publishedBefore
+                              ? format(
+                                  new Date(publishedBefore),
+                                  "MMMM d, yyyy"
+                                )
+                              : ""}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                 <Button
                   type="submit"
