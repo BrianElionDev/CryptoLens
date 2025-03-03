@@ -208,7 +208,10 @@ const KnowledgePageContent = memo(function KnowledgePageContent() {
                   <input
                     type="text"
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setCurrentPage(1);
+                    }}
                     placeholder="Search knowledge..."
                     className="w-full bg-gray-900/60 bg-gradient-to-r from-blue-600/10 to-purple-600/10 border border-blue-500/30 rounded-lg py-2 pl-10 pr-4 text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all duration-200 hover:from-blue-600/20 hover:to-purple-600/20"
                   />
@@ -232,7 +235,10 @@ const KnowledgePageContent = memo(function KnowledgePageContent() {
               <div className="relative w-48">
                 <select
                   value={filterChannel}
-                  onChange={(e) => setFilterChannel(e.target.value)}
+                  onChange={(e) => {
+                    setFilterChannel(e.target.value);
+                    setCurrentPage(1);
+                  }}
                   className="w-full appearance-none bg-gray-900/60 border border-gray-700/50 rounded-lg py-2 px-4 pr-8 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 hover:bg-gray-800/60 transition-colors"
                 >
                   <option value="all">All Channels</option>
@@ -265,7 +271,10 @@ const KnowledgePageContent = memo(function KnowledgePageContent() {
                 <div className="relative w-32">
                   <select
                     value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as SortByType)}
+                    onChange={(e) => {
+                      setSortBy(e.target.value as SortByType);
+                      setCurrentPage(1);
+                    }}
                     className="w-full appearance-none bg-gray-900/60 border border-gray-700/50 rounded-lg py-2 px-3 pr-8 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 hover:bg-gray-800/60 transition-colors"
                   >
                     <option value="title">Sort by Title</option>
@@ -333,11 +342,12 @@ const KnowledgePageContent = memo(function KnowledgePageContent() {
                                 name="dateFilter"
                                 value={option.value}
                                 checked={dateFilter === option.value}
-                                onChange={(e) =>
+                                onChange={(e) => {
                                   setDateFilter(
                                     e.target.value as DateFilterType
-                                  )
-                                }
+                                  );
+                                  setCurrentPage(1);
+                                }}
                                 className="hidden"
                               />
                               <div className="w-4 h-4 rounded-full border-2 border-gray-600 group-hover/option:border-blue-400 flex items-center justify-center">
