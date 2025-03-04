@@ -300,10 +300,10 @@ export function CombinedMarketTable({
       </div>
       <div className="bg-gradient-to-r from-blue-900/10 via-purple-900/10 to-pink-900/10 backdrop-blur-sm rounded-xl p-6 overflow-x-auto border border-gray-800/20">
         <div className="min-w-[900px] w-full [&_table]:divide-y-0 [&_tr:hover]:bg-blue-500/5 [&_tr]:transition-colors [&_td]:py-5 [&_th]:py-4 [&_td]:text-[15px] [&_th]:text-sm [&_*]:border-0 [&_*]:outline-none [&_tr]:cursor-pointer">
-          <DataTable
+          <DataTable<CoinData, unknown>
             columns={columns}
             data={sortedCoinData}
-            onRowClick={(row: CoinData) => {
+            onRowClick={(row) => {
               onCoinSelect({
                 symbol: row.coingecko_id,
                 coingecko_id: row.coingecko_id,
