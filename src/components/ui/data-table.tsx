@@ -22,6 +22,7 @@ interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   onRowClick?: (data: TData) => void;
+  pageSize?: number;
 }
 
 export function DataTable<TData, TValue>({
@@ -60,10 +61,13 @@ export function DataTable<TData, TValue>({
           ))}
         </TableHeader>
         <TableBody>
-          {table.getRowModel().rows.map((row) => (
+          {table.getRowModel().rows.map((row, index) => (
             <TableRow
               key={row.id}
-              className={onRowClick ? "cursor-pointer" : ""}
+              className={`${onRowClick ? "cursor-pointer" : ""} animate-fadeIn`}
+              style={{
+                animationDelay: `${Math.min(index * 50, 2000)}ms`,
+              }}
               onClick={() => onRowClick?.(row.original)}
             >
               {row.getVisibleCells().map((cell) => (
@@ -73,6 +77,13 @@ export function DataTable<TData, TValue>({
               ))}
             </TableRow>
           ))}
+          {table.getRowModel().rows.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={columns.length} className="text-center py-4">
+                <div className="text-sm text-gray-400">No data available</div>
+              </TableCell>
+            </TableRow>
+          )}
         </TableBody>
       </Table>
     </div>

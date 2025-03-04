@@ -10,8 +10,7 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        jakarta: ["var(--font-jakarta)"],
-        fira: ["var(--font-fira)"],
+        poppins: ["var(--font-poppins)"],
       },
       colors: {
         background: "hsl(var(--background))",

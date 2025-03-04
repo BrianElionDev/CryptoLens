@@ -18,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useCoinData } from "@/hooks/useCoinData";
 import Image from "next/image";
 
@@ -30,6 +30,7 @@ interface ProcessedData {
     coin: string;
     categories: string[];
     channel: string;
+    date: string;
     rpoints: number;
   }[];
   channels: string[];
@@ -50,31 +51,124 @@ export function CombinedMarketTable({
   selectedChannels,
   onCoinSelect,
 }: CombinedMarketTableProps) {
+  const [showMostRecent, setShowMostRecent] = useState(false);
+
+  // Get symbols for all coins
   const symbols = useMemo(() => {
-    return processedData.projectDistribution
-      .filter((project) =>
-        processedData.coinCategories.some(
-          (coin) =>
-            coin.coin === project.name &&
-            selectedChannels.includes(coin.channel)
-        )
-      )
-      .map((project) => project.name);
-  }, [processedData, selectedChannels]);
+    const relevantCoins = new Map<string, number>();
 
-  const { data: coinData, isLoading } = useCoinData(symbols);
+    // Calculate latest dates for all channels first
+    const latestDates = new Map<string, number>();
+    if (showMostRecent) {
+      processedData.coinCategories.forEach((c) => {
+        if (selectedChannels.includes(c.channel)) {
+          const date = new Date(c.date).getTime();
+          const existingDate = latestDates.get(c.channel);
+          if (!existingDate || date > existingDate) {
+            latestDates.set(c.channel, date);
+          }
+        }
+      });
+    }
 
+    selectedChannels.forEach((channel) => {
+      processedData.coinCategories.forEach((coin) => {
+        if (coin.channel === channel) {
+          if (showMostRecent) {
+            const latestDate = latestDates.get(channel);
+            if (new Date(coin.date).getTime() === latestDate) {
+              relevantCoins.set(
+                coin.coin,
+                (relevantCoins.get(coin.coin) || 0) + coin.rpoints
+              );
+            }
+          } else {
+            relevantCoins.set(
+              coin.coin,
+              (relevantCoins.get(coin.coin) || 0) + coin.rpoints
+            );
+          }
+        }
+      });
+    });
+
+    // Sort by rpoints
+    return Array.from(relevantCoins.entries())
+      .sort(([, a], [, b]) => b - a)
+      .map(([coin]) => coin);
+  }, [processedData.coinCategories, selectedChannels, showMostRecent]);
+
+  const { data: coinData, isLoading } = useCoinData(symbols) as {
+    data: CoinData[] | undefined;
+    isLoading: boolean;
+  };
+
+  // Sort coin data
+  const sortedCoinData = useMemo(() => {
+    if (!coinData) return [];
+
+    const uniqueCoins = new Map();
+
+    // Calculate latest dates for all channels first
+    const latestDates = new Map<string, number>();
+    if (showMostRecent) {
+      processedData.coinCategories.forEach((c) => {
+        if (selectedChannels.includes(c.channel)) {
+          const date = new Date(c.date).getTime();
+          const existingDate = latestDates.get(c.channel);
+          if (!existingDate || date > existingDate) {
+            latestDates.set(c.channel, date);
+          }
+        }
+      });
+    }
+
+    coinData.forEach((coin) => {
+      const matchingCoins = processedData.coinCategories.filter((cat) => {
+        if (!selectedChannels.includes(cat.channel)) return false;
+        if (showMostRecent) {
+          const latestDate = latestDates.get(cat.channel);
+          if (new Date(cat.date).getTime() !== latestDate) return false;
+        }
+        return (
+          cat.coin.toLowerCase() === coin.symbol.toLowerCase() ||
+          cat.coin.toLowerCase() === coin.name.toLowerCase() ||
+          cat.coin.toLowerCase().includes(coin.symbol.toLowerCase()) ||
+          coin.symbol.toLowerCase().includes(cat.coin.toLowerCase())
+        );
+      });
+
+      const totalRpoints = matchingCoins.reduce(
+        (sum, cat) => sum + cat.rpoints,
+        0
+      );
+      uniqueCoins.set(coin.coingecko_id, {
+        ...coin,
+        rpoints: totalRpoints,
+      });
+    });
+
+    return Array.from(uniqueCoins.values()).sort((a, b) => {
+      if (b.rpoints !== a.rpoints) return b.rpoints - a.rpoints;
+      return b.market_cap - a.market_cap;
+    });
+  }, [
+    coinData,
+    processedData.coinCategories,
+    selectedChannels,
+    showMostRecent,
+  ]);
+
+  // Add rpoints column
   const columns: ColumnDef<CoinData>[] = [
     {
       accessorKey: "rank",
       header: "#",
-      cell: ({ row }) => {
-        return (
-          <div className="w-[40px] text-[15px] text-gray-400 font-medium">
-            {row.index + 1}
-          </div>
-        );
-      },
+      cell: ({ row }) => (
+        <div className="w-[40px] text-[15px] text-gray-400 font-medium">
+          {row.index + 1}
+        </div>
+      ),
     },
     {
       accessorKey: "name",
@@ -123,6 +217,15 @@ export function CombinedMarketTable({
           </div>
         );
       },
+    },
+    {
+      accessorKey: "rpoints",
+      header: () => <div className="text-white font-medium">R-Points</div>,
+      cell: ({ row }) => (
+        <div className="w-[100px] text-[15px] font-medium text-blue-400">
+          {(row.original as any).rpoints.toFixed(2)}
+        </div>
+      ),
     },
     {
       accessorKey: "price",
@@ -175,28 +278,41 @@ export function CombinedMarketTable({
     },
   ];
 
-  if (isLoading) {
+  if (isLoading && !coinData?.length) {
     return <TableSkeleton />;
   }
 
   return (
-    <div className="bg-gradient-to-r from-blue-900/10 via-purple-900/10 to-pink-900/10 backdrop-blur-sm rounded-xl p-6 overflow-x-auto border border-gray-800/20">
-      <div className="min-w-[900px] w-full [&_table]:divide-y-0 [&_tr:hover]:bg-blue-500/5 [&_tr]:transition-colors [&_td]:py-5 [&_th]:py-4 [&_td]:text-[15px] [&_th]:text-sm [&_*]:border-0 [&_*]:outline-none [&_tr]:cursor-pointer">
-        <DataTable
-          columns={columns}
-          data={coinData || []}
-          onRowClick={(row: CoinData) => {
-            const latestData =
-              coinData?.find(
-                (coin) => coin.coingecko_id === row.coingecko_id
-              ) || row;
-            onCoinSelect({
-              symbol: latestData.coingecko_id,
-              coingecko_id: latestData.coingecko_id,
-              data: latestData,
-            });
-          }}
-        />
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <div className="text-sm text-gray-400">
+          {sortedCoinData.length} coins
+        </div>
+        <button
+          onClick={() => setShowMostRecent(!showMostRecent)}
+          className="px-4 py-2 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 hover:text-blue-300 transition-colors border border-blue-500/30 flex items-center gap-2"
+        >
+          <span>{showMostRecent ? "Show All" : "Show Most Recent"}</span>
+          {showMostRecent && (
+            <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+          )}
+        </button>
+      </div>
+      <div className="bg-gradient-to-r from-blue-900/10 via-purple-900/10 to-pink-900/10 backdrop-blur-sm rounded-xl p-6 overflow-x-auto border border-gray-800/20">
+        <div className="min-w-[900px] w-full [&_table]:divide-y-0 [&_tr:hover]:bg-blue-500/5 [&_tr]:transition-colors [&_td]:py-5 [&_th]:py-4 [&_td]:text-[15px] [&_th]:text-sm [&_*]:border-0 [&_*]:outline-none [&_tr]:cursor-pointer">
+          <DataTable
+            columns={columns}
+            data={sortedCoinData}
+            onRowClick={(row: CoinData) => {
+              onCoinSelect({
+                symbol: row.coingecko_id,
+                coingecko_id: row.coingecko_id,
+                data: row,
+              });
+            }}
+            pageSize={25}
+          />
+        </div>
       </div>
     </div>
   );
