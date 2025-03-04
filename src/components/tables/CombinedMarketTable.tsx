@@ -22,6 +22,8 @@ import { useMemo, useState } from "react";
 import { useCoinData } from "@/hooks/useCoinData";
 import Image from "next/image";
 
+type ExtendedCoinData = CoinData & { rpoints: number };
+
 interface ProcessedData {
   projectDistribution: { name: string; value: number }[];
   projectTrends: Map<string, { date: string; rpoints: number }[]>;
@@ -42,7 +44,7 @@ interface CombinedMarketTableProps {
   onCoinSelect: (coin: {
     symbol: string;
     coingecko_id: string;
-    data: CoinData;
+    data: ExtendedCoinData;
   }) => void;
 }
 
@@ -105,9 +107,9 @@ export function CombinedMarketTable({
 
   // Sort coin data
   const sortedCoinData = useMemo(() => {
-    if (!coinData) return [];
+    if (!coinData) return [] as ExtendedCoinData[];
 
-    const uniqueCoins = new Map();
+    const uniqueCoins = new Map<string, ExtendedCoinData>();
 
     // Calculate latest dates for all channels first
     const latestDates = new Map<string, number>();
@@ -160,7 +162,7 @@ export function CombinedMarketTable({
   ]);
 
   // Add rpoints column
-  const columns: ColumnDef<CoinData>[] = [
+  const columns: ColumnDef<ExtendedCoinData>[] = [
     {
       accessorKey: "rank",
       header: "#",
@@ -217,15 +219,6 @@ export function CombinedMarketTable({
           </div>
         );
       },
-    },
-    {
-      accessorKey: "rpoints",
-      header: () => <div className="text-white font-medium">R-Points</div>,
-      cell: ({ row }) => (
-        <div className="w-[100px] text-[15px] font-medium text-blue-400">
-          {(row.original as any).rpoints.toFixed(2)}
-        </div>
-      ),
     },
     {
       accessorKey: "price",
@@ -300,7 +293,7 @@ export function CombinedMarketTable({
       </div>
       <div className="bg-gradient-to-r from-blue-900/10 via-purple-900/10 to-pink-900/10 backdrop-blur-sm rounded-xl p-6 overflow-x-auto border border-gray-800/20">
         <div className="min-w-[900px] w-full [&_table]:divide-y-0 [&_tr:hover]:bg-blue-500/5 [&_tr]:transition-colors [&_td]:py-5 [&_th]:py-4 [&_td]:text-[15px] [&_th]:text-sm [&_*]:border-0 [&_*]:outline-none [&_tr]:cursor-pointer">
-          <DataTable<CoinData, unknown>
+          <DataTable<ExtendedCoinData, unknown>
             columns={columns}
             data={sortedCoinData}
             onRowClick={(row) => {
