@@ -31,17 +31,54 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
   const { data: coinData, isLoading: isValidating } = useCoinData(coinSymbols);
 
   const validProjects = useMemo(() => {
-    if (!coinData || isValidating) return [];
+    if (!coinData || isValidating) return item.llm_answer.projects;
 
-    return item.llm_answer.projects.filter((project) => {
-      const projectName = project.coin_or_project.toLowerCase();
-      return coinData.data.some(
-        (coin: { symbol: string; name: string }) =>
-          coin.symbol.toLowerCase() === projectName ||
-          coin.name.toLowerCase() === projectName ||
-          projectName.includes(coin.symbol.toLowerCase()) ||
-          projectName.includes(coin.name.toLowerCase())
-      );
+    // Debug log
+    console.log(
+      "CoinGecko Data:",
+      coinData.data.map((c) => ({ symbol: c.symbol, name: c.name }))
+    );
+    console.log(
+      "Projects to match:",
+      item.llm_answer.projects.map((p) => p.coin_or_project)
+    );
+
+    return item.llm_answer.projects.map((project) => {
+      const projectName = project.coin_or_project.toLowerCase().trim();
+
+      // Try to find matching coin
+      const matchedCoin = coinData.data.find((coin) => {
+        const symbol = coin.symbol.toLowerCase().trim();
+        const name = coin.name.toLowerCase().trim();
+
+        const isMatch =
+          symbol === projectName ||
+          name === projectName ||
+          projectName.includes(symbol) ||
+          symbol.includes(projectName) ||
+          name.includes(projectName) ||
+          projectName.includes(name);
+
+        if (isMatch) {
+          console.log(`Matched: ${projectName} with CoinGecko coin:`, {
+            symbol,
+            name,
+            price: coin.price,
+          });
+        }
+
+        return isMatch;
+      });
+
+      if (!matchedCoin) {
+        console.log(`No CoinGecko match for: ${projectName}`);
+      }
+
+      return {
+        ...project,
+        coingecko_matched: !!matchedCoin,
+        current_price: matchedCoin?.price,
+      };
     });
   }, [coinData, item.llm_answer.projects, isValidating]);
 
