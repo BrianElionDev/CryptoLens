@@ -35,7 +35,7 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
 
     return item.llm_answer.projects.filter((project) => {
       const projectName = project.coin_or_project.toLowerCase();
-      return coinData.some(
+      return coinData.data.some(
         (coin: { symbol: string; name: string }) =>
           coin.symbol.toLowerCase() === projectName ||
           coin.name.toLowerCase() === projectName ||
@@ -45,7 +45,7 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
     });
   }, [coinData, item.llm_answer.projects, isValidating]);
 
-  const renderLLMAnswer = (llm_answer: KnowledgeItem["llm_answer"]) => {
+  const renderLLMAnswer = () => {
     try {
       if (isValidating) {
         return (
@@ -223,7 +223,7 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
         {/* Tab Content */}
         <div className="flex-1 overflow-y-auto mt-6">
           {activeTab === "stats" ? (
-            renderLLMAnswer(item.llm_answer)
+            renderLLMAnswer()
           ) : (
             <div className="p-6 rounded-xl bg-gray-900/40 border border-gray-700/50">
               <div className="prose prose-invert max-w-none">

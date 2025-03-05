@@ -11,7 +11,9 @@ let consecutiveFailures = 0;
 let lastRequestTime = 0;
 
 function getRequestDelay() {
-  return BASE_DELAY * Math.pow(2, consecutiveFailures);
+  // Use MAX_RETRIES to cap the exponential backoff
+  const backoffFactor = Math.min(consecutiveFailures, MAX_RETRIES);
+  return BASE_DELAY * Math.pow(2, backoffFactor);
 }
 
 // Cache configuration
@@ -290,17 +292,15 @@ export async function POST(request: Request) {
       timestamp: now,
       fromCache: false,
     });
-  } catch (error) {
-    // Increment failure counter
-    consecutiveFailures = Math.min(consecutiveFailures + 1, MAX_RETRIES);
+  } catch (err) {
+    console.error("Error in CoinGecko API:", err);
 
-    if (marketDataCache && symbols.length > 0) {
-      const cachedData = marketDataCache.data;
+    // If we have cached data, return it
+    if (marketDataCache) {
       const filteredData: Record<string, CoinData> = {};
-
       for (const symbol of symbols) {
-        if (cachedData[symbol]) {
-          filteredData[symbol] = cachedData[symbol];
+        if (marketDataCache.data[symbol]) {
+          filteredData[symbol] = marketDataCache.data[symbol];
         }
       }
 
@@ -309,24 +309,14 @@ export async function POST(request: Request) {
           data: filteredData,
           timestamp: marketDataCache.timestamp,
           fromCache: true,
-          error: "Using cached data due to API error",
-          retryAfter: getRequestDelay() / 1000,
+          error: "Using cached data due to error",
         });
       }
     }
 
-    const retryAfter = getRequestDelay() / 1000;
     return NextResponse.json(
-      {
-        error: "Failed to fetch price data",
-        retryAfter,
-      },
-      {
-        status: 500,
-        headers: {
-          "Retry-After": retryAfter.toString(),
-        },
-      }
+      { error: "Failed to fetch market data" },
+      { status: 500 }
     );
   }
 }
