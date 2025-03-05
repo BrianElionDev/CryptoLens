@@ -164,14 +164,14 @@ function CategoriesContent() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex items-center justify-center mt-20 p-4 bg-black/50 backdrop-blur-sm"
         onClick={() => setShowCategorySelector(false)}
       >
         <motion.div
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
-          className="bg-gray-800/90 backdrop-blur-xl rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-700/50"
+          className="bg-gray-800/90 backdrop-blur-xl rounded-xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto border border-gray-700/50"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center justify-between mb-6">
@@ -238,7 +238,7 @@ function CategoriesContent() {
   }
 
   return (
-    <div className="min-h-screen pt-24 bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900 relative overflow-hidden">
+    <div className="min-h-screen pt-20 bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900 relative overflow-hidden">
       {/* Background Animation */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
         <div className="absolute -inset-[10px] opacity-50">

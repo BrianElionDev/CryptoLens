@@ -13,8 +13,11 @@ export const queryConfig = {
       retryDelay: (attemptIndex: number) =>
         Math.min(1000 * 2 ** attemptIndex, 30000),
       onError: (error: Error) => {
-        console.error("Query error:", error);
-        toast.error("Failed to fetch data. Please try again.");
+        // Only show toast on client side
+        if (typeof window !== "undefined") {
+          console.error("Query error:", error);
+          toast.error("Failed to fetch data. Please try again.");
+        }
       },
     },
     mutations: {
@@ -22,13 +25,27 @@ export const queryConfig = {
       retryDelay: (attemptIndex: number) =>
         Math.min(1000 * 2 ** attemptIndex, 30000),
       onError: (error: Error) => {
-        console.error("Mutation error:", error);
-        toast.error("Operation failed. Please try again.");
+        // Only show toast on client side
+        if (typeof window !== "undefined") {
+          console.error("Mutation error:", error);
+          toast.error("Operation failed. Please try again.");
+        }
       },
     },
   },
 };
 
 export function createQueryClient() {
-  return new QueryClient(queryConfig);
+  return new QueryClient({
+    ...queryConfig,
+    // Add default suspense config
+    defaultOptions: {
+      ...queryConfig.defaultOptions,
+      queries: {
+        ...queryConfig.defaultOptions.queries,
+        suspense: false,
+        useErrorBoundary: false,
+      },
+    },
+  });
 }

@@ -102,6 +102,7 @@ export default function CoinDetailsModal({
       <SheetContent
         side="right"
         className="w-full sm:max-w-xl lg:max-w-3xl xl:max-w-4xl p-0 bg-gradient-to-b from-gray-900/95 to-gray-800/95 backdrop-blur-xl border-gray-800/50 [&>button]:p-2 [&>button]:text-white [&>button]:rounded-lg [&>button]:bg-gray-800/50 [&>button]:hover:bg-gray-700/50 [&>button]:transition-colors [&>button]:absolute [&>button]:right-6 [&>button]:top-6"
+        aria-describedby="coin-details-description"
       >
         <div className="h-full flex flex-col">
           <SheetHeader className="flex-none p-6 pb-2">
@@ -116,6 +117,18 @@ export default function CoinDetailsModal({
                         fill
                         className="rounded-full object-cover"
                         sizes="40px"
+                        onError={(e) => {
+                          // Remove the errored image
+                          const imgElement = e.target as HTMLImageElement;
+                          imgElement.style.display = "none";
+                          // Show the fallback icon
+                          const parent = imgElement.parentElement;
+                          if (parent) {
+                            const fallback = document.createElement("div");
+                            fallback.innerHTML = `<svg viewBox="0 0 24 24" class="w-8 h-8 text-blue-400"><path fill="currentColor" d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm0-2a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm-3-7h6v2H9v-2zm0-3h6v2H9v-2z"/></svg>`;
+                            parent.appendChild(fallback.firstChild as Node);
+                          }
+                        }}
                       />
                     </div>
                   ) : (
@@ -128,6 +141,10 @@ export default function CoinDetailsModal({
               </SheetTitle>
             </div>
           </SheetHeader>
+          <div id="coin-details-description" className="sr-only">
+            Detailed information about {displayData.name} including price,
+            market cap, 24h change, and price history
+          </div>
 
           <div className="flex-1 pt-6 overflow-y-auto scrollbar-thin scrollbar-thumb-blue-500/20 scrollbar-track-gray-800/50 space-y-6 px-6 pb-6">
             {/* Stats Grid */}
