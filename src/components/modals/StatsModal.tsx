@@ -4,8 +4,9 @@ import { motion } from "framer-motion";
 import { X } from "lucide-react";
 import type { KnowledgeItem } from "@/types/knowledge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import React from "react";
+import { useCoinData } from "@/hooks/useCoinData";
 
 interface StatsModalProps {
   item: KnowledgeItem;
@@ -15,9 +16,46 @@ interface StatsModalProps {
 export function StatsModal({ item, onClose }: StatsModalProps) {
   const [activeTab, setActiveTab] = useState<"stats" | "summary">("stats");
 
+  // Get all unique coin symbols
+  const coinSymbols = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          item.llm_answer.projects.map((p) => p.coin_or_project.toLowerCase())
+        )
+      ),
+    [item.llm_answer.projects]
+  );
+
+  // Validate coins against CoinGecko
+  const { data: coinData, isLoading: isValidating } = useCoinData(coinSymbols);
+
+  const validProjects = useMemo(() => {
+    if (!coinData || isValidating) return [];
+
+    return item.llm_answer.projects.filter((project) => {
+      const projectName = project.coin_or_project.toLowerCase();
+      return coinData.some(
+        (coin: { symbol: string; name: string }) =>
+          coin.symbol.toLowerCase() === projectName ||
+          coin.name.toLowerCase() === projectName ||
+          projectName.includes(coin.symbol.toLowerCase()) ||
+          projectName.includes(coin.name.toLowerCase())
+      );
+    });
+  }, [coinData, item.llm_answer.projects, isValidating]);
+
   const renderLLMAnswer = (llm_answer: KnowledgeItem["llm_answer"]) => {
     try {
-      const { projects } = llm_answer;
+      if (isValidating) {
+        return (
+          <div className="mt-4 flex items-center justify-center p-8">
+            <div className="w-8 h-8 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
+          </div>
+        );
+      }
+
+      const projects = validProjects;
 
       // Sort projects by rpoints in descending order
       const top3Projects = [...projects]
@@ -134,7 +172,6 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-      onClick={onClose}
     >
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
@@ -149,7 +186,10 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
             {item.video_title}
           </h2>
           <button
-            onClick={onClose}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
             className="p-2 hover:bg-gray-800/50 rounded-lg transition-colors"
           >
             <X className="w-5 h-5 text-gray-400" />
@@ -166,12 +206,14 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
             <TabsTrigger
               value="stats"
               className="data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-300"
+              onClick={(e) => e.stopPropagation()}
             >
               Stats
             </TabsTrigger>
             <TabsTrigger
               value="summary"
               className="data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-300"
+              onClick={(e) => e.stopPropagation()}
             >
               Summary
             </TabsTrigger>
@@ -224,9 +266,14 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
                   // Handle bold text
                   if (paragraph.includes("**")) {
                     return (
-                      <p key={`bold-${index}-${paragraph.slice(0, 20)}`} className="text-gray-200 mb-2">
+                      <p
+                        key={`bold-${index}-${paragraph.slice(0, 20)}`}
+                        className="text-gray-200 mb-2"
+                      >
                         {paragraph.split("**").map((part, i) => (
-                          <React.Fragment key={`${index}-${i}-${part.slice(0, 10)}`}>
+                          <React.Fragment
+                            key={`${index}-${i}-${part.slice(0, 10)}`}
+                          >
                             {i % 2 === 0 ? (
                               <span>{part}</span>
                             ) : (
@@ -239,7 +286,10 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
                   }
                   // Regular paragraphs
                   return paragraph ? (
-                    <p key={`p-${index}-${paragraph.slice(0, 20)}`} className="text-gray-200 mb-2">
+                    <p
+                      key={`p-${index}-${paragraph.slice(0, 20)}`}
+                      className="text-gray-200 mb-2"
+                    >
                       {paragraph}
                     </p>
                   ) : null;

@@ -2,9 +2,22 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 
 export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const pathname = usePathname();
+
+  const isActive = (path: string) => pathname === path;
+
+  const navLinks = [
+    { href: "/knowledge", label: "Knowledge" },
+    { href: "/channels", label: "Channels" },
+    { href: "/analytics", label: "Analytics" },
+    { href: "/categories", label: "Categories" },
+    { href: "/autofetch", label: "Autofetch" },
+    { href: "/faq", label: "FAQ" },
+  ];
 
   return (
     <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-7xl">
@@ -18,49 +31,30 @@ export default function Navbar() {
             <div className="flex items-center justify-between h-16">
               {/* Logo */}
               <Link href="/" className="flex items-center">
-                <span className="text-xl font-bold bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 text-transparent bg-clip-text">
+                <span
+                  className={`text-xl font-bold bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 text-transparent bg-clip-text ${
+                    isActive("/") ? "scale-105" : ""
+                  }`}
+                >
                   CryptoLens
                 </span>
               </Link>
 
               {/* Desktop Navigation */}
               <nav className="hidden md:flex items-center space-x-8">
-                <Link
-                  href="/knowledge"
-                  className="text-gray-300 hover:text-white px-3 py-2 text-sm font-medium transition-colors"
-                >
-                  Knowledge
-                </Link>
-                <Link
-                  href="/channels"
-                  className="text-gray-300 hover:text-white px-3 py-2 text-sm font-medium transition-colors"
-                >
-                  Channels
-                </Link>
-                <Link
-                  href="/analytics"
-                  className="text-gray-300 hover:text-white px-3 py-2 text-sm font-medium transition-colors"
-                >
-                  Analytics
-                </Link>
-                <Link
-                  href="/categories"
-                  className="text-gray-300 hover:text-white px-3 py-2 text-sm font-medium transition-colors"
-                >
-                  Categories
-                </Link>
-                <Link
-                  href="/autofetch"
-                  className="text-gray-300 hover:text-white px-3 py-2 text-sm font-medium transition-colors"
-                >
-                  Autofetch
-                </Link>
-                <Link
-                  href="/faq"
-                  className="text-gray-300 hover:text-white px-3 py-2 text-sm font-medium transition-colors"
-                >
-                  FAQ
-                </Link>
+                {navLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className={`px-3 py-2 text-sm font-medium transition-all duration-200 ${
+                      isActive(link.href)
+                        ? "text-white bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-pink-500/20 rounded-lg scale-105 shadow-lg shadow-purple-500/20 border border-purple-500/20"
+                        : "text-gray-400 hover:text-white hover:bg-gray-800/40 hover:rounded-lg"
+                    }`}
+                  >
+                    {link.label}
+                  </Link>
+                ))}
               </nav>
 
               {/* Mobile menu button */}
@@ -106,7 +100,9 @@ export default function Navbar() {
               <div className="hidden md:flex items-center">
                 <Link
                   href="/autofetch"
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 hover:from-blue-600 hover:via-purple-600 hover:to-pink-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-200 shadow-lg shadow-purple-500/20"
+                  className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 hover:from-blue-600 hover:via-purple-600 hover:to-pink-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-200 shadow-lg shadow-purple-500/20 ${
+                    isActive("/autofetch") ? "scale-105" : ""
+                  }`}
                 >
                   Start Fetching
                 </Link>
@@ -121,52 +117,26 @@ export default function Navbar() {
             } md:hidden border-t border-gray-700/50`}
           >
             <div className="px-2 pt-2 pb-3 space-y-1">
-              <Link
-                href="/knowledge"
-                className="block px-3 py-2 rounded-lg text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700/50 transition-colors"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Knowledge
-              </Link>
-              <Link
-                href="/channels"
-                className="block px-3 py-2 rounded-lg text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700/50 transition-colors"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Channels
-              </Link>
-              <Link
-                href="/analytics"
-                className="block px-3 py-2 rounded-lg text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700/50 transition-colors"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Analytics
-              </Link>
-              <Link
-                href="/categories"
-                className="block px-3 py-2 rounded-lg text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700/50 transition-colors"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Categories
-              </Link>
-              <Link
-                href="/autofetch"
-                className="block px-3 py-2 rounded-lg text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700/50 transition-colors"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Autofetch
-              </Link>
-              <Link
-                href="/faq"
-                className="block px-3 py-2 rounded-lg text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700/50 transition-colors"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                FAQ
-              </Link>
+              {navLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`block px-3 py-2 rounded-lg text-base font-medium transition-all duration-200 ${
+                    isActive(link.href)
+                      ? "text-white bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-pink-500/20 scale-[1.02] shadow-lg shadow-purple-500/20 border border-purple-500/20"
+                      : "text-gray-400 hover:text-white hover:bg-gray-800/40"
+                  }`}
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  {link.label}
+                </Link>
+              ))}
               <div className="px-3 py-2">
                 <Link
                   href="/autofetch"
-                  className="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-base font-medium rounded-lg text-white bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 hover:from-blue-600 hover:via-purple-600 hover:to-pink-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-200 shadow-lg shadow-purple-500/20"
+                  className={`w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-base font-medium rounded-lg text-white bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 hover:from-blue-600 hover:via-purple-600 hover:to-pink-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-200 shadow-lg shadow-purple-500/20 ${
+                    isActive("/autofetch") ? "scale-105" : ""
+                  }`}
                   onClick={() => setIsMenuOpen(false)}
                 >
                   Start Fetching

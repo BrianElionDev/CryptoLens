@@ -4,9 +4,35 @@ import axios from "axios";
 const COINGECKO_BASE_URL = "https://api.coingecko.com/api/v3";
 const API_TIMEOUT = 10000;
 
-// Rate limiting
-const REQUEST_DELAY = 30000; // 30 seconds between requests
+// Rate limiting with exponential backoff
+const BASE_DELAY = 60000; // 1 minute base delay
+const MAX_RETRIES = 3;
+let consecutiveFailures = 0;
 let lastRequestTime = 0;
+
+function getRequestDelay() {
+  return BASE_DELAY * Math.pow(2, consecutiveFailures);
+}
+
+// Cache configuration
+const CACHE_DURATION = 60000; // 1 minute base cache
+const MAX_CACHE_DURATION = 300000; // 5 minutes max cache
+
+function getCacheDuration() {
+  return Math.min(
+    CACHE_DURATION * Math.pow(2, consecutiveFailures),
+    MAX_CACHE_DURATION
+  );
+}
+
+// Add in-memory cache with longer duration
+interface CacheEntry {
+  data: Record<string, CoinData>;
+  timestamp: number;
+  marketData: CoinGeckoMarketResponse[];
+}
+
+let marketDataCache: CacheEntry | null = null;
 
 interface CoinGeckoMarketResponse {
   id: string;
@@ -133,20 +159,80 @@ function findCoinMatch(
 }
 
 export async function POST(request: Request) {
+  let symbols: string[] = [];
+  let requestData;
+
   try {
+    requestData = await request.json();
+    symbols = requestData.symbols || [];
     const now = Date.now();
+
+    // Enhanced cache check with dynamic duration
+    if (marketDataCache) {
+      const currentCacheDuration = getCacheDuration();
+      if (now - marketDataCache.timestamp < currentCacheDuration) {
+        const cachedData = marketDataCache.data;
+        const filteredData: Record<string, CoinData> = {};
+
+        for (const symbol of symbols) {
+          if (cachedData[symbol]) {
+            filteredData[symbol] = cachedData[symbol];
+          }
+        }
+
+        if (Object.keys(filteredData).length === symbols.length) {
+          return NextResponse.json({
+            data: filteredData,
+            timestamp: marketDataCache.timestamp,
+            fromCache: true,
+            cacheExpiry: marketDataCache.timestamp + currentCacheDuration,
+          });
+        }
+      }
+    }
+
+    // Enhanced rate limiting with exponential backoff
+    const currentDelay = getRequestDelay();
     const timeSinceLastRequest = now - lastRequestTime;
-    if (timeSinceLastRequest < REQUEST_DELAY) {
-      await new Promise((resolve) =>
-        setTimeout(resolve, REQUEST_DELAY - timeSinceLastRequest)
+
+    if (timeSinceLastRequest < currentDelay) {
+      if (marketDataCache) {
+        const cachedData = marketDataCache.data;
+        const filteredData: Record<string, CoinData> = {};
+
+        for (const symbol of symbols) {
+          if (cachedData[symbol]) {
+            filteredData[symbol] = cachedData[symbol];
+          }
+        }
+
+        if (Object.keys(filteredData).length > 0) {
+          return NextResponse.json({
+            data: filteredData,
+            timestamp: marketDataCache.timestamp,
+            fromCache: true,
+            retryAfter: Math.ceil((currentDelay - timeSinceLastRequest) / 1000),
+          });
+        }
+      }
+
+      return NextResponse.json(
+        {
+          error: "Rate limit exceeded",
+          retryAfter: Math.ceil((currentDelay - timeSinceLastRequest) / 1000),
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": Math.ceil(
+              (currentDelay - timeSinceLastRequest) / 1000
+            ).toString(),
+          },
+        }
       );
     }
-    lastRequestTime = now;
 
-    const { symbols } = await request.json();
-    const headers: Record<string, string> = {
-      Accept: "application/json",
-    };
+    lastRequestTime = now;
 
     const response = await axios.get(`${COINGECKO_BASE_URL}/coins/markets`, {
       params: {
@@ -155,11 +241,17 @@ export async function POST(request: Request) {
         per_page: 250,
         sparkline: false,
         price_change_percentage: "24h",
-        _: Date.now(), // Add timestamp to prevent caching
+        _: now,
       },
       timeout: API_TIMEOUT,
-      headers,
+      headers: {
+        Accept: "application/json",
+        "Cache-Control": "no-cache",
+      },
     });
+
+    // Reset failure count on success
+    consecutiveFailures = 0;
 
     if (!response.data) {
       throw new Error("No data received from CoinGecko");
@@ -186,15 +278,55 @@ export async function POST(request: Request) {
       }
     }
 
+    // Update cache with both the processed data and raw market data
+    marketDataCache = {
+      data: allCoinData,
+      marketData,
+      timestamp: now,
+    };
+
     return NextResponse.json({
       data: allCoinData,
-      timestamp: Date.now(),
+      timestamp: now,
+      fromCache: false,
     });
-  } catch {
-    // API Error
+  } catch (error) {
+    // Increment failure counter
+    consecutiveFailures = Math.min(consecutiveFailures + 1, MAX_RETRIES);
+
+    if (marketDataCache && symbols.length > 0) {
+      const cachedData = marketDataCache.data;
+      const filteredData: Record<string, CoinData> = {};
+
+      for (const symbol of symbols) {
+        if (cachedData[symbol]) {
+          filteredData[symbol] = cachedData[symbol];
+        }
+      }
+
+      if (Object.keys(filteredData).length > 0) {
+        return NextResponse.json({
+          data: filteredData,
+          timestamp: marketDataCache.timestamp,
+          fromCache: true,
+          error: "Using cached data due to API error",
+          retryAfter: getRequestDelay() / 1000,
+        });
+      }
+    }
+
+    const retryAfter = getRequestDelay() / 1000;
     return NextResponse.json(
-      { error: "Failed to fetch price data", timestamp: Date.now() },
-      { status: 500 }
+      {
+        error: "Failed to fetch price data",
+        retryAfter,
+      },
+      {
+        status: 500,
+        headers: {
+          "Retry-After": retryAfter.toString(),
+        },
+      }
     );
   }
 }
