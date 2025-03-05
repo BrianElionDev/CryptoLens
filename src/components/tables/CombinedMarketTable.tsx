@@ -1,27 +1,13 @@
 "use client";
 
-import { ColumnDef, Row, CellContext } from "@tanstack/react-table";
 import type { CoinData } from "@/hooks/useCoinData";
 import { formatCurrency, formatPercentage } from "@/lib/utils";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { useMemo, useState, useRef, useEffect } from "react";
 import { useCoinData } from "@/hooks/useCoinData";
 import Image from "next/image";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import { DataTable } from "@/components/ui/data-table";
+import { ColumnDef } from "@tanstack/react-table";
 
 type ExtendedCoinData = CoinData & { rpoints: number };
 
@@ -113,7 +99,7 @@ export function CombinedMarketTable({
       setIsReloading(true);
       prevSymbolsRef.current = symbols;
     }
-  }, [symbols]);
+  }, [symbols, setIsReloading, isReloading]);
 
   const { data: coinData, isLoading } = useCoinData(prevSymbolsRef.current);
 
@@ -122,7 +108,7 @@ export function CombinedMarketTable({
     if (coinData && isReloading) {
       setIsReloading(false);
     }
-  }, [coinData]);
+  }, [coinData, isReloading]);
 
   // Sort coin data
   const sortedCoinData = useMemo(() => {
@@ -144,7 +130,7 @@ export function CombinedMarketTable({
       });
     }
 
-    coinData.forEach((coin: CoinData) => {
+    coinData.data?.forEach((coin: CoinData) => {
       const matchingCoins = processedData.coinCategories.filter((cat) => {
         if (!selectedChannels.includes(cat.channel)) return false;
         if (showMostRecent) {
@@ -180,6 +166,101 @@ export function CombinedMarketTable({
     showMostRecent,
   ]);
 
+  const columns: ColumnDef<ExtendedCoinData>[] = [
+    {
+      accessorKey: "index",
+      header: "#",
+      size: 80,
+      cell: ({ row }) => (
+        <div className="text-[15px] text-gray-400 font-medium">
+          {row.index + 1}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "name",
+      header: "Coins",
+      size: 300,
+      cell: ({ row }) => (
+        <div className="flex items-center gap-3">
+          {row.original.image && (
+            <Image
+              src={row.original.image}
+              alt={row.original.name || ""}
+              width={32}
+              height={32}
+              className="rounded-full w-8 h-8"
+              onError={(e) => {
+                const imgElement = e.target as HTMLImageElement;
+                imgElement.style.display = "none";
+                const parent = imgElement.parentElement;
+                if (parent) {
+                  const fallback = document.createElement("div");
+                  fallback.innerHTML = `<svg viewBox="0 0 24 24" class="w-8 h-8 text-blue-400"><path fill="currentColor" d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm0-2a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm-3-7h6v2H9v-2zm0-3h6v2H9v-2z"/></svg>`;
+                  parent.appendChild(fallback.firstChild as Node);
+                }
+              }}
+            />
+          )}
+          <div className="flex flex-col items-start">
+            <span className="text-[15px] font-medium text-gray-100">
+              {row.original.name}
+            </span>
+            <span className="text-xs text-gray-400">
+              {row.original.symbol?.toUpperCase()}
+            </span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      accessorKey: "price",
+      header: "Price",
+      size: 150,
+      cell: ({ row }) => (
+        <div className="text-[15px] font-medium text-gray-100">
+          {formatCurrency(row.original.price)}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "percent_change_24h",
+      header: "24h %",
+      size: 120,
+      cell: ({ row }) => (
+        <div
+          className={`text-[15px] font-medium ${
+            row.original.percent_change_24h >= 0
+              ? "text-emerald-400"
+              : "text-red-400"
+          }`}
+        >
+          {formatPercentage(row.original.percent_change_24h)}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "volume_24h",
+      header: "24h Volume",
+      size: 200,
+      cell: ({ row }) => (
+        <div className="text-[15px] font-medium text-gray-100">
+          {formatCurrency(row.original.volume_24h)}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "market_cap",
+      header: "Market Cap",
+      size: 200,
+      cell: ({ row }) => (
+        <div className="text-[15px] font-medium text-gray-100">
+          {formatCurrency(row.original.market_cap)}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -187,9 +268,7 @@ export function CombinedMarketTable({
           {sortedCoinData.length} coins
         </div>
         <button
-          onClick={() => {
-            setShowMostRecent((prev) => !prev);
-          }}
+          onClick={() => setShowMostRecent((prev) => !prev)}
           className="px-4 py-2 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 hover:text-blue-300 transition-colors border border-blue-500/30 flex items-center gap-2"
         >
           <span>{showMostRecent ? "Show All" : "Show Most Recent"}</span>
@@ -201,141 +280,19 @@ export function CombinedMarketTable({
       {isLoading || isReloading ? (
         <TableSkeleton />
       ) : (
-        <div className="bg-gradient-to-r from-blue-900/10 via-purple-900/10 to-pink-900/10 backdrop-blur-sm rounded-xl p-6 overflow-x-auto border border-gray-800/20">
-          <div className="min-w-[900px] w-full">
-            <table className="w-full">
-              <thead className="sticky top-0 bg-gray-900/80 backdrop-blur-sm z-10">
-                <tr>
-                  <th className="py-4 text-left text-sm font-medium text-white px-4 w-[40px]">
-                    #
-                  </th>
-                  <th className="py-4 text-left text-sm font-medium text-white px-4 w-[200px]">
-                    Coin
-                  </th>
-                  <th className="py-4 text-left text-sm font-medium text-white px-4 w-[120px]">
-                    Price
-                  </th>
-                  <th className="py-4 text-left text-sm font-medium text-white px-4 w-[100px]">
-                    24h %
-                  </th>
-                  <th className="py-4 text-left text-sm font-medium text-white px-4 w-[150px]">
-                    24h Volume
-                  </th>
-                  <th className="py-4 text-left text-sm font-medium text-white px-4 w-[150px]">
-                    Market Cap
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedCoinData.map((row, index) => (
-                  <tr
-                    key={row.coingecko_id}
-                    className="hover:bg-blue-500/5 transition-colors cursor-pointer"
-                    onClick={() =>
-                      onCoinSelect({
-                        symbol: row.coingecko_id,
-                        coingecko_id: row.coingecko_id,
-                        data: row,
-                      })
-                    }
-                  >
-                    <td className="py-5 px-4 w-[40px]">
-                      <div className="text-[15px] text-gray-400 font-medium">
-                        {index + 1}
-                      </div>
-                    </td>
-                    <td className="py-5 px-4 w-[200px]">
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <div className="flex items-center gap-3">
-                            {row.image && (
-                              <Image
-                                src={row.image}
-                                alt={row.name || ""}
-                                width={32}
-                                height={32}
-                                className="rounded-full w-8 h-8"
-                                onError={(e) => {
-                                  const imgElement =
-                                    e.target as HTMLImageElement;
-                                  imgElement.style.display = "none";
-                                  const parent = imgElement.parentElement;
-                                  if (parent) {
-                                    const fallback =
-                                      document.createElement("div");
-                                    fallback.innerHTML = `<svg viewBox="0 0 24 24" class="w-8 h-8 text-blue-400"><path fill="currentColor" d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm0-2a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm-3-7h6v2H9v-2zm0-3h6v2H9v-2z"/></svg>`;
-                                    parent.appendChild(
-                                      fallback.firstChild as Node
-                                    );
-                                  }
-                                }}
-                              />
-                            )}
-                            <div className="flex flex-col items-start">
-                              <span className="text-[15px] font-medium text-gray-100">
-                                {row.name}
-                              </span>
-                              <span className="text-xs text-gray-400">
-                                {row.symbol?.toUpperCase()}
-                              </span>
-                            </div>
-                          </div>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-80">
-                          <div className="space-y-2">
-                            <h4 className="text-[15px] font-semibold">
-                              {row.name}
-                            </h4>
-                            <div className="text-sm space-y-1">
-                              <p>
-                                Market Cap:{" "}
-                                {formatCurrency(row.market_cap || 0)}
-                              </p>
-                              <p>
-                                Volume (24h):{" "}
-                                {formatCurrency(row.volume_24h || 0)}
-                              </p>
-                              <p>
-                                Circulating Supply:{" "}
-                                {row.circulating_supply?.toLocaleString() || 0}{" "}
-                                {row.symbol?.toUpperCase()}
-                              </p>
-                            </div>
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                    </td>
-                    <td className="py-5 px-4 w-[120px]">
-                      <div className="text-[15px] font-medium text-gray-100">
-                        {formatCurrency(row.price)}
-                      </div>
-                    </td>
-                    <td className="py-5 px-4 w-[100px]">
-                      <div
-                        className={`text-[15px] font-medium ${
-                          row.percent_change_24h >= 0
-                            ? "text-emerald-400"
-                            : "text-red-400"
-                        }`}
-                      >
-                        {formatPercentage(row.percent_change_24h)}
-                      </div>
-                    </td>
-                    <td className="py-5 px-4 w-[150px]">
-                      <div className="text-[15px] font-medium text-gray-100">
-                        {formatCurrency(row.volume_24h)}
-                      </div>
-                    </td>
-                    <td className="py-5 px-4 w-[150px]">
-                      <div className="text-[15px] font-medium text-gray-100">
-                        {formatCurrency(row.market_cap)}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <div className="bg-gradient-to-r from-blue-900/10 via-purple-900/10 to-pink-900/10 backdrop-blur-sm rounded-xl p-6 border border-gray-800/20">
+          <DataTable
+            columns={columns}
+            data={sortedCoinData}
+            onRowClick={(data) =>
+              onCoinSelect({
+                symbol: data.coingecko_id,
+                coingecko_id: data.coingecko_id,
+                data,
+              })
+            }
+            virtualizeRows={true}
+          />
         </div>
       )}
     </div>
@@ -346,38 +303,29 @@ function TableSkeleton() {
   return (
     <div className="bg-gradient-to-r from-blue-900/10 via-purple-900/10 to-pink-900/10 backdrop-blur-sm rounded-xl p-6 overflow-x-auto border border-gray-800/20">
       <div className="min-w-[900px] w-full">
-        <Table className="[&_*]:border-0 [&_td]:py-5 [&_th]:py-4 [&_td]:text-[15px] [&_th]:text-sm">
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="w-[40px] text-gray-400 font-medium">
-                #
-              </TableHead>
-              <TableHead className="w-[200px] text-gray-400 font-medium">
-                Coin
-              </TableHead>
-              <TableHead className="w-[120px] text-gray-400 font-medium">
-                Price
-              </TableHead>
-              <TableHead className="w-[100px] text-gray-400 font-medium">
-                24h %
-              </TableHead>
-              <TableHead className="w-[150px] text-gray-400 font-medium">
-                24h Volume
-              </TableHead>
-              <TableHead className="w-[150px] text-gray-400 font-medium">
-                Market Cap
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+        <div className="w-full">
+          <div className="bg-gray-800/30 py-4 grid grid-cols-6 gap-4">
+            {["#", "Coin", "Price", "24h %", "24h Volume", "Market Cap"].map(
+              (header) => (
+                <div
+                  key={header}
+                  className="px-4 text-left text-xs font-medium text-cyan-200 uppercase tracking-wider"
+                >
+                  {header}
+                </div>
+              )
+            )}
+          </div>
+          <div className="divide-y divide-gray-700/30 bg-gray-800/10">
             {Array.from({ length: 5 }).map((_, i) => (
-              <TableRow key={i} className="animate-pulse">
-                <TableCell className="w-[40px]">
-                  <div className="text-[15px] text-gray-400 font-medium">
-                    {i + 1}
-                  </div>
-                </TableCell>
-                <TableCell className="w-[200px]">
+              <div
+                key={i}
+                className="animate-pulse grid grid-cols-6 gap-4 py-5"
+              >
+                <div className="px-4">
+                  <Skeleton className="h-5 w-8 bg-gray-800/50" />
+                </div>
+                <div className="px-4">
                   <div className="flex items-center gap-3">
                     <Skeleton className="h-8 w-8 rounded-full bg-gray-800/50" />
                     <div className="flex flex-col gap-1">
@@ -385,23 +333,23 @@ function TableSkeleton() {
                       <Skeleton className="h-4 w-16 bg-gray-800/50" />
                     </div>
                   </div>
-                </TableCell>
-                <TableCell className="w-[120px]">
+                </div>
+                <div className="px-4">
                   <Skeleton className="h-5 w-20 bg-gray-800/50" />
-                </TableCell>
-                <TableCell className="w-[100px]">
+                </div>
+                <div className="px-4">
                   <Skeleton className="h-5 w-16 bg-gray-800/50" />
-                </TableCell>
-                <TableCell className="w-[150px]">
+                </div>
+                <div className="px-4">
                   <Skeleton className="h-5 w-24 bg-gray-800/50" />
-                </TableCell>
-                <TableCell className="w-[150px]">
+                </div>
+                <div className="px-4">
                   <Skeleton className="h-5 w-24 bg-gray-800/50" />
-                </TableCell>
-              </TableRow>
+                </div>
+              </div>
             ))}
-          </TableBody>
-        </Table>
+          </div>
+        </div>
       </div>
     </div>
   );

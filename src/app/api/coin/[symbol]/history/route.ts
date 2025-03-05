@@ -8,8 +8,13 @@ const REQUEST_DELAY = 60000; // 60 seconds between requests
 let lastRequestTime = 0;
 
 // Cache configuration
+interface HistoryData {
+  date: string;
+  price: number;
+}
+
 interface CacheEntry {
-  data: any;
+  data: HistoryData[];
   timestamp: number;
 }
 

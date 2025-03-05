@@ -1,12 +1,24 @@
-import { useQuery, useQueryClient, Query } from "@tanstack/react-query";
-import axios from "axios";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import axios, { AxiosError } from "axios";
 import { API_ENDPOINTS } from "@/config/api";
 import type { KnowledgeItem } from "@/types/knowledge";
 import { toast } from "react-hot-toast";
 import { useRef } from "react";
 
-// Add request deduplication map
-const pendingRequests = new Map<string, Promise<any>>();
+interface TimestampedData {
+  timestamp: number;
+}
+
+interface CachedData<T> {
+  data: T[];
+  timestamp: number;
+}
+
+type CoinResponse = CachedData<CoinData>;
+
+// Add request deduplication maps
+const pendingRequests = new Map<string, Promise<CoinResponse>>();
+const pendingHistoryRequests = new Map<string, Promise<CoinHistoryData[]>>();
 
 export interface CoinData {
   id: string;
@@ -26,41 +38,45 @@ export interface CoinHistoryData {
   price: number;
 }
 
-export function useCoinData(symbols: string[]) {
+export function useCoinData(symbols: string[], refreshKey: number = 0) {
   const queryClient = useQueryClient();
 
-  return useQuery({
-    queryKey: ["coins-market", symbols.sort().join(",")],
-    queryFn: async () => {
-      if (!symbols.length) return [];
+  return useQuery<CoinResponse, AxiosError>({
+    queryKey: ["coins-market", symbols.sort().join(","), refreshKey],
+    queryFn: async (): Promise<CoinResponse> => {
+      if (!symbols.length) return { data: [], timestamp: Date.now() };
 
       // Check if we have fresh data in the cache first
-      const cacheKey = ["coins-market", symbols.sort().join(",")];
-      const cachedData = queryClient.getQueryData<CoinData[]>(cacheKey);
+      const cacheKey = [
+        "coins-market",
+        symbols.sort().join(","),
+        refreshKey,
+      ] as const;
+      const cachedData = queryClient.getQueryData<CoinResponse>(cacheKey);
       const now = Date.now();
-      const cacheAge = (cachedData as any)?.timestamp
-        ? now - (cachedData as any).timestamp
+      const cacheAge = cachedData?.timestamp
+        ? now - cachedData.timestamp
         : Infinity;
 
+      // Only use cache if it's less than 30 seconds old
       if (cachedData && cacheAge < 30000) {
         return cachedData;
       }
 
       // Check if any single coin queries are fresher
       if (symbols.length === 1) {
-        const batchQueries = queryClient.getQueriesData<CoinData[]>({
+        const batchQueries = queryClient.getQueriesData<CoinResponse>({
           queryKey: ["coins-market"],
         });
 
-        for (const [key, data] of batchQueries) {
-          if (!data || !Array.isArray(data)) continue;
-          const coinData = data.find((c) => c.coingecko_id === symbols[0]);
+        for (const [queryKey] of batchQueries) {
+          const data = queryClient.getQueryData<CoinResponse>(queryKey);
+          if (!data?.data) continue;
+          const coinData = data.data.find((c) => c.coingecko_id === symbols[0]);
           if (coinData) {
-            const dataAge = (data as any)?.timestamp
-              ? now - (data as any).timestamp
-              : Infinity;
+            const dataAge = data.timestamp ? now - data.timestamp : Infinity;
             if (dataAge < 30000) {
-              return [coinData];
+              return { data: [coinData], timestamp: Date.now() };
             }
           }
         }
@@ -68,10 +84,12 @@ export function useCoinData(symbols: string[]) {
 
       // Deduplicate requests but with a short timeout
       const requestKey = symbols.sort().join(",");
-      if (pendingRequests.has(requestKey)) {
-        const pendingPromise = pendingRequests.get(requestKey);
+      const pendingPromise = pendingRequests.get(requestKey);
+      if (pendingPromise) {
         // Only use pending request if it's less than 5 seconds old
-        if (Date.now() - (pendingPromise as any).timestamp < 5000) {
+        const timestampedPromise = pendingPromise as Promise<CoinResponse> &
+          TimestampedData;
+        if (Date.now() - timestampedPromise.timestamp < 5000) {
           return pendingPromise;
         }
         pendingRequests.delete(requestKey);
@@ -89,20 +107,22 @@ export function useCoinData(symbols: string[]) {
           }
         )
         .then(({ data }) => {
-          const result = Object.values(data.data);
-          (result as any).timestamp = Date.now();
+          const result: CoinResponse = {
+            data: Object.values(data.data),
+            timestamp: Date.now(),
+          };
 
           // Update all related queries in the cache
-          const batchQueries = queryClient.getQueriesData<CoinData[]>({
+          const batchQueries = queryClient.getQueriesData<CoinResponse>({
             queryKey: ["coins-market"],
           });
 
-          for (const [key, data] of batchQueries) {
-            if (!data || !Array.isArray(data)) continue;
-            const updatedData = [...data];
+          for (const [queryKey, queryData] of batchQueries) {
+            if (!queryData?.data) continue;
+            const updatedData = [...queryData.data];
             let hasUpdates = false;
 
-            result.forEach((newCoin) => {
+            result.data.forEach((newCoin) => {
               const index = updatedData.findIndex(
                 (c) => c.coingecko_id === newCoin.coingecko_id
               );
@@ -113,35 +133,39 @@ export function useCoinData(symbols: string[]) {
             });
 
             if (hasUpdates) {
-              (updatedData as any).timestamp = Date.now();
-              queryClient.setQueryData(key, updatedData);
+              queryClient.setQueryData<CoinResponse>(queryKey, {
+                data: updatedData,
+                timestamp: Date.now(),
+              });
             }
           }
 
           pendingRequests.delete(requestKey);
           return result;
         })
-        .catch((error) => {
+        .catch((error: AxiosError) => {
           pendingRequests.delete(requestKey);
           // If we get rate limited and have cached data, use it
-          if (error?.response?.status === 429 && cachedData) {
+          if (error.response?.status === 429 && cachedData) {
             return cachedData;
           }
           throw error;
         });
 
       // Add timestamp to the promise for age checking
-      (promise as any).timestamp = Date.now();
+      const timestampedPromise = promise as Promise<CoinResponse> &
+        TimestampedData;
+      timestampedPromise.timestamp = Date.now();
       pendingRequests.set(requestKey, promise);
       return promise;
     },
-    staleTime: 30000, // Data becomes stale after 30 seconds
-    gcTime: 60000, // Keep unused data for 1 minute
+    staleTime: 30000,
+    gcTime: 60000,
     enabled: symbols.length > 0,
-    refetchInterval: 30000, // 30 second interval to avoid rate limits
+    refetchInterval: 30000,
     refetchIntervalInBackground: true,
-    retry: (failureCount, error: any) => {
-      if (error?.response?.status === 429) return false;
+    retry: (failureCount, error: AxiosError) => {
+      if (error.response?.status === 429) return false;
       return failureCount < 2;
     },
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
@@ -151,18 +175,19 @@ export function useCoinData(symbols: string[]) {
 export function useCoinHistory(symbol: string, timeframe: string = "1") {
   const queryClient = useQueryClient();
 
-  return useQuery({
+  return useQuery<CoinHistoryData[], AxiosError>({
     queryKey: ["coin-history", symbol, timeframe],
-    queryFn: async () => {
+    queryFn: async (): Promise<CoinHistoryData[]> => {
       // Check cache first
-      const cacheKey = ["coin-history", symbol, timeframe];
-      const cachedData = queryClient.getQueryData(cacheKey);
+      const cacheKey = ["coin-history", symbol, timeframe] as const;
+      const cachedData = queryClient.getQueryData<CoinHistoryData[]>(cacheKey);
       if (cachedData) return cachedData;
 
       // Deduplicate requests
       const requestKey = `${symbol}-${timeframe}`;
-      if (pendingRequests.has(requestKey)) {
-        return pendingRequests.get(requestKey);
+      const pendingPromise = pendingHistoryRequests.get(requestKey);
+      if (pendingPromise) {
+        return pendingPromise;
       }
 
       const promise = axios
@@ -170,15 +195,15 @@ export function useCoinHistory(symbol: string, timeframe: string = "1") {
           `${API_ENDPOINTS.COIN.HISTORY(symbol)}?days=${timeframe}`
         )
         .then(({ data }) => {
-          pendingRequests.delete(requestKey);
+          pendingHistoryRequests.delete(requestKey);
           return data;
         })
-        .catch((error) => {
-          pendingRequests.delete(requestKey);
+        .catch((error: AxiosError) => {
+          pendingHistoryRequests.delete(requestKey);
           throw error;
         });
 
-      pendingRequests.set(requestKey, promise);
+      pendingHistoryRequests.set(requestKey, promise);
       return promise;
     },
     staleTime: 300000,
@@ -186,8 +211,8 @@ export function useCoinHistory(symbol: string, timeframe: string = "1") {
     refetchInterval: 300000,
     refetchIntervalInBackground: false,
     enabled: !!symbol,
-    retry: (failureCount, error: any) => {
-      if (error?.response?.status === 429) return false;
+    retry: (failureCount, error: AxiosError) => {
+      if (error.response?.status === 429) return false;
       return failureCount < 2;
     },
   });
@@ -196,16 +221,19 @@ export function useCoinHistory(symbol: string, timeframe: string = "1") {
 export function useKnowledgeData() {
   const prevDataLength = useRef<number>(0);
 
-  return useQuery({
+  return useQuery<KnowledgeItem[], AxiosError>({
     queryKey: ["knowledge"],
-    queryFn: async () => {
-      const response = await axios.get("/api/knowledge", {
-        headers: {
-          "Cache-Control": "no-cache",
-          tags: "knowledge",
-        },
-      });
-      const data = response.data.knowledge as KnowledgeItem[];
+    queryFn: async (): Promise<KnowledgeItem[]> => {
+      const response = await axios.get<{ knowledge: KnowledgeItem[] }>(
+        "/api/knowledge",
+        {
+          headers: {
+            "Cache-Control": "no-cache",
+            tags: "knowledge",
+          },
+        }
+      );
+      const data = response.data.knowledge;
 
       // Check if we have new data
       if (prevDataLength.current > 0 && data.length > prevDataLength.current) {

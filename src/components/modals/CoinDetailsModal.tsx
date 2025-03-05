@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useCoinHistory, useCoinData } from "@/hooks/useCoinData";
 import type { CoinData } from "@/hooks/useCoinData";
 import {
@@ -42,9 +42,18 @@ export default function CoinDetailsModal({
   onClose,
 }: CoinDetailsModalProps) {
   const [timeframe, setTimeframe] = useState("1");
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Force refresh every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRefreshKey((key) => key + 1);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Use the coin data hook directly for live updates
-  const { data: liveData } = useCoinData([coingecko_id]);
+  const { data: liveData } = useCoinData([coingecko_id], refreshKey);
   const { data: chartData, isLoading: isLoadingChart } = useCoinHistory(
     coingecko_id,
     timeframe
@@ -52,8 +61,8 @@ export default function CoinDetailsModal({
 
   // Use the latest data or fall back to initial data
   const displayData = useMemo(() => {
-    if (liveData && liveData[0]) {
-      return liveData[0];
+    if (liveData?.data?.[0]) {
+      return liveData.data[0];
     }
     return initialData;
   }, [liveData, initialData]);
