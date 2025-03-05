@@ -38,13 +38,10 @@ export const queryConfig = {
 export function createQueryClient() {
   return new QueryClient({
     ...queryConfig,
-    // Add default suspense config
     defaultOptions: {
       ...queryConfig.defaultOptions,
       queries: {
         ...queryConfig.defaultOptions.queries,
-        suspense: false,
-        useErrorBoundary: false,
       },
     },
   });
