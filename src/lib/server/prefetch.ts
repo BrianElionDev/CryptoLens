@@ -1,7 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
 import type { KnowledgeItem } from "@/types/knowledge";
-import type { CoinData } from "@/hooks/useCoinData";
-import axios from "axios";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -14,13 +12,21 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 export async function prefetchKnowledgeData() {
   try {
+    // Only fetch last 30 days of data initially
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const isoDate = thirtyDaysAgo.toISOString();
+
     const { data: knowledgeData, error } = await supabase
       .from("knowledge")
       .select("*")
-      .order("date", { ascending: false });
+      .gte("date", isoDate)
+      .order("date", { ascending: false })
+      .limit(100); // Limit initial load
 
     if (error) {
-      throw error;
+      console.error("Knowledge fetch error:", error);
+      return [];
     }
 
     if (!knowledgeData || knowledgeData.length === 0) {
@@ -36,32 +42,12 @@ export async function prefetchKnowledgeData() {
       link: item.link || "",
       answer: item.answer || "",
       summary: item.summary || "",
-      llm_answer: item.llm_answer,
+      llm_answer: item.llm_answer || { projects: [] }, // Ensure projects array exists
     }));
 
     return transformedData;
   } catch (error) {
     console.error("Prefetch Error:", error);
-    return [];
-  }
-}
-
-export async function prefetchCoinData(symbols: string[]) {
-  try {
-    if (!symbols.length) return [];
-    const response = await axios.post(
-      `${process.env.NEXT_PUBLIC_APP_URL}/api/coingecko`,
-      { symbols },
-      {
-        headers: {
-          "Cache-Control": "no-cache",
-          Pragma: "no-cache",
-        },
-      }
-    );
-    return Object.values(response.data.data) as CoinData[];
-  } catch (error) {
-    console.error("Coin Prefetch Error:", error);
-    return [];
+    return []; // Return empty array instead of undefined
   }
 }

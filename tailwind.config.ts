@@ -92,6 +92,11 @@ export default {
             backgroundPosition: "100% 50%",
           },
         },
+        dots: {
+          "0%, 20%": { opacity: "0" },
+          "50%": { opacity: "1" },
+          "100%": { opacity: "0" },
+        },
       },
       utilities: {
         ".animation-delay-2000": {

@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface ChannelSelectorProps {
   channels: string[];
@@ -21,12 +21,23 @@ export function ChannelSelector({
   selectedChannels,
   onChannelsChange,
 }: ChannelSelectorProps) {
-  const [tempSelectedChannels, setTempSelectedChannels] =
-    useState<string[]>(selectedChannels);
+  const [tempSelectedChannels, setTempSelectedChannels] = useState<string[]>(
+    []
+  );
   const [open, setOpen] = useState(false);
 
+  useEffect(() => {
+    if (open) {
+      setTempSelectedChannels(selectedChannels);
+    }
+  }, [open, selectedChannels]);
+
   const handleSelectAll = () => {
-    setTempSelectedChannels(channels);
+    setTempSelectedChannels(
+      [...channels].sort((a, b) =>
+        a.toLowerCase().localeCompare(b.toLowerCase())
+      )
+    );
   };
 
   const handleDeselectAll = () => {

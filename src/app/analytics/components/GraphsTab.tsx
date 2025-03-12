@@ -1,13 +1,12 @@
 import { useMemo, useState, useEffect } from "react";
 import {
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Area,
 } from "recharts";
 import {
   Select,
@@ -16,6 +15,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { KnowledgeItem } from "@/types/knowledge";
 
 interface GraphsTabProps {
@@ -35,6 +36,7 @@ export const GraphsTab = ({
   selectedChannels,
 }: GraphsTabProps) => {
   const [selectedCoin, setSelectedCoin] = useState<string>("");
+  const [timeframe, setTimeframe] = useState<"all" | "30" | "7">("all");
 
   // Reset selected coin when channels change
   useEffect(() => {
@@ -70,12 +72,23 @@ export const GraphsTab = ({
         ([coin]) => coin === selectedCoin
       )?.[1] || [];
 
+    let filteredData = trendData;
+
+    // Apply timeframe filter
+    if (timeframe !== "all") {
+      const daysAgo = parseInt(timeframe);
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - daysAgo);
+
+      filteredData = trendData.filter((d) => new Date(d.date) >= cutoffDate);
+    }
+
     // If no channels selected, show all data
     if (selectedChannels.length === 0) {
-      return trendData
+      return filteredData
         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
         .map((d) => ({
-          date: new Date(d.date).toLocaleDateString(),
+          date: d.date,
           rpoints: Math.round(d.rpoints * 100) / 100,
         }));
     }
@@ -91,10 +104,10 @@ export const GraphsTab = ({
 
     if (relevantChannels.length === 0) return [];
 
-    return trendData
+    return filteredData
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
       .map((d) => ({
-        date: new Date(d.date).toLocaleDateString(),
+        date: d.date,
         rpoints: Math.round(d.rpoints * 100) / 100,
       }));
   }, [
@@ -102,99 +115,121 @@ export const GraphsTab = ({
     processedData.coinCategories,
     selectedCoin,
     selectedChannels,
+    timeframe,
   ]);
 
   return (
     <div className="space-y-8">
-      <div className="p-6 rounded-xl bg-gradient-to-r from-blue-900/10 via-purple-900/10 to-pink-900/10 border border-gray-800/20 backdrop-blur-sm">
-        {/* Coin Selection */}
-        <div className="mb-6 w-[200px]">
-          <Select value={selectedCoin} onValueChange={setSelectedCoin}>
-            <SelectTrigger className="w-full bg-gray-900/50 border border-gray-700/50 text-gray-200 hover:bg-gray-800/50 transition-colors">
-              <SelectValue placeholder="Select a coin" />
-            </SelectTrigger>
-            <SelectContent className="bg-gray-900/95 border border-gray-700/50 text-gray-200 backdrop-blur-lg">
-              {top10Coins.map((coin, index) => (
-                <SelectItem
-                  key={`${coin.name}-${index}`}
-                  value={coin.name}
-                  className="hover:bg-blue-500/20 focus:bg-blue-500/20 focus:text-blue-200"
-                >
-                  {coin.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Chart */}
-        <div className="h-[400px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData}>
-              <defs>
-                <linearGradient id="colorRpoints" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#2d374850" />
-              <XAxis
-                dataKey="date"
-                stroke="#94a3b8"
-                fontSize={12}
-                tickLine={false}
-                axisLine={false}
-                tickMargin={10}
-              />
-              <YAxis
-                stroke="#94a3b8"
-                fontSize={12}
-                tickLine={false}
-                axisLine={false}
-                domain={["auto", "auto"]}
-                tickMargin={10}
-                tickFormatter={(value) => value.toLocaleString()}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "rgba(15, 23, 42, 0.9)",
-                  border: "1px solid rgba(59, 130, 246, 0.2)",
-                  borderRadius: "0.5rem",
-                  padding: "12px",
-                }}
-                labelStyle={{ color: "#94a3b8", marginBottom: "4px" }}
-                itemStyle={{ color: "#3b82f6" }}
-                formatter={(value: number) => [
-                  value.toLocaleString(),
-                  "R-Points",
-                ]}
-              />
-              <Area
-                type="monotone"
-                dataKey="rpoints"
-                stroke="#3b82f6"
-                strokeWidth={2}
-                fillOpacity={1}
-                fill="url(#colorRpoints)"
-              />
-              <Line
-                type="monotone"
-                dataKey="rpoints"
-                stroke="#3b82f6"
-                strokeWidth={2}
-                dot={false}
-                name="R-Points"
-                activeDot={{
-                  r: 6,
-                  fill: "#3b82f6",
-                  stroke: "#1e3a8a",
-                  strokeWidth: 2,
-                }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+      <Card className="bg-gray-800/50 border-gray-700/50 backdrop-blur-sm">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-gray-200">R-Points Trend</CardTitle>
+            <div className="flex items-center gap-4">
+              <Select value={selectedCoin} onValueChange={setSelectedCoin}>
+                <SelectTrigger className="w-[200px] bg-gray-900/50 border border-gray-700/50 text-gray-200 hover:bg-gray-800/50 transition-colors">
+                  <SelectValue placeholder="Select a coin" />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-900/95 border border-gray-700/50 text-gray-200 backdrop-blur-lg">
+                  {top10Coins.map((coin, index) => (
+                    <SelectItem
+                      key={`${coin.name}-${index}`}
+                      value={coin.name}
+                      className="hover:bg-blue-500/20 focus:bg-blue-500/20 focus:text-blue-200"
+                    >
+                      {coin.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Tabs
+                value={timeframe}
+                onValueChange={(v) => setTimeframe(v as "all" | "30" | "7")}
+              >
+                <TabsList className="bg-gray-900/60">
+                  <TabsTrigger value="7">7d</TabsTrigger>
+                  <TabsTrigger value="30">30d</TabsTrigger>
+                  <TabsTrigger value="all">All</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[400px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="colorRpoints" x1="0" y1="0" x2="0" y2="1">
+                    <stop
+                      offset="0%"
+                      stopColor="rgba(59, 130, 246, 0.5)"
+                      stopOpacity={0.8}
+                    />
+                    <stop
+                      offset="100%"
+                      stopColor="rgba(59, 130, 246, 0.1)"
+                      stopOpacity={0.1}
+                    />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="#2d374850"
+                  horizontal={true}
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="date"
+                  stroke="#94a3b8"
+                  tickFormatter={(date) => new Date(date).toLocaleDateString()}
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={10}
+                />
+                <YAxis
+                  stroke="#94a3b8"
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={false}
+                  domain={[0, "auto"]}
+                  tickMargin={10}
+                  tickFormatter={(value) => value.toLocaleString()}
+                  width={80}
+                  scale="linear"
+                  padding={{ top: 20, bottom: 0 }}
+                />
+                <Tooltip
+                  content={({ active, payload, label }) => {
+                    if (active && payload?.[0]?.value) {
+                      return (
+                        <div className="bg-gray-900/90 border border-gray-800 rounded-lg p-3 backdrop-blur-sm">
+                          <p className="text-gray-200">
+                            {new Date(label).toLocaleDateString()}
+                          </p>
+                          <p className="text-blue-400 font-medium">
+                            {Number(payload[0].value).toLocaleString()} R-Points
+                          </p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="rpoints"
+                  stroke="rgb(59, 130, 246)"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#colorRpoints)"
+                  isAnimationActive={false}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
