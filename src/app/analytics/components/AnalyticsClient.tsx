@@ -26,7 +26,7 @@ interface AnalyticsClientProps {
 }
 
 export function AnalyticsClient({ initialData }: AnalyticsClientProps) {
-  const { data: knowledge = initialData } = useKnowledgeData();
+  const { data: knowledge = initialData, isLoading } = useKnowledgeData();
   const [activeTab, setActiveTab] = useState<TabType>("market");
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   const [selectedCoin, setSelectedCoin] = useState<{
@@ -35,7 +35,9 @@ export function AnalyticsClient({ initialData }: AnalyticsClientProps) {
     data: CoinData;
   } | null>(null);
 
+  // Process data once and memoize
   const processedData = useMemo(() => {
+    console.debug("Processing analytics data...");
     const data = {
       projectDistribution: [] as { name: string; value: number }[],
       projectTrends: new Map<string, { date: string; rpoints: number }[]>(),
@@ -48,6 +50,7 @@ export function AnalyticsClient({ initialData }: AnalyticsClientProps) {
         rpoints: number;
       }[],
       channels: [] as string[],
+      uniqueCoins: new Set<string>(),
     };
 
     if (!knowledge?.length) {
@@ -68,8 +71,13 @@ export function AnalyticsClient({ initialData }: AnalyticsClientProps) {
       channelSet.add(channel);
 
       projects.forEach((project: RawProjectData) => {
-        const projectName = project.coin_or_project;
+        const projectName = project.coin_or_project?.toLowerCase().trim();
+        if (!projectName) return; // Skip empty projects
+
         const rpoints = Number(project.rpoints || project.Rpoints || 0);
+        if (rpoints <= 0) return; // Skip projects with no points
+
+        data.uniqueCoins.add(projectName);
 
         // Track dates and channels for each coin
         if (!coinDates.has(projectName)) {
@@ -136,18 +144,37 @@ export function AnalyticsClient({ initialData }: AnalyticsClientProps) {
       })
       .sort((a, b) => b.rpoints - a.rpoints);
 
-    // Add channels
-    data.channels = Array.from(channelSet).sort();
+    // Add channels with stable sorting
+    data.channels = Array.from(channelSet).sort((a, b) =>
+      a.toLowerCase().localeCompare(b.toLowerCase())
+    );
 
+    console.debug("Unique coins found:", data.uniqueCoins.size);
     return data;
   }, [knowledge]);
 
-  // Initialize channels
+  // Initialize channels with a stable reference
   useEffect(() => {
-    if (processedData.channels.length > 0 && selectedChannels.length === 0) {
-      setSelectedChannels(processedData.channels);
+    if (processedData.channels.length > 0) {
+      const stableChannels = [...processedData.channels].sort((a, b) =>
+        a.toLowerCase().localeCompare(b.toLowerCase())
+      );
+      setSelectedChannels(stableChannels);
     }
-  }, [processedData.channels, selectedChannels.length]);
+  }, [processedData.channels]);
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen pt-24 bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900">
+        <div className="container mx-auto px-4 2xl:px-0 max-w-[1400px] space-y-4">
+          <div className="flex items-center justify-center p-12">
+            <div className="w-8 h-8 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pt-24 bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900">
@@ -181,6 +208,7 @@ export function AnalyticsClient({ initialData }: AnalyticsClientProps) {
             </div>
           </div>
         </div>
+
         {/* Channel Selector */}
         <div className="flex justify-end mb-4">
           <ChannelSelector
@@ -205,7 +233,10 @@ export function AnalyticsClient({ initialData }: AnalyticsClientProps) {
               <CombinedMarketTable
                 processedData={processedData}
                 selectedChannels={selectedChannels}
-                onCoinSelect={setSelectedCoin}
+                onCoinSelect={(coin) => {
+                  console.log("Selected coin:", coin);
+                  setSelectedCoin(coin);
+                }}
               />
             )}
             {activeTab === "graphs" && (
@@ -229,6 +260,7 @@ export function AnalyticsClient({ initialData }: AnalyticsClientProps) {
 
         {selectedCoin && (
           <CoinDetailsModal
+            key={selectedCoin.coingecko_id}
             coingecko_id={selectedCoin.coingecko_id}
             data={selectedCoin.data}
             onClose={() => setSelectedCoin(null)}

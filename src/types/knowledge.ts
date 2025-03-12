@@ -21,4 +21,10 @@ export interface Project {
   rpoints: number;
   total_count: number;
   category: string[];
+  coingecko_matched?: boolean;
+  coingecko_data?: {
+    id: string;
+    symbol: string;
+    name: string;
+  };
 }

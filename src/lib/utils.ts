@@ -16,9 +16,9 @@ export function formatCurrency(
   }).format(value);
 }
 
-export function formatPercentage(value: number | undefined) {
-  if (value === undefined) return "0.00%";
-  return `${value.toFixed(2)}%`;
+export function formatPercentage(value: number | null | undefined): string {
+  if (value === null || value === undefined) return "0.00%";
+  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
 
 export function formatNumber(

@@ -6,7 +6,7 @@ import type { KnowledgeItem } from "@/types/knowledge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState, useMemo } from "react";
 import React from "react";
-import { useCoinData } from "@/hooks/useCoinData";
+import { useCoinGecko } from "@/contexts/CoinGeckoContext";
 
 interface StatsModalProps {
   item: KnowledgeItem;
@@ -15,84 +15,60 @@ interface StatsModalProps {
 
 export function StatsModal({ item, onClose }: StatsModalProps) {
   const [activeTab, setActiveTab] = useState<"stats" | "summary">("stats");
-
-  // Get all unique coin symbols
-  const coinSymbols = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          item.llm_answer.projects.map((p) => p.coin_or_project.toLowerCase())
-        )
-      ),
-    [item.llm_answer.projects]
-  );
-
-  // Validate coins against CoinGecko
-  const { data: coinData, isLoading: isValidating } = useCoinData(coinSymbols);
+  const { topCoins, isLoading: isLoadingCoins, matchCoins } = useCoinGecko();
 
   const validProjects = useMemo(() => {
-    if (!coinData || isValidating) return item.llm_answer.projects;
+    if (!topCoins || isLoadingCoins) return [];
 
-    // Debug log
-    console.log(
-      "CoinGecko Data:",
-      coinData.data.map((c) => ({ symbol: c.symbol, name: c.name }))
-    );
-    console.log(
-      "Projects to match:",
-      item.llm_answer.projects.map((p) => p.coin_or_project)
-    );
-
-    return item.llm_answer.projects.map((project) => {
-      const projectName = project.coin_or_project.toLowerCase().trim();
-
-      // Try to find matching coin
-      const matchedCoin = coinData.data.find((coin) => {
-        const symbol = coin.symbol.toLowerCase().trim();
-        const name = coin.name.toLowerCase().trim();
-
-        const isMatch =
-          symbol === projectName ||
-          name === projectName ||
-          projectName.includes(symbol) ||
-          symbol.includes(projectName) ||
-          name.includes(projectName) ||
-          projectName.includes(name);
-
-        if (isMatch) {
-          console.log(`Matched: ${projectName} with CoinGecko coin:`, {
-            symbol,
-            name,
-            price: coin.price,
-          });
-        }
-
-        return isMatch;
-      });
-
-      if (!matchedCoin) {
-        console.log(`No CoinGecko match for: ${projectName}`);
-      }
-
-      return {
-        ...project,
-        coingecko_matched: !!matchedCoin,
-        current_price: matchedCoin?.price,
-      };
+    console.debug("Attempting to match coins:", {
+      totalProjects: item.llm_answer.projects.length,
+      availableCoins: topCoins.length,
+      projectNames: item.llm_answer.projects.map((p) => p.coin_or_project),
     });
-  }, [coinData, item.llm_answer.projects, isValidating]);
+
+    return matchCoins(item.llm_answer.projects).filter(
+      (p) => p.coingecko_matched
+    );
+  }, [topCoins, item.llm_answer.projects, isLoadingCoins, matchCoins]);
 
   const renderLLMAnswer = () => {
     try {
-      if (isValidating) {
+      if (isLoadingCoins) {
         return (
-          <div className="mt-4 flex items-center justify-center p-8">
+          <div className="mt-4 flex flex-col items-center justify-center p-8 space-y-4">
             <div className="w-8 h-8 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
+            <p className="text-sm text-gray-400">Loading coin data...</p>
           </div>
         );
       }
 
       const projects = validProjects;
+
+      if (!projects || projects.length === 0) {
+        return (
+          <div className="flex flex-col items-center justify-center p-12 text-center">
+            <div className="w-16 h-16 mb-4 text-gray-500">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              >
+                <path d="M3 7v10c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2z" />
+                <path d="M16 3v4M8 3v4M3 9h18" />
+                <path d="M8 13h.01M12 13h.01M16 13h.01M8 17h.01M12 17h.01M16 17h.01" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-medium text-gray-400 mb-2">
+              No Coin Data Available
+            </h3>
+            <p className="text-gray-500 max-w-sm">
+              There are no coins to analyze in this video yet. Check back later
+              for updates.
+            </p>
+          </div>
+        );
+      }
 
       // Sort projects by rpoints in descending order
       const top3Projects = [...projects]
@@ -264,73 +240,97 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
           ) : (
             <div className="p-6 rounded-xl bg-gray-900/40 border border-gray-700/50">
               <div className="prose prose-invert max-w-none">
-                {(item.summary || "").split("\n").map((paragraph, index) => {
-                  // Handle headers
-                  if (paragraph.startsWith("###")) {
-                    return (
-                      <h3
-                        key={`h3-${index}-${paragraph.slice(0, 20)}`}
-                        className="text-xl font-bold text-cyan-200 mb-4"
-                      >
-                        {paragraph.replace(/###/g, "").trim()}
-                      </h3>
-                    );
-                  }
-                  if (paragraph.startsWith("####")) {
-                    return (
-                      <h4
-                        key={`h4-${index}-${paragraph.slice(0, 20)}`}
-                        className="text-lg font-semibold text-blue-300 mb-3"
-                      >
-                        {paragraph.replace(/####/g, "").trim()}
-                      </h4>
-                    );
-                  }
-                  // Handle bullet points
-                  if (paragraph.startsWith("-")) {
-                    return (
-                      <div
-                        key={`bullet-${index}-${paragraph.slice(0, 20)}`}
-                        className="flex items-start space-x-2 mb-2"
-                      >
-                        <span className="text-blue-400 mt-1.5">•</span>
-                        <p className="text-gray-200">
-                          {paragraph.replace("-", "").trim()}
+                {item.summary ? (
+                  (item.summary || "").split("\n").map((paragraph, index) => {
+                    // Handle headers
+                    if (paragraph.startsWith("###")) {
+                      return (
+                        <h3
+                          key={`h3-${index}-${paragraph.slice(0, 20)}`}
+                          className="text-xl font-bold text-cyan-200 mb-4"
+                        >
+                          {paragraph.replace(/###/g, "").trim()}
+                        </h3>
+                      );
+                    }
+                    if (paragraph.startsWith("####")) {
+                      return (
+                        <h4
+                          key={`h4-${index}-${paragraph.slice(0, 20)}`}
+                          className="text-lg font-semibold text-blue-300 mb-3"
+                        >
+                          {paragraph.replace(/####/g, "").trim()}
+                        </h4>
+                      );
+                    }
+                    // Handle bullet points
+                    if (paragraph.startsWith("-")) {
+                      return (
+                        <div
+                          key={`bullet-${index}-${paragraph.slice(0, 20)}`}
+                          className="flex items-start space-x-2 mb-2"
+                        >
+                          <span className="text-blue-400 mt-1.5">•</span>
+                          <p className="text-gray-200">
+                            {paragraph.replace("-", "").trim()}
+                          </p>
+                        </div>
+                      );
+                    }
+                    // Handle bold text
+                    if (paragraph.includes("**")) {
+                      return (
+                        <p
+                          key={`bold-${index}-${paragraph.slice(0, 20)}`}
+                          className="text-gray-200 mb-2"
+                        >
+                          {paragraph.split("**").map((part, i) => (
+                            <React.Fragment
+                              key={`${index}-${i}-${part.slice(0, 10)}`}
+                            >
+                              {i % 2 === 0 ? (
+                                <span>{part}</span>
+                              ) : (
+                                <strong className="text-cyan-200">
+                                  {part}
+                                </strong>
+                              )}
+                            </React.Fragment>
+                          ))}
                         </p>
-                      </div>
-                    );
-                  }
-                  // Handle bold text
-                  if (paragraph.includes("**")) {
-                    return (
+                      );
+                    }
+                    // Regular paragraphs
+                    return paragraph ? (
                       <p
-                        key={`bold-${index}-${paragraph.slice(0, 20)}`}
+                        key={`p-${index}-${paragraph.slice(0, 20)}`}
                         className="text-gray-200 mb-2"
                       >
-                        {paragraph.split("**").map((part, i) => (
-                          <React.Fragment
-                            key={`${index}-${i}-${part.slice(0, 10)}`}
-                          >
-                            {i % 2 === 0 ? (
-                              <span>{part}</span>
-                            ) : (
-                              <strong className="text-cyan-200">{part}</strong>
-                            )}
-                          </React.Fragment>
-                        ))}
+                        {paragraph}
                       </p>
-                    );
-                  }
-                  // Regular paragraphs
-                  return paragraph ? (
-                    <p
-                      key={`p-${index}-${paragraph.slice(0, 20)}`}
-                      className="text-gray-200 mb-2"
-                    >
-                      {paragraph}
+                    ) : null;
+                  })
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-12 text-center">
+                    <div className="w-16 h-16 mb-4 text-gray-500">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      >
+                        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-400 mb-2">
+                      No Summary Available
+                    </h3>
+                    <p className="text-gray-500 max-w-sm">
+                      A summary for this video hasn&apos;t been generated yet.
+                      Check back later for updates.
                     </p>
-                  ) : null;
-                })}
+                  </div>
+                )}
               </div>
             </div>
           )}
