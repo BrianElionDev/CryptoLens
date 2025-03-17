@@ -108,7 +108,7 @@ export default function AutofetchPage() {
     setError("");
 
     const promise = axios.post(
-      "fetch-server-production-0ddc.up.railway.app/api/analysis",
+      "https://fetch-server-production-0ddc.up.railway.app/api/analysis",
       {
         channel_handler: channelHandler.trim(),
         published_before: new Date(
