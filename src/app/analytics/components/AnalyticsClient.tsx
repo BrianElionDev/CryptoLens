@@ -41,6 +41,7 @@ export function AnalyticsClient({ initialData }: AnalyticsClientProps) {
         channel: string;
         date: string;
         rpoints: number;
+        total_count: number;
       }[],
       channels: [] as string[],
       uniqueCoins: new Set<string>(),
@@ -133,6 +134,7 @@ export function AnalyticsClient({ initialData }: AnalyticsClientProps) {
           channel: dateInfo.channel,
           date: dateInfo.date,
           rpoints: projectMap.get(coin) || 0,
+          total_count: dates.length,
         }));
       })
       .sort((a, b) => b.rpoints - a.rpoints);
