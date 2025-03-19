@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import Navbar from "@/components/Navbar";
-import { Toaster } from "react-hot-toast";
 import { QueryProvider } from "@/providers/QueryProvider";
+import { Toaster } from "react-hot-toast";
+import Navbar from "@/components/Navbar";
 import { CoinGeckoProvider } from "@/contexts/CoinGeckoContext";
 
 export const metadata: Metadata = {
   title: "CryptoLens",
-  description: "Crypto Analytics Platform",
+  description: "Your comprehensive crypto analytics platform",
 };
 
 export default function RootLayout({
@@ -21,6 +21,7 @@ export default function RootLayout({
         <QueryProvider>
           <CoinGeckoProvider>
             <Navbar />
+            {children}
             <Toaster
               position="bottom-right"
               toastOptions={{
@@ -56,7 +57,6 @@ export default function RootLayout({
                 },
               }}
             />
-            {children}
           </CoinGeckoProvider>
         </QueryProvider>
       </body>

@@ -1,12 +1,14 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { X } from "lucide-react";
+import { X, Search, ChevronUp, ChevronDown } from "lucide-react";
 import type { KnowledgeItem } from "@/types/knowledge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import React from "react";
 import { useCoinGecko } from "@/contexts/CoinGeckoContext";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 interface StatsModalProps {
   item: KnowledgeItem;
@@ -14,7 +16,12 @@ interface StatsModalProps {
 }
 
 export function StatsModal({ item, onClose }: StatsModalProps) {
-  const [activeTab, setActiveTab] = useState<"stats" | "summary">("stats");
+  const [activeTab, setActiveTab] = useState<
+    "stats" | "summary" | "transcript"
+  >("stats");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentMatchIndex, setCurrentMatchIndex] = useState(-1);
+  const transcriptRef = useRef<HTMLDivElement>(null);
   const { topCoins, isLoading: isLoadingCoins, matchCoins } = useCoinGecko();
 
   const validProjects = useMemo(() => {
@@ -30,6 +37,70 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
       (p) => p.coingecko_matched
     );
   }, [topCoins, item.llm_answer.projects, isLoadingCoins, matchCoins]);
+
+  const matches = useMemo(() => {
+    if (!item.transcript || !searchQuery) return [];
+    const lines = item.transcript.split("\n");
+    const query = searchQuery.toLowerCase();
+    return lines
+      .map((line, index) => ({ line, index }))
+      .filter(({ line }) => line.toLowerCase().includes(query));
+  }, [item.transcript, searchQuery]);
+
+  const filteredTranscript = useMemo(() => {
+    if (!item.transcript || !searchQuery) return item.transcript;
+    return matches.map(({ line }) => line).join("\n");
+  }, [item.transcript, searchQuery, matches]);
+
+  const highlightText = (text: string, lineIndex: number) => {
+    if (!searchQuery) return text;
+    const parts = text.split(new RegExp(`(${searchQuery})`, "gi"));
+    return parts.map((part, i) => {
+      if (part.toLowerCase() === searchQuery.toLowerCase()) {
+        const isCurrentMatch = matches[currentMatchIndex]?.index === lineIndex;
+        return (
+          <span
+            key={i}
+            ref={
+              isCurrentMatch
+                ? (el) => {
+                    if (el && transcriptRef.current) {
+                      el.scrollIntoView({
+                        behavior: "smooth",
+                        block: "center",
+                      });
+                    }
+                  }
+                : undefined
+            }
+            className={`bg-blue-500/20 text-blue-200 px-1 rounded ${
+              isCurrentMatch ? "ring-2 ring-blue-400" : ""
+            }`}
+          >
+            {part}
+          </span>
+        );
+      }
+      return part;
+    });
+  };
+
+  const navigateMatches = (direction: "next" | "prev") => {
+    if (matches.length === 0) return;
+    setCurrentMatchIndex((prev) => {
+      const newIndex =
+        direction === "next"
+          ? (prev + 1) % matches.length
+          : prev <= 0
+          ? matches.length - 1
+          : prev - 1;
+      return newIndex;
+    });
+  };
+
+  useEffect(() => {
+    setCurrentMatchIndex(-1);
+  }, [searchQuery]);
 
   const renderLLMAnswer = () => {
     try {
@@ -212,10 +283,12 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
         {/* Tabs */}
         <Tabs
           value={activeTab}
-          onValueChange={(value) => setActiveTab(value as "stats" | "summary")}
+          onValueChange={(value) =>
+            setActiveTab(value as "stats" | "summary" | "transcript")
+          }
           className="w-full"
         >
-          <TabsList className="grid w-full max-w-[400px] grid-cols-2 bg-gray-900/50 backdrop-blur-sm">
+          <TabsList className="grid w-full max-w-[600px] grid-cols-3 bg-gray-900/50 backdrop-blur-sm">
             <TabsTrigger
               value="stats"
               className="data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-300"
@@ -230,6 +303,13 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
             >
               Summary
             </TabsTrigger>
+            <TabsTrigger
+              value="transcript"
+              className="data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-300"
+              onClick={(e) => e.stopPropagation()}
+            >
+              Transcript
+            </TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -237,17 +317,27 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
         <div className="flex-1 overflow-y-auto mt-6">
           {activeTab === "stats" ? (
             renderLLMAnswer()
-          ) : (
+          ) : activeTab === "summary" ? (
             <div className="p-6 rounded-xl bg-gray-900/40 border border-gray-700/50">
               <div className="prose prose-invert max-w-none">
                 {item.summary ? (
                   (item.summary || "").split("\n").map((paragraph, index) => {
-                    // Handle headers
+                    // Handle headers with hashes
+                    if (paragraph.startsWith("##")) {
+                      return (
+                        <h2
+                          key={`h2-${index}-${paragraph.slice(0, 20)}`}
+                          className="text-2xl font-bold text-cyan-200 mb-6 mt-10 first:mt-0 border-b border-gray-700/50 pb-3"
+                        >
+                          {paragraph.replace(/##/g, "").trim()}
+                        </h2>
+                      );
+                    }
                     if (paragraph.startsWith("###")) {
                       return (
                         <h3
                           key={`h3-${index}-${paragraph.slice(0, 20)}`}
-                          className="text-xl font-bold text-cyan-200 mb-4"
+                          className="text-xl font-bold text-blue-300 mb-4 mt-8"
                         >
                           {paragraph.replace(/###/g, "").trim()}
                         </h3>
@@ -257,46 +347,145 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
                       return (
                         <h4
                           key={`h4-${index}-${paragraph.slice(0, 20)}`}
-                          className="text-lg font-semibold text-blue-300 mb-3"
+                          className="text-lg font-semibold text-blue-300/90 mb-3 mt-6"
                         >
                           {paragraph.replace(/####/g, "").trim()}
                         </h4>
                       );
                     }
-                    // Handle bullet points
-                    if (paragraph.startsWith("-")) {
+                    // Handle bullet points with bold text
+                    if (paragraph.startsWith("•")) {
+                      const content = paragraph.replace("•", "").trim();
+                      if (content.includes("**")) {
+                        return (
+                          <div
+                            key={`bullet-bold-${index}-${content.slice(0, 20)}`}
+                            className="flex items-start space-x-3 mb-4 group"
+                          >
+                            <span className="text-blue-400 mt-1.5 group-hover:text-blue-300 transition-colors text-lg">
+                              •
+                            </span>
+                            <div className="flex-1">
+                              {content
+                                .split(/(\*\*.*?\*\*)/g)
+                                .map((part, i) => {
+                                  if (
+                                    part.startsWith("**") &&
+                                    part.endsWith("**")
+                                  ) {
+                                    return (
+                                      <strong
+                                        key={i}
+                                        className="text-cyan-200 font-semibold"
+                                      >
+                                        {part.slice(2, -2)}
+                                      </strong>
+                                    );
+                                  }
+                                  return (
+                                    <span key={i} className="text-gray-200">
+                                      {part}
+                                    </span>
+                                  );
+                                })}
+                            </div>
+                          </div>
+                        );
+                      }
                       return (
                         <div
-                          key={`bullet-${index}-${paragraph.slice(0, 20)}`}
-                          className="flex items-start space-x-2 mb-2"
+                          key={`bullet-${index}-${content.slice(0, 20)}`}
+                          className="flex items-start space-x-3 mb-4 group"
                         >
-                          <span className="text-blue-400 mt-1.5">•</span>
-                          <p className="text-gray-200">
-                            {paragraph.replace("-", "").trim()}
+                          <span className="text-blue-400 mt-1.5 group-hover:text-blue-300 transition-colors text-lg">
+                            •
+                          </span>
+                          <p className="text-gray-200 leading-relaxed flex-1">
+                            {content}
                           </p>
                         </div>
                       );
                     }
-                    // Handle bold text
+                    // Handle nested bullet points
+                    if (paragraph.startsWith("-")) {
+                      const content = paragraph.replace("-", "").trim();
+                      if (content.includes("**")) {
+                        return (
+                          <div
+                            key={`nested-bullet-bold-${index}-${content.slice(
+                              0,
+                              20
+                            )}`}
+                            className="flex items-start space-x-3 mb-3 group ml-6"
+                          >
+                            <span className="text-blue-400/70 mt-1.5 group-hover:text-blue-300 transition-colors">
+                              •
+                            </span>
+                            <div className="flex-1">
+                              {content
+                                .split(/(\*\*.*?\*\*)/g)
+                                .map((part, i) => {
+                                  if (
+                                    part.startsWith("**") &&
+                                    part.endsWith("**")
+                                  ) {
+                                    return (
+                                      <strong
+                                        key={i}
+                                        className="text-cyan-200 font-semibold"
+                                      >
+                                        {part.slice(2, -2)}
+                                      </strong>
+                                    );
+                                  }
+                                  return (
+                                    <span key={i} className="text-gray-200">
+                                      {part}
+                                    </span>
+                                  );
+                                })}
+                            </div>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div
+                          key={`nested-bullet-${index}-${content.slice(0, 20)}`}
+                          className="flex items-start space-x-3 mb-3 group ml-6"
+                        >
+                          <span className="text-blue-400/70 mt-1.5 group-hover:text-blue-300 transition-colors">
+                            •
+                          </span>
+                          <p className="text-gray-200 leading-relaxed flex-1">
+                            {content}
+                          </p>
+                        </div>
+                      );
+                    }
+                    // Handle bold text in regular paragraphs
                     if (paragraph.includes("**")) {
                       return (
                         <p
                           key={`bold-${index}-${paragraph.slice(0, 20)}`}
-                          className="text-gray-200 mb-2"
+                          className="text-gray-200 mb-4 leading-relaxed"
                         >
-                          {paragraph.split("**").map((part, i) => (
-                            <React.Fragment
-                              key={`${index}-${i}-${part.slice(0, 10)}`}
-                            >
-                              {i % 2 === 0 ? (
-                                <span>{part}</span>
-                              ) : (
-                                <strong className="text-cyan-200">
-                                  {part}
+                          {paragraph.split(/(\*\*.*?\*\*)/g).map((part, i) => {
+                            if (part.startsWith("**") && part.endsWith("**")) {
+                              return (
+                                <strong
+                                  key={i}
+                                  className="text-cyan-200 font-semibold"
+                                >
+                                  {part.slice(2, -2)}
                                 </strong>
-                              )}
-                            </React.Fragment>
-                          ))}
+                              );
+                            }
+                            return (
+                              <span key={i} className="text-gray-200">
+                                {part}
+                              </span>
+                            );
+                          })}
                         </p>
                       );
                     }
@@ -304,7 +493,7 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
                     return paragraph ? (
                       <p
                         key={`p-${index}-${paragraph.slice(0, 20)}`}
-                        className="text-gray-200 mb-2"
+                        className="text-gray-200 mb-4 leading-relaxed"
                       >
                         {paragraph}
                       </p>
@@ -332,6 +521,82 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
                   </div>
                 )}
               </div>
+            </div>
+          ) : (
+            <div className="p-6 rounded-xl bg-gray-900/40 border border-gray-700/50">
+              <div className="relative mb-6">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  type="text"
+                  placeholder="Search transcript..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 bg-gray-800/50 border-gray-700/50 focus:border-blue-500/50"
+                />
+                {searchQuery && matches.length > 0 && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
+                    <span className="text-sm text-gray-400">
+                      {currentMatchIndex + 1}/{matches.length}
+                    </span>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => navigateMatches("prev")}
+                      >
+                        <ChevronUp className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => navigateMatches("next")}
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              {item.transcript ? (
+                <div
+                  ref={transcriptRef}
+                  className="prose prose-invert max-w-none"
+                >
+                  {filteredTranscript ? (
+                    filteredTranscript.split("\n").map((line, index) => (
+                      <p key={index} className="text-gray-200 mb-2">
+                        {highlightText(line, index)}
+                      </p>
+                    ))
+                  ) : (
+                    <p className="text-gray-400 text-center">
+                      No matches found
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center p-12 text-center">
+                  <div className="w-16 h-16 mb-4 text-gray-500">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                    >
+                      <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-400 mb-2">
+                    No Transcript Available
+                  </h3>
+                  <p className="text-gray-500 max-w-sm">
+                    The transcript for this video hasn&apos;t been generated
+                    yet. Check back later for updates.
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
