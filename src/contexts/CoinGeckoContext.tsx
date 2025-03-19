@@ -202,37 +202,47 @@ export function CoinGeckoProvider({ children }: { children: React.ReactNode }) {
       const allCoins: CoinGeckoData[] = [];
       for (let page = 1; page <= 3; page++) {
         console.debug(`Fetching page ${page} of coins...`);
-        const response = await axios.get(
-          "https://api.coingecko.com/api/v3/coins/markets",
-          {
-            params: {
-              vs_currency: "usd",
-              order: "market_cap_desc",
-              per_page: 250,
-              page: page,
-              sparkline: false,
-            },
-            headers: {
-              "Cache-Control": "max-age=300", // Cache for 5 minutes
-            },
+        try {
+          const response = await axios.get(
+            "https://api.coingecko.com/api/v3/coins/markets",
+            {
+              params: {
+                vs_currency: "usd",
+                order: "market_cap_desc",
+                per_page: 250,
+                page: page,
+                sparkline: false,
+              },
+              headers: {
+                "Cache-Control": "max-age=300", // Cache for 5 minutes
+              },
+            }
+          );
+
+          if (!response.data || !Array.isArray(response.data)) {
+            throw new Error("Invalid response from CoinGecko API");
           }
-        );
 
-        if (!response.data || !Array.isArray(response.data)) {
-          throw new Error("Invalid response from CoinGecko API");
-        }
+          const pageCoins = response.data.map((coin: CoinGeckoData) => ({
+            id: coin.id,
+            symbol: coin.symbol,
+            name: coin.name,
+          }));
 
-        const pageCoins = response.data.map((coin: CoinGeckoData) => ({
-          id: coin.id,
-          symbol: coin.symbol,
-          name: coin.name,
-        }));
+          allCoins.push(...pageCoins);
 
-        allCoins.push(...pageCoins);
-
-        // Add a small delay between requests to avoid rate limiting
-        if (page < 3) {
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+          // Add a longer delay between requests to avoid rate limiting
+          if (page < 3) {
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+          }
+        } catch (error) {
+          if (axios.isAxiosError(error) && error.response?.status === 429) {
+            // If rate limited, wait longer and retry
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+            page--; // Retry this page
+            continue;
+          }
+          throw error;
         }
       }
 

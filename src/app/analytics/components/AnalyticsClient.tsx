@@ -6,10 +6,8 @@ import { GraphsTab } from "./GraphsTab";
 import { CategoriesTab } from "./CategoriesTab";
 import { CombinedMarketTable } from "@/components/tables/CombinedMarketTable";
 import { motion, AnimatePresence } from "framer-motion";
-import CoinDetailsModal from "@/components/modals/CoinDetailsModal";
 import { ChannelSelector } from "./ChannelSelector";
 import { AnalyticsTabs, TabType } from "./AnalyticsTabs";
-import type { CoinData } from "@/hooks/useCoinData";
 import type { KnowledgeItem } from "@/types/knowledge";
 import { BarChart3, TrendingUp, Zap } from "lucide-react";
 
@@ -29,11 +27,6 @@ export function AnalyticsClient({ initialData }: AnalyticsClientProps) {
   const { data: knowledge = initialData, isLoading } = useKnowledgeData();
   const [activeTab, setActiveTab] = useState<TabType>("market");
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
-  const [selectedCoin, setSelectedCoin] = useState<{
-    symbol: string;
-    coingecko_id: string;
-    data: CoinData;
-  } | null>(null);
 
   // Process data once and memoize
   const processedData = useMemo(() => {
@@ -233,10 +226,7 @@ export function AnalyticsClient({ initialData }: AnalyticsClientProps) {
               <CombinedMarketTable
                 processedData={processedData}
                 selectedChannels={selectedChannels}
-                onCoinSelect={(coin) => {
-                  console.log("Selected coin:", coin);
-                  setSelectedCoin(coin);
-                }}
+                onCoinSelect={() => {}}
               />
             )}
             {activeTab === "graphs" && (
@@ -257,15 +247,6 @@ export function AnalyticsClient({ initialData }: AnalyticsClientProps) {
             )}
           </motion.div>
         </AnimatePresence>
-
-        {selectedCoin && (
-          <CoinDetailsModal
-            key={selectedCoin.coingecko_id}
-            coingecko_id={selectedCoin.coingecko_id}
-            data={selectedCoin.data}
-            onClose={() => setSelectedCoin(null)}
-          />
-        )}
       </div>
     </div>
   );

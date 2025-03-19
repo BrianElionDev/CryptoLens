@@ -7,8 +7,28 @@ import { useCoinData } from "@/hooks/useCoinData";
 import Image from "next/image";
 import { DataTable } from "@/components/ui/data-table";
 import type { Row } from "@tanstack/react-table";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import { CalendarIcon, Filter } from "lucide-react";
+import { format, subDays, startOfDay, endOfDay } from "date-fns";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useRouter } from "next/navigation";
 
-type ExtendedCoinData = CoinData & { rpoints: number };
+type ExtendedCoinData = CoinData & {
+  rpoints: number;
+  total_mentions: number;
+};
 
 interface CoinCategoryData {
   channel: string;
@@ -16,6 +36,7 @@ interface CoinCategoryData {
   coin: string;
   rpoints: number;
   categories: string[];
+  total_count: number;
 }
 
 interface ProcessedData {
@@ -24,6 +45,11 @@ interface ProcessedData {
   categoryDistribution: { name: string; value: number }[];
   coinCategories: CoinCategoryData[];
   channels: string[];
+}
+
+interface DateRange {
+  from: Date | undefined;
+  to: Date | undefined;
 }
 
 interface CombinedMarketTableProps {
@@ -41,9 +67,85 @@ export function CombinedMarketTable({
   selectedChannels,
   onCoinSelect,
 }: CombinedMarketTableProps) {
+  const router = useRouter();
   const [showMostRecent, setShowMostRecent] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRange>({
+    from: undefined,
+    to: undefined,
+  });
+  const [datePreset, setDatePreset] = useState<string>("custom");
   const refreshKeyRef = useRef(0);
   const prevDataRef = useRef<ExtendedCoinData[]>([]);
+
+  // Get unique dates from coinCategories
+  const availableDates = useMemo(() => {
+    const dates = new Set<string>();
+    processedData.coinCategories.forEach((coin) => {
+      if (
+        selectedChannels.length === 0 ||
+        selectedChannels.includes(coin.channel)
+      ) {
+        dates.add(coin.date);
+      }
+    });
+    return Array.from(dates).sort();
+  }, [processedData.coinCategories, selectedChannels]);
+
+  // Get earliest and latest dates
+  const dateRangeInfo = useMemo(() => {
+    if (availableDates.length === 0) return null;
+    const earliest = new Date(availableDates[0]);
+    const latest = new Date(availableDates[availableDates.length - 1]);
+    return { earliest, latest };
+  }, [availableDates]);
+
+  // Handle preset date range selection
+  const handleDatePresetChange = (value: string) => {
+    setDatePreset(value);
+    if (!dateRangeInfo) return;
+
+    const now = new Date();
+    const today = startOfDay(now);
+    const yesterday = subDays(today, 1);
+    const lastWeek = subDays(today, 7);
+    const lastMonth = subDays(today, 30);
+    const last3Months = subDays(today, 90);
+    const last6Months = subDays(today, 180);
+    const lastYear = subDays(today, 365);
+
+    switch (value) {
+      case "today":
+        setDateRange({ from: today, to: endOfDay(now) });
+        break;
+      case "yesterday":
+        setDateRange({ from: yesterday, to: endOfDay(yesterday) });
+        break;
+      case "last7days":
+        setDateRange({ from: lastWeek, to: endOfDay(now) });
+        break;
+      case "last30days":
+        setDateRange({ from: lastMonth, to: endOfDay(now) });
+        break;
+      case "last90days":
+        setDateRange({ from: last3Months, to: endOfDay(now) });
+        break;
+      case "last180days":
+        setDateRange({ from: last6Months, to: endOfDay(now) });
+        break;
+      case "last365days":
+        setDateRange({ from: lastYear, to: endOfDay(now) });
+        break;
+      case "all":
+        setDateRange({
+          from: dateRangeInfo.earliest,
+          to: dateRangeInfo.latest,
+        });
+        break;
+      case "custom":
+        setDateRange({ from: undefined, to: undefined });
+        break;
+    }
+  };
 
   const handleCoinSelect = (coin: ExtendedCoinData | null) => {
     if (!onCoinSelect || !coin) return;
@@ -85,6 +187,7 @@ export function CombinedMarketTable({
         roi: coin.roi || null,
         last_updated: coin.last_updated || "",
         rpoints: coin.rpoints || 0,
+        total_mentions: coin.total_mentions || 0,
       },
     });
   };
@@ -93,7 +196,7 @@ export function CombinedMarketTable({
   const symbols = useMemo(() => {
     const coinMap = new Map<
       string,
-      { symbol: string; points: number; date: string }
+      { symbol: string; points: number; date: string; mentions: number }
     >();
     const channels =
       selectedChannels.length > 0 ? selectedChannels : processedData.channels;
@@ -130,11 +233,21 @@ export function CombinedMarketTable({
       const key = symbol || cleanName;
 
       const existing = coinMap.get(key);
-      if (!existing || coin.rpoints > existing.points) {
+      if (existing) {
+        // Update points if current coin has higher points
+        if (coin.rpoints > existing.points) {
+          existing.points = coin.rpoints;
+          existing.date = coin.date;
+        }
+        // Add total_count to mentions
+        existing.mentions += coin.total_count || 1;
+      } else {
+        // Initialize new entry with total_count
         coinMap.set(key, {
           symbol: key,
           points: coin.rpoints,
           date: coin.date,
+          mentions: coin.total_count || 1,
         });
       }
     });
@@ -158,15 +271,14 @@ export function CombinedMarketTable({
     "full"
   );
 
-  // Debug coin data updates and track loaded count
+  // Track loaded count
   useEffect(() => {
     if (coinData?.data) {
-      const newCount = coinData.loadedCount ?? coinData.data.length;
-      console.debug("Loaded coins:", newCount);
+      // Removed unused newCount variable
     }
   }, [coinData]);
 
-  // Process coin data with debug
+  // Process coin data
   const sortedCoinData = useMemo(() => {
     const baseData = prevDataRef.current;
     if (!coinData?.data?.length) return baseData;
@@ -175,7 +287,7 @@ export function CombinedMarketTable({
       selectedChannels.length > 0 ? selectedChannels : processedData.channels;
     const channelSet = new Set(channels);
 
-    // Get latest dates
+    // Get latest date for each channel
     const latestDates = new Map<string, string>();
     processedData.coinCategories.forEach((c) => {
       if (channelSet.has(c.channel)) {
@@ -188,14 +300,26 @@ export function CombinedMarketTable({
       }
     });
 
-    // Calculate points per coin
-    const rpointsMap = new Map<string, { points: number; date: string }>();
+    // Calculate points and mentions per coin
+    const coinStatsMap = new Map<
+      string,
+      { points: number; mentions: number; date: string }
+    >();
+
     processedData.coinCategories.forEach((coin) => {
       if (!channelSet.has(coin.channel)) return;
 
       // Skip if not from latest date when showMostRecent is true
       if (showMostRecent && coin.date !== latestDates.get(coin.channel)) {
         return;
+      }
+
+      // Skip if outside date range
+      if (dateRange.from && dateRange.to) {
+        const coinDate = new Date(coin.date);
+        if (coinDate < dateRange.from || coinDate > dateRange.to) {
+          return;
+        }
       }
 
       const symbolMatch = coin.coin.match(/\(\$([^)]+)\)/);
@@ -206,10 +330,20 @@ export function CombinedMarketTable({
         .trim();
       const key = symbol || cleanName;
 
-      const existing = rpointsMap.get(key);
-      if (!existing || coin.rpoints > existing.points) {
-        rpointsMap.set(key, {
+      const existing = coinStatsMap.get(key);
+      if (existing) {
+        // Update points if current coin has higher points
+        if (coin.rpoints > existing.points) {
+          existing.points = coin.rpoints;
+          existing.date = coin.date;
+        }
+        // Add total_count to mentions with fallback to 1
+        existing.mentions += coin.total_count ?? 1;
+      } else {
+        // Initialize new entry with total_count fallback to 1
+        coinStatsMap.set(key, {
           points: coin.rpoints,
+          mentions: coin.total_count ?? 1,
           date: coin.date,
         });
       }
@@ -225,11 +359,15 @@ export function CombinedMarketTable({
 
         if (matchedCoins.has(coinId)) return null;
 
-        const pointsData =
-          rpointsMap.get(cleanSymbol) || rpointsMap.get(cleanName);
-        if (pointsData) {
+        const stats =
+          coinStatsMap.get(cleanSymbol) || coinStatsMap.get(cleanName);
+        if (stats) {
           matchedCoins.add(coinId);
-          return { ...coin, rpoints: pointsData.points };
+          return {
+            ...coin,
+            rpoints: stats.points,
+            total_mentions: stats.mentions,
+          };
         }
 
         return null;
@@ -245,6 +383,7 @@ export function CombinedMarketTable({
     selectedChannels,
     showMostRecent,
     processedData.channels,
+    dateRange,
   ]);
 
   const memoizedColumns = useMemo(
@@ -342,6 +481,16 @@ export function CombinedMarketTable({
           </div>
         ),
       },
+      {
+        accessorKey: "total_mentions",
+        header: "Total Mentions",
+        size: 150,
+        cell: ({ row }: { row: Row<ExtendedCoinData> }) => (
+          <div className="text-[15px] font-medium text-blue-300">
+            {(row.original.total_mentions || 0).toLocaleString()}
+          </div>
+        ),
+      },
     ],
     []
   );
@@ -365,23 +514,93 @@ export function CombinedMarketTable({
             </span>
           )}
         </div>
-        <button
-          onClick={() => {
-            setShowMostRecent((prev) => !prev);
-          }}
-          className="px-4 py-2 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 hover:text-blue-300 transition-colors border border-blue-500/30 flex items-center gap-2"
-        >
-          <span>{showMostRecent ? "Show All" : "Show Most Recent"}</span>
-          {showMostRecent && (
-            <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-          )}
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            <Select value={datePreset} onValueChange={handleDatePresetChange}>
+              <SelectTrigger className="w-[180px] bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 hover:text-blue-300 border-blue-500/30">
+                <SelectValue placeholder="Select time range" />
+              </SelectTrigger>
+              <SelectContent className="bg-gray-800 border-gray-700">
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="yesterday">Yesterday</SelectItem>
+                <SelectItem value="last7days">Last 7 days</SelectItem>
+                <SelectItem value="last30days">Last 30 days</SelectItem>
+                <SelectItem value="last90days">Last 90 days</SelectItem>
+                <SelectItem value="last180days">Last 180 days</SelectItem>
+                <SelectItem value="last365days">Last 365 days</SelectItem>
+                <SelectItem value="all">All time</SelectItem>
+                <SelectItem value="custom">Custom range</SelectItem>
+              </SelectContent>
+            </Select>
+            {datePreset === "custom" && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="gap-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 hover:text-blue-300 border-blue-500/30"
+                  >
+                    <CalendarIcon className="h-4 w-4" />
+                    {dateRange.from ? (
+                      dateRange.to ? (
+                        <>
+                          {format(dateRange.from, "LLL dd")} -{" "}
+                          {format(dateRange.to, "LLL dd")}
+                        </>
+                      ) : (
+                        format(dateRange.from, "LLL dd")
+                      )
+                    ) : (
+                      "Select dates"
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 bg-gray-800 border-gray-700">
+                  <Calendar
+                    initialFocus
+                    mode="range"
+                    defaultMonth={dateRange.from}
+                    selected={dateRange}
+                    onSelect={(range: DateRange | undefined) => {
+                      if (range) setDateRange(range);
+                    }}
+                    numberOfMonths={2}
+                    className="bg-gray-800 border-gray-700"
+                    disabled={(date) => {
+                      if (!dateRangeInfo) return false;
+                      return (
+                        date < dateRangeInfo.earliest ||
+                        date > dateRangeInfo.latest
+                      );
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
+            )}
+          </div>
+          <button
+            onClick={() => {
+              setShowMostRecent((prev) => !prev);
+              setDateRange({ from: undefined, to: undefined });
+              setDatePreset("custom");
+            }}
+            className="px-4 py-2 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 hover:text-blue-300 transition-colors border border-blue-500/30 flex items-center gap-2"
+          >
+            <Filter className="h-4 w-4" />
+            <span>{showMostRecent ? "Show All" : "Show Most Recent"}</span>
+            {showMostRecent && (
+              <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+            )}
+          </button>
+        </div>
       </div>
       <div className="bg-gradient-to-r from-blue-900/10 via-purple-900/10 to-pink-900/10 backdrop-blur-sm rounded-xl border border-gray-800/20">
         <DataTable
           columns={memoizedColumns}
           data={sortedCoinData}
-          onRowClick={handleCoinSelect}
+          onRowClick={(row) => {
+            handleCoinSelect(row);
+            router.push(`/coin/${row.coingecko_id}`);
+          }}
           virtualizeRows={true}
           isLoading={isFetching}
         />
