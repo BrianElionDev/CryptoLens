@@ -7,13 +7,6 @@ import { useCoinData } from "@/hooks/useCoinData";
 import Image from "next/image";
 import { DataTable } from "@/components/ui/data-table";
 import type { Row } from "@tanstack/react-table";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
 import { CalendarIcon, Filter } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import {
@@ -24,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useRouter } from "next/navigation";
+import { Input } from "@/components/ui/input";
 
 type ExtendedCoinData = CoinData & {
   rpoints: number;
@@ -73,7 +67,7 @@ export function CombinedMarketTable({
     from: undefined,
     to: undefined,
   });
-  const [datePreset, setDatePreset] = useState<string>("custom");
+  const [datePreset, setDatePreset] = useState<string>("");
   const refreshKeyRef = useRef(0);
   const prevDataRef = useRef<ExtendedCoinData[]>([]);
 
@@ -102,48 +96,36 @@ export function CombinedMarketTable({
   // Handle preset date range selection
   const handleDatePresetChange = (value: string) => {
     setDatePreset(value);
-    if (!dateRangeInfo) return;
-
     const now = new Date();
-    const today = startOfDay(now);
-    const yesterday = subDays(today, 1);
-    const lastWeek = subDays(today, 7);
-    const lastMonth = subDays(today, 30);
-    const last3Months = subDays(today, 90);
-    const last6Months = subDays(today, 180);
-    const lastYear = subDays(today, 365);
 
-    switch (value) {
-      case "today":
-        setDateRange({ from: today, to: endOfDay(now) });
-        break;
-      case "yesterday":
-        setDateRange({ from: yesterday, to: endOfDay(yesterday) });
-        break;
-      case "last7days":
-        setDateRange({ from: lastWeek, to: endOfDay(now) });
-        break;
-      case "last30days":
-        setDateRange({ from: lastMonth, to: endOfDay(now) });
-        break;
-      case "last90days":
-        setDateRange({ from: last3Months, to: endOfDay(now) });
-        break;
-      case "last180days":
-        setDateRange({ from: last6Months, to: endOfDay(now) });
-        break;
-      case "last365days":
-        setDateRange({ from: lastYear, to: endOfDay(now) });
-        break;
-      case "all":
-        setDateRange({
-          from: dateRangeInfo.earliest,
-          to: dateRangeInfo.latest,
-        });
-        break;
-      case "custom":
+    if (value === "today") {
+      const today = startOfDay(now);
+      setDateRange({ from: today, to: endOfDay(now) });
+    } else if (value === "yesterday") {
+      const yesterday = startOfDay(subDays(now, 1));
+      setDateRange({ from: yesterday, to: endOfDay(yesterday) });
+    } else if (value === "last7days") {
+      const lastWeek = startOfDay(subDays(now, 7));
+      setDateRange({ from: lastWeek, to: endOfDay(now) });
+    } else if (value === "last30days") {
+      const lastMonth = startOfDay(subDays(now, 30));
+      setDateRange({ from: lastMonth, to: endOfDay(now) });
+    } else if (value === "last90days") {
+      const last3Months = startOfDay(subDays(now, 90));
+      setDateRange({ from: last3Months, to: endOfDay(now) });
+    } else if (value === "last180days") {
+      const last6Months = startOfDay(subDays(now, 180));
+      setDateRange({ from: last6Months, to: endOfDay(now) });
+    } else if (value === "last365days") {
+      const lastYear = startOfDay(subDays(now, 365));
+      setDateRange({ from: lastYear, to: endOfDay(now) });
+    } else if (value === "custom") {
+      // Don't reset the date range when switching to custom
+      if (!dateRange.from && !dateRange.to) {
         setDateRange({ from: undefined, to: undefined });
-        break;
+      }
+    } else {
+      setDateRange({ from: undefined, to: undefined });
     }
   };
 
@@ -515,68 +497,141 @@ export function CombinedMarketTable({
           )}
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2">
-            <Select value={datePreset} onValueChange={handleDatePresetChange}>
-              <SelectTrigger className="w-[180px] bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 hover:text-blue-300 border-blue-500/30">
-                <SelectValue placeholder="Select time range" />
-              </SelectTrigger>
-              <SelectContent className="bg-gray-800 border-gray-700">
-                <SelectItem value="today">Today</SelectItem>
-                <SelectItem value="yesterday">Yesterday</SelectItem>
-                <SelectItem value="last7days">Last 7 days</SelectItem>
-                <SelectItem value="last30days">Last 30 days</SelectItem>
-                <SelectItem value="last90days">Last 90 days</SelectItem>
-                <SelectItem value="last180days">Last 180 days</SelectItem>
-                <SelectItem value="last365days">Last 365 days</SelectItem>
-                <SelectItem value="all">All time</SelectItem>
-                <SelectItem value="custom">Custom range</SelectItem>
-              </SelectContent>
-            </Select>
-            {datePreset === "custom" && (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="gap-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 hover:text-blue-300 border-blue-500/30"
-                  >
-                    <CalendarIcon className="h-4 w-4" />
-                    {dateRange.from ? (
-                      dateRange.to ? (
-                        <>
-                          {format(dateRange.from, "LLL dd")} -{" "}
-                          {format(dateRange.to, "LLL dd")}
-                        </>
-                      ) : (
-                        format(dateRange.from, "LLL dd")
-                      )
-                    ) : (
-                      "Select dates"
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 bg-gray-800 border-gray-700">
-                  <Calendar
-                    initialFocus
-                    mode="range"
-                    defaultMonth={dateRange.from}
-                    selected={dateRange}
-                    onSelect={(range: DateRange | undefined) => {
-                      if (range) setDateRange(range);
-                    }}
-                    numberOfMonths={2}
-                    className="bg-gray-800 border-gray-700"
-                    disabled={(date) => {
-                      if (!dateRangeInfo) return false;
-                      return (
-                        date < dateRangeInfo.earliest ||
-                        date > dateRangeInfo.latest
+          <Select value={datePreset} onValueChange={handleDatePresetChange}>
+            <SelectTrigger className="w-[180px] bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 hover:text-blue-300 border-blue-500/30">
+              <SelectValue placeholder="Select time range" />
+            </SelectTrigger>
+            <SelectContent className="bg-gray-800 border-gray-700">
+              <SelectItem value="today">Today</SelectItem>
+              <SelectItem value="yesterday">Yesterday</SelectItem>
+              <SelectItem value="last7days">Last 7 days</SelectItem>
+              <SelectItem value="last30days">Last 30 days</SelectItem>
+              <SelectItem value="last90days">Last 90 days</SelectItem>
+              <SelectItem value="all">All time</SelectItem>
+              <SelectItem value="custom">Custom range</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {datePreset === "custom" && (
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Input
+                  type="text"
+                  placeholder="MM/DD/YYYY"
+                  value={
+                    dateRange.from ? format(dateRange.from, "MM/dd/yyyy") : ""
+                  }
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    try {
+                      const date = value ? new Date(value) : undefined;
+                      if (
+                        date &&
+                        !isNaN(date.getTime()) &&
+                        date.getFullYear() >= 1900 &&
+                        date.getFullYear() <= 2100 &&
+                        dateRangeInfo &&
+                        date >= dateRangeInfo.earliest &&
+                        date <= dateRangeInfo.latest
+                      ) {
+                        setDateRange((prev) => ({ ...prev, from: date }));
+                      }
+                    } catch (e) {
+                      console.log(e);
+                      // Invalid date format
+                    }
+                  }}
+                  className="w-[140px] bg-gray-900/60 border-gray-700/50 text-gray-200 h-9 px-3 pr-10 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/50 transition-colors [&::-webkit-calendar-picker-indicator]:hidden"
+                  onFocus={(e) => {
+                    e.target.type = "date";
+                    if (dateRangeInfo) {
+                      e.target.min = format(
+                        dateRangeInfo.earliest,
+                        "yyyy-MM-dd"
                       );
-                    }}
-                  />
-                </PopoverContent>
-              </Popover>
-            )}
-          </div>
+                      e.target.max = format(dateRangeInfo.latest, "yyyy-MM-dd");
+                    }
+                  }}
+                  onBlur={(e) => {
+                    e.target.type = "text";
+                    if (!e.target.value) {
+                      e.target.placeholder = "MM/DD/YYYY";
+                    }
+                  }}
+                />
+                <button
+                  onClick={(e) => {
+                    const input = e.currentTarget
+                      .previousElementSibling as HTMLInputElement;
+                    input.type = "date";
+                    input.showPicker();
+                  }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:text-blue-400 transition-colors"
+                >
+                  <CalendarIcon className="h-4 w-4" />
+                </button>
+              </div>
+
+              <span className="text-gray-400">to</span>
+
+              <div className="relative">
+                <Input
+                  type="text"
+                  placeholder="MM/DD/YYYY"
+                  value={dateRange.to ? format(dateRange.to, "MM/dd/yyyy") : ""}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    try {
+                      const date = value ? new Date(value) : undefined;
+                      if (
+                        date &&
+                        !isNaN(date.getTime()) &&
+                        date.getFullYear() >= 1900 &&
+                        date.getFullYear() <= 2100 &&
+                        dateRangeInfo &&
+                        date >= dateRangeInfo.earliest &&
+                        date <= dateRangeInfo.latest
+                      ) {
+                        setDateRange((prev) => ({ ...prev, to: date }));
+                      }
+                    } catch (e) {
+                      console.log(e);
+                      // Invalid date format
+                    }
+                  }}
+                  className="w-[140px] bg-gray-900/60 border-gray-700/50 text-gray-200 h-9 px-3 pr-10 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/50 transition-colors [&::-webkit-calendar-picker-indicator]:hidden"
+                  onFocus={(e) => {
+                    e.target.type = "date";
+                    if (dateRangeInfo) {
+                      e.target.min = format(
+                        dateRangeInfo.earliest,
+                        "yyyy-MM-dd"
+                      );
+                      e.target.max = format(dateRangeInfo.latest, "yyyy-MM-dd");
+                    }
+                  }}
+                  onBlur={(e) => {
+                    e.target.type = "text";
+                    if (!e.target.value) {
+                      e.target.placeholder = "MM/DD/YYYY";
+                    }
+                  }}
+                />
+                <button
+                  onClick={(e) => {
+                    const input = e.currentTarget
+                      .previousElementSibling as HTMLInputElement;
+                    input.type = "date";
+                    input.showPicker();
+                  }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:text-blue-400 transition-colors"
+                >
+                  <CalendarIcon className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
           <button
             onClick={() => {
               setShowMostRecent((prev) => !prev);
