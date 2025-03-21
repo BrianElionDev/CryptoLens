@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
+import ChannelMentionsTable from "./ChannelMentionsTable";
 
 async function getCoinData(id: string) {
   const res = await fetch(`/api/coins/${id}`);
@@ -278,14 +279,18 @@ export default function CoinPage({
         </Card>
       </div>
 
-      <Card className="bg-gray-800/50 border-gray-700/50 backdrop-blur-sm hover:bg-gray-800/70 transition-all duration-300">
-        <CardHeader>
-          <CardTitle className="text-gray-200">Price Chart</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <CoinChart coingecko_id={displayData.coingecko_id} />
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-1 gap-4">
+        <ChannelMentionsTable coinId={displayData.coingecko_id} />
+
+        <Card className="bg-gray-800/50 border-gray-700/50 backdrop-blur-sm hover:bg-gray-800/70 transition-all duration-300">
+          <CardHeader>
+            <CardTitle className="text-gray-200">Price Chart</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CoinChart coingecko_id={displayData.coingecko_id} />
+          </CardContent>
+        </Card>
+      </div>
     </main>
   );
 }

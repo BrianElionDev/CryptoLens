@@ -319,13 +319,13 @@ export function CombinedMarketTable({
           existing.points = coin.rpoints;
           existing.date = coin.date;
         }
-        // Add total_count to mentions with fallback to 1
-        existing.mentions += coin.total_count ?? 1;
+        // Use total_count which is specific to this coin
+        existing.mentions += coin.total_count || 0;
       } else {
-        // Initialize new entry with total_count fallback to 1
+        // Initialize new entry with total_count
         coinStatsMap.set(key, {
           points: coin.rpoints,
-          mentions: coin.total_count ?? 1,
+          mentions: coin.total_count || 0,
           date: coin.date,
         });
       }
@@ -341,8 +341,10 @@ export function CombinedMarketTable({
 
         if (matchedCoins.has(coinId)) return null;
 
-        const stats =
-          coinStatsMap.get(cleanSymbol) || coinStatsMap.get(cleanName);
+        const statsBySymbol = coinStatsMap.get(cleanSymbol);
+        const statsByName = coinStatsMap.get(cleanName);
+        const stats = statsBySymbol || statsByName;
+
         if (stats) {
           matchedCoins.add(coinId);
           return {
@@ -596,7 +598,7 @@ export function CombinedMarketTable({
                       }
                     } catch (e) {
                       console.log(e);
-                      // Invalid date format
+                      // Invalid date format  
                     }
                   }}
                   className="w-[140px] bg-gray-900/60 border-gray-700/50 text-gray-200 h-9 px-3 pr-10 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/50 transition-colors [&::-webkit-calendar-picker-indicator]:hidden"

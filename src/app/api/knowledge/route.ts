@@ -11,31 +11,6 @@ if (!supabaseUrl || !supabaseServiceKey) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-interface RawDataItem {
-  id?: string;
-  date: string;
-  transcript: string;
-  video_title: string;
-  channel_name: string;
-  link?: string;
-  answer?: string;
-  llm_answer: Array<{
-    projects: Array<{
-      coin_or_project: string;
-      Marketcap?: string;
-      marketcap?: string;
-      Rpoints?: number;
-      rpoints?: number;
-      "Total count"?: number;
-      total_count?: number;
-      category?: string[];
-    }>;
-    total_count?: number;
-    total_Rpoints?: number;
-    total_rpoints?: number;
-  }>;
-}
-
 interface RawProject {
   coin_or_project: string;
   Marketcap?: string;
@@ -55,12 +30,16 @@ export async function GET() {
       .order("date", { ascending: false });
 
     if (error) {
+      console.error("Knowledge fetch error:", error);
       throw error;
     }
 
     if (!knowledgeData || knowledgeData.length === 0) {
+      console.log("No knowledge data found");
       return NextResponse.json({ knowledge: [] });
     }
+
+    console.log(`Found ${knowledgeData.length} knowledge entries`);
 
     const transformedData: KnowledgeItem[] = knowledgeData.map((item) => ({
       id: item.id,
@@ -71,7 +50,7 @@ export async function GET() {
       link: item.link || "",
       answer: item.answer || "",
       summary: item.summary || "",
-      llm_answer: item.llm_answer,
+      llm_answer: item.llm_answer || { projects: [] },
     }));
 
     return NextResponse.json({ knowledge: transformedData });
@@ -90,95 +69,154 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const data = await request.json();
+    console.log(
+      "Raw received data type:",
+      Array.isArray(data) ? "Array" : typeof data
+    );
+    console.log("Raw data keys:", Object.keys(data));
 
     if (!data || typeof data !== "object") {
-      throw new Error("Invalid data format: expected an object");
+      return NextResponse.json(
+        {
+          error: "Invalid data format",
+          details: "Expected an object or array",
+          received: typeof data,
+        },
+        { status: 400 }
+      );
     }
 
+    // Normalize data to array format
     const dataArray = Array.isArray(data)
       ? data
-      : Object.entries(data).map(([id, item]) => ({
-          ...(item as RawDataItem),
-          id,
-        }));
+      : Object.keys(data).some((key) => !isNaN(Number(key)))
+      ? Object.values(data)
+      : [data];
 
-    const transformedData = dataArray.map((item, index) => {
+    if (dataArray.length === 0) {
+      return NextResponse.json(
+        {
+          error: "Empty data",
+          details: "No items to process",
+        },
+        { status: 400 }
+      );
+    }
+
+    console.log(`Processing ${dataArray.length} items`);
+
+    // Validate all items before processing
+    const validationErrors: string[] = [];
+    dataArray.forEach((item, index) => {
       if (!item || typeof item !== "object") {
-        throw new Error(`Item ${index} is not an object`);
+        validationErrors.push(`Item ${index}: Invalid item format`);
+        return;
       }
 
-      // Check for required fields
       const missingFields = [];
       if (!item.video_title) missingFields.push("video_title");
-      if (!item.channel_name) missingFields.push("channel_name");
-      if (!item.llm_answer) missingFields.push("llm_answer");
+      if (!item.channel_name && !item["channel name"])
+        missingFields.push("channel_name");
       if (!item.transcript) missingFields.push("transcript");
 
-      if (missingFields.length > 0) {
-        throw new Error(
-          `Missing required fields in item ${index}: ${missingFields.join(
-            ", "
-          )}`
+      // Detailed llm_answer validation
+      if (!item.llm_answer) {
+        missingFields.push("llm_answer");
+      } else if (!Array.isArray(item.llm_answer)) {
+        validationErrors.push(`Item ${index}: llm_answer must be an array`);
+      } else if (item.llm_answer.length === 0) {
+        validationErrors.push(`Item ${index}: llm_answer array is empty`);
+      } else if (!item.llm_answer[0]?.projects) {
+        validationErrors.push(
+          `Item ${index}: llm_answer[0].projects is required`
         );
       }
 
-      // Transform llm_answer to match database structure
-      const llm_answer = {
-        projects:
-          Array.isArray(item.llm_answer) && item.llm_answer[0]?.projects
-            ? item.llm_answer[0].projects.map((project: RawProject) => ({
-                coin_or_project: project.coin_or_project,
-                marketcap: (
-                  project.Marketcap ||
-                  project.marketcap ||
-                  ""
-                ).toLowerCase(),
-                rpoints: Number(project.Rpoints || project.rpoints || 0),
-                total_count: Number(
-                  project["Total count"] || project.total_count || 0
-                ),
-                category: Array.isArray(project.category)
-                  ? project.category
-                  : [],
-              }))
-            : [],
-        total_count: Number(item.llm_answer?.[0]?.total_count || 0),
-        total_rpoints: Number(
-          item.llm_answer?.[0]?.total_Rpoints ||
-            item.llm_answer?.[0]?.total_rpoints ||
-            0
-        ),
-      };
-
-      // Clean the data structure
-      const cleanedData = {
-        date: item.date || new Date().toISOString(),
-        transcript: item.transcript,
-        video_title: item.video_title,
-        "channel name": item.channel_name,
-        link: item.link || "",
-        summary: item.answer || "",
-        llm_answer: JSON.parse(JSON.stringify(llm_answer)), // Ensure clean JSON
-        created_at: new Date().toISOString(),
-      };
-
-      return cleanedData;
+      if (missingFields.length > 0) {
+        validationErrors.push(
+          `Item ${index}: Missing required fields: ${missingFields.join(", ")}`
+        );
+      }
     });
 
-    // Instead of deleting all data, let's check what's new
+    if (validationErrors.length > 0) {
+      return NextResponse.json(
+        {
+          error: "Validation failed",
+          details: validationErrors,
+        },
+        { status: 400 }
+      );
+    }
+
+    const transformedData = dataArray.map((item, index) => {
+      try {
+        // Transform llm_answer to match database structure
+        const llm_answer = {
+          projects:
+            Array.isArray(item.llm_answer) && item.llm_answer[0]?.projects
+              ? item.llm_answer[0].projects.map((project: RawProject) => ({
+                  coin_or_project: project.coin_or_project,
+                  marketcap: (
+                    project.Marketcap ||
+                    project.marketcap ||
+                    ""
+                  ).toLowerCase(),
+                  rpoints: Number(project.Rpoints || project.rpoints || 0),
+                  total_count: Number(
+                    project["Total count"] || project.total_count || 0
+                  ),
+                  category: Array.isArray(project.category)
+                    ? project.category
+                    : [],
+                }))
+              : [],
+          total_count: Number(item.llm_answer?.[0]?.total_count || 0),
+          total_rpoints: Number(
+            item.llm_answer?.[0]?.total_Rpoints ||
+              item.llm_answer?.[0]?.total_rpoints ||
+              0
+          ),
+        };
+
+        return {
+          date: item.date || new Date().toISOString(),
+          transcript: item.transcript,
+          video_title: item.video_title,
+          "channel name": item.channel_name || item["channel name"],
+          link: item.link || "",
+          summary: item.answer || "",
+          llm_answer,
+          created_at: new Date().toISOString(),
+        };
+      } catch (error) {
+        console.error(`Error transforming item ${index}:`, error);
+        throw new Error(
+          `Failed to transform item ${index}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+    });
+
+    // Check for existing entries
     const { data: existingData, error: fetchError } = await supabase
       .from("knowledge")
       .select("link")
       .order("date", { ascending: false });
 
     if (fetchError) {
-      throw new Error(`Failed to fetch existing data: ${fetchError.message}`);
+      console.error("Database fetch error:", fetchError);
+      return NextResponse.json(
+        {
+          error: "Database error",
+          details: "Failed to check for existing entries",
+        },
+        { status: 500 }
+      );
     }
 
-    // Create a unique key for comparison using YouTube links
     const existingLinks = new Set(existingData.map((item) => item.link));
-
-    // Filter out only new items
     const newData = transformedData.filter(
       (item) => !existingLinks.has(item.link)
     );
@@ -187,55 +225,54 @@ export async function POST(request: Request) {
       return NextResponse.json({
         success: true,
         message: "No new data to update",
+        skipped: transformedData.length,
         dataSize: 0,
       });
     }
 
-    // Transform only the new data
-    const dbData = newData.map((item) => ({
-      date: item.date,
-      transcript: item.transcript,
-      video_title: item.video_title,
-      "channel name": item["channel name"],
-      link: item.link,
-      summary: item.summary,
-      llm_answer: item.llm_answer,
-      created_at: item.created_at,
-    }));
-
-    // Insert only new data
+    // Insert new data
     const { error: insertError } = await supabase
       .from("knowledge")
-      .insert(dbData);
+      .insert(newData);
 
     if (insertError) {
-      console.error("Insert Error:", insertError);
-      throw new Error(`Failed to insert new data: ${insertError.message}`);
+      console.error("Database insert error:", insertError);
+      return NextResponse.json(
+        {
+          error: "Database error",
+          details: "Failed to insert new data",
+          dbError: insertError.message,
+        },
+        { status: 500 }
+      );
     }
 
-    // Trigger revalidation
+    // Optional revalidation
     try {
-      await fetch(
-        `${process.env.NEXT_PUBLIC_APP_URL}/api/revalidate?path=/knowledge`,
-        {
-          method: "POST",
-        }
-      );
-    } catch (revalidateError) {
-      console.error("Revalidation error:", revalidateError);
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+      if (appUrl) {
+        const revalidateUrl = new URL("/api/revalidate", appUrl);
+        revalidateUrl.searchParams.set("path", "/knowledge");
+        await fetch(revalidateUrl.toString(), { method: "POST" });
+      }
+    } catch (error) {
+      console.warn("Revalidation failed:", error);
+      // Non-critical error, continue
     }
 
     return NextResponse.json({
       success: true,
-      message: "New data added successfully",
-      dataSize: newData.length,
+      message: "Data processed successfully",
+      total: transformedData.length,
+      added: newData.length,
+      skipped: transformedData.length - newData.length,
     });
-  } catch (error: unknown) {
-    console.error("POST Error:", error);
+  } catch (error) {
+    console.error("Unexpected error:", error);
     return NextResponse.json(
       {
-        error: "Failed to process knowledge data",
-        details: error instanceof Error ? error.message : JSON.stringify(error),
+        error: "Server error",
+        details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }
     );
