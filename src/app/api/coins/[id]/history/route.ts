@@ -9,8 +9,6 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const days = searchParams.get("days") || "1";
 
-    console.log("Fetching data for:", resolvedParams.id, "days:", days);
-
     // Add a small delay to handle rate limiting
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
@@ -28,22 +26,14 @@ export async function GET(
     );
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error("CoinGecko API error:", {
-        status: response.status,
-        statusText: response.statusText,
-        errorData,
-      });
       throw new Error(
         `CoinGecko API error: ${response.status} ${response.statusText}`
       );
     }
 
     const data = await response.json();
-    console.log("Raw data from CoinGecko:", data);
 
     if (!Array.isArray(data)) {
-      console.error("Invalid response format:", data);
       throw new Error("Invalid response format from CoinGecko");
     }
 
@@ -58,7 +48,6 @@ export async function GET(
       })
     );
 
-    console.log("Transformed data:", transformedData);
     return NextResponse.json(transformedData);
   } catch (error) {
     console.error("Error fetching coin history:", error);

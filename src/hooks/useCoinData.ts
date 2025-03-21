@@ -83,7 +83,9 @@ export function useCoinData(
     queryKey,
     queryFn: async (): Promise<CoinResponse> => {
       try {
-        const response = await axios.post<{ data: Record<string, CoinData> }>(
+        const response = await axios.post<{
+          data: Record<string, CoinData>;
+        }>(
           "/api/coingecko",
           {
             symbols,
@@ -112,7 +114,7 @@ export function useCoinData(
           loadedCount: loadedSymbolsRef.current.size,
         };
       } catch (error) {
-        // Return cached data if available
+        // If request fails, try to return cached data
         const cachedData = queryClient.getQueryData<CoinResponse>(queryKey);
         if (cachedData) {
           return {
@@ -203,11 +205,11 @@ export function useKnowledgeData() {
       prevDataLength.current = data.length;
       return data;
     },
-    staleTime: Infinity,
-    gcTime: 1000 * 60 * 60,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    refetchOnReconnect: false,
-    retry: 1,
+    staleTime: 1000 * 60, // 1 minute stale time
+    gcTime: 1000 * 60 * 5, // 5 minutes cache time
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+    refetchOnReconnect: true,
+    retry: 2,
   });
 }
