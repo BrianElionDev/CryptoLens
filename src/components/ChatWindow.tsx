@@ -4,25 +4,12 @@ import { useState, useEffect, useRef } from 'react';
 import ChatHistory from './ChatHistory';
 import { v4 as uuidv4 } from 'uuid';
 import { createClient } from '@supabase/supabase-js';
+import { Message, Chat } from '../types/chat';
 
 // Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
-
-interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: number;
-}
-
-interface Chat {
-  id: string;
-  title: string;
-  messages: Message[];
-  createdAt: number;
-}
 
 const ChatWindow = ({ onClose }: { onClose: () => void }) => {
   const [input, setInput] = useState('');
@@ -77,7 +64,6 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
   const sendMessage = async () => {
     if (!input.trim() || !currentChat) return;
     
-    // Create user message
     const userMessage: Message = {
       id: uuidv4(),
       role: 'user',
@@ -85,7 +71,6 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
       timestamp: Date.now()
     };
     
-    // Update chat with user message
     const updatedChat = {
       ...currentChat,
       messages: [...currentChat.messages, userMessage],
@@ -97,24 +82,25 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
     setLoading(true);
     
     try {
-      // Send message to API
-      const response = await fetch('/api/faq', {
+      const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: input })
+        body: JSON.stringify({ 
+          question: input,
+          chatId: currentChat.id
+        })
       });
       
       const data = await response.json();
       
-      // Create assistant message
       const assistantMessage: Message = {
         id: uuidv4(),
         role: 'assistant',
-        content: data.answer || 'Sorry, I could not find an answer.',
-        timestamp: Date.now()
+        content: data.answer,
+        timestamp: Date.now(),
+        references: data.references
       };
       
-      // Update chat with assistant message
       const finalChat = {
         ...updatedChat,
         messages: [...updatedChat.messages, assistantMessage]
@@ -131,17 +117,6 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
           messages: finalChat.messages,
           created_at: new Date(finalChat.createdAt).toISOString()
         });
-      
-      // Update chats list
-      setChats(prevChats => {
-        const index = prevChats.findIndex(chat => chat.id === finalChat.id);
-        if (index !== -1) {
-          const newChats = [...prevChats];
-          newChats[index] = finalChat;
-          return newChats;
-        }
-        return [finalChat, ...prevChats];
-      });
       
     } catch (error) {
       console.error('Error sending message:', error);
@@ -169,6 +144,13 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
     }
   };
 
+  // Add handler to hide history when input is focused
+  const handleInputFocus = () => {
+    if (showHistory) {
+      setShowHistory(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-[#1A1B1E] bg-opacity-95 flex items-center justify-center z-50">
       <div className="bg-[#2A2B2E] w-[80%] rounded-lg shadow-2xl h-[85vh] flex flex-col relative text-gray-100">
@@ -177,7 +159,7 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
           <button 
             type="button"
             onClick={() => setShowHistory(!showHistory)}
-            className="text-gray-400 hover:bg-gray-700 p-2 rounded-full transition-colors"
+            className="text-gray-400 hover:bg-gray-700 p-2 rounded-full transition-colors flex items-center gap-2"
             aria-label="Toggle chat history"
           >
             <svg 
@@ -191,10 +173,10 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
               strokeLinecap="round"
               strokeLinejoin="round"
             >
-              <line x1="3" y1="12" x2="21" y2="12"></line>
-              <line x1="3" y1="6" x2="21" y2="6"></line>
-              <line x1="3" y1="18" x2="21" y2="18"></line>
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
             </svg>
+            <span className="text-sm">History</span>
           </button>
           <h3 className="font-medium text-lg">Chat Assistant</h3>
           <button 
@@ -235,7 +217,7 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
           {currentChat?.messages.map(message => (
             <div 
               key={message.id} 
-              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} flex-col gap-2`}
             >
               <div 
                 className={`max-w-[80%] p-3 rounded-lg ${
@@ -246,6 +228,22 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
               >
                 {message.content}
               </div>
+              {message.references && (
+                <div className="text-sm text-gray-400 pl-3">
+                  Sources:
+                  {message.references.map((ref, index) => (
+                    <a 
+                      key={index}
+                      href={ref.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block hover:text-blue-400 transition-colors"
+                    >
+                      {ref.title}
+                    </a>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
           {loading && (
@@ -266,6 +264,7 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+              onFocus={handleInputFocus}
               placeholder="Ask anything"
               className="flex-1 bg-gray-700 text-gray-100 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
               disabled={loading}
