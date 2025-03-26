@@ -153,7 +153,7 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
 
   return (
     <div className="fixed inset-0 bg-[#1A1B1E] bg-opacity-95 flex items-center justify-center z-50">
-      <div className="bg-[#2A2B2E] w-[80%] rounded-lg shadow-2xl h-[85vh] flex flex-col relative text-gray-100">
+      <div className="bg-[#2A2B2E] w-[53%] rounded-lg shadow-2xl h-[80vh] flex flex-col relative text-gray-100">
         {/* Header */}
         <div className="flex justify-between items-center p-4 border-b border-gray-700">
           <button 

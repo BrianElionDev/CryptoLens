@@ -36,11 +36,11 @@ export async function POST(request: Request) {
 
     // Generate response using OpenAI
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: "gpt-4-turbo-preview",
       messages: [
         {
           role: "system",
-          content: "You are a helpful assistant that answers questions based on the provided video content context. Use the context to provide accurate answers and include relevant video references."
+          content: "You are a knowledgeable assistant with expertise in crypto and web3. You have access to video content and can provide detailed, accurate answers based on the provided context. Always reference source videos when available."
         },
         {
           role: "user",
@@ -48,6 +48,7 @@ export async function POST(request: Request) {
         }
       ],
       temperature: 0.7,
+      max_tokens: 4000,
     });
 
     const answer = completion.choices[0].message.content;
