@@ -6,6 +6,7 @@ export interface Message {
   references?: {
     title: string;
     link: string;
+    date?: string;
   }[];
 }
 

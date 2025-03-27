@@ -153,32 +153,34 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
 
   return (
     <div className="fixed inset-0 bg-[#1A1B1E] bg-opacity-95 flex items-center justify-center z-50">
-      <div className="bg-[#2A2B2E] w-[53%] rounded-lg shadow-2xl h-[80vh] flex flex-col relative text-gray-100">
+      <div className="bg-[#2A2B2E] w-[80%] rounded-lg shadow-2xl h-[85vh] flex flex-col relative text-gray-100">
         {/* Header */}
         <div className="flex justify-between items-center p-4 border-b border-gray-700">
-          <button 
-            type="button"
-            onClick={() => setShowHistory(!showHistory)}
-            className="text-gray-400 hover:bg-gray-700 p-2 rounded-full transition-colors flex items-center gap-2"
-            aria-label="Toggle chat history"
-          >
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              width="20" 
-              height="20" 
-              viewBox="0 0 24 24" 
-              fill="none" 
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+          <div className="flex items-center gap-4">
+            <button 
+              type="button"
+              onClick={() => setShowHistory(!showHistory)}
+              className="text-gray-400 hover:bg-gray-700 p-2 rounded-full transition-colors flex items-center gap-2"
+              aria-label="Toggle chat history"
             >
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
-            </svg>
-            <span className="text-sm">History</span>
-          </button>
-          <h3 className="font-medium text-lg">Chat Assistant</h3>
+              <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                width="20" 
+                height="20" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              <span className="text-sm">History</span>
+            </button>
+          </div>
+          <h3 className="font-medium text-lg">Video Knowledge Assistant</h3>
           <button 
             type="button"
             onClick={onClose}
@@ -228,7 +230,7 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
               >
                 {message.content}
               </div>
-              {message.references && (
+              {message.references && message.references.length > 0 && (
                 <div className="text-sm text-gray-400 pl-3">
                   Sources:
                   {message.references.map((ref, index) => (
@@ -239,7 +241,7 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
                       rel="noopener noreferrer"
                       className="block hover:text-blue-400 transition-colors"
                     >
-                      {ref.title}
+                      {ref.title} {ref.date && `(${ref.date})`}
                     </a>
                   ))}
                 </div>
@@ -249,7 +251,7 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
           {loading && (
             <div className="flex justify-start">
               <div className="inline-block p-3 bg-gray-700 text-gray-100 rounded-lg">
-                Thinking...
+                Searching videos...
               </div>
             </div>
           )}
@@ -265,7 +267,7 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
               onFocus={handleInputFocus}
-              placeholder="Ask anything"
+              placeholder="Ask about video content or search for recent videos"
               className="flex-1 bg-gray-700 text-gray-100 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
               disabled={loading}
             />
@@ -275,7 +277,7 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
               disabled={loading || !input.trim()}
               className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-400 transition-colors"
             >
-              Send
+              Search
             </button>
           </div>
         </div>

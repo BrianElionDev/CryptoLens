@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-import { OpenAI } from 'openai';
 import { NextResponse } from 'next/server';
 
 const supabase = createClient(
@@ -7,93 +6,159 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 );
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+interface KnowledgeItem {
+  date: string;
+  transcript: string;
+  video_title: string;
+  "channel name": string;
+  link: string;
+  summary: string;
+}
+
+// Helper function to determine query type
+const getQueryType = (question: string): 'recent' | 'search' => {
+  const recentPatterns = [
+    'recent videos',
+    'latest videos',
+    'last videos',
+    'newest videos'
+  ];
+  
+  return recentPatterns.some(pattern => 
+    question.toLowerCase().includes(pattern)
+  ) ? 'recent' : 'search';
+};
+
+// Helper function to format date consistently
+const formatDate = (date: string) => {
+  return new Date(date).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+};
 
 export async function POST(request: Request) {
   try {
     const { question, chatId } = await request.json();
+    console.log('Received question:', question);
 
-    // Query knowledge base
-    const { data: knowledgeData } = await supabase
-      .from('knowledge')
-      .select('transcript, video_title, channel_name, link, summary')
-      .textSearch('transcript', question, {
-        type: 'websearch',
-        config: 'english'
-      })
-      .limit(3);
+    const queryType = getQueryType(question);
 
-    // Format context from knowledge data
-    const context = knowledgeData?.map(item => `
-      Video: ${item.video_title}
-      Channel: ${item.channel_name}
-      Summary: ${item.summary}
-      Transcript Excerpt: ${item.transcript.substring(0, 300)}...
-      Link: ${item.link}
-    `).join('\n\n') || '';
+    if (queryType === 'recent') {
+      // Handle recent videos query
+      console.log('Executing recent videos query...');
+      
+      const { data: recentVideos, error } = await supabase
+        .from('knowledge')
+        .select('video_title, "channel name", date, link')
+        .order('date', { ascending: false })
+        .limit(10);
 
-    // Generate response using OpenAI
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4-turbo-preview",
-      messages: [
-        {
-          role: "system",
-          content: "You are a knowledgeable assistant with expertise in crypto and web3. You have access to video content and can provide detailed, accurate answers based on the provided context. Always reference source videos when available."
-        },
-        {
-          role: "user",
-          content: `Context:\n${context}\n\nQuestion: ${question}`
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 4000,
-    });
+      console.log('Query results:', { recentVideos, error });
 
-    const answer = completion.choices[0].message.content;
+      if (error) {
+        console.error('Database Error:', error);
+        return NextResponse.json({
+          error: 'Failed to fetch videos',
+          details: error.message
+        }, { status: 500 });
+      }
 
-    // Save to chat history if chatId provided
-    if (chatId) {
-      // First get current messages
-      const { data: currentChat } = await supabase
-        .from('chats')
-        .select('messages')
-        .eq('id', chatId)
-        .single();
+      // Log the actual data received
+      console.log('Number of videos found:', recentVideos?.length || 0);
 
-      await supabase
-        .from('chats')
-        .update({
-          messages: knowledgeData ? [
-            ...(currentChat?.messages || []),
-            {
-              role: 'assistant',
-              content: answer,
-              timestamp: new Date().toISOString(),
-              references: knowledgeData.map(item => ({
-                title: item.video_title,
-                link: item.link
-              }))
-            }
-          ] : (currentChat?.messages || [])
+      if (!recentVideos || recentVideos.length === 0) {
+        console.log('No data found in knowledge table');
+        return NextResponse.json({
+          answer: "No recent videos found in the database.",
+          references: []
+        });
+      }
+
+      const formattedList = recentVideos
+        .map((video, index) => 
+          `${index + 1}. "${video.video_title}" by ${video["channel name"]} (${formatDate(video.date)})`
+        )
+        .join('\n');
+
+      return NextResponse.json({
+        answer: `Here are the most recent videos:\n${formattedList}`,
+        references: recentVideos.map(video => ({
+          title: video.video_title,
+          link: video.link,
+          date: formatDate(video.date)
+        }))
+      });
+    } else {
+      // Handle content search query
+      const { data: knowledgeData, error } = await supabase
+        .from('knowledge')
+        .select('transcript, video_title, "channel name", link, summary, date')
+        .textSearch('transcript', question, {
+          type: 'websearch',
+          config: 'english'
         })
-        .eq('id', chatId);
+        .order('date', { ascending: false })
+        .limit(5);
+
+      if (error) {
+        console.error('Search Error:', error);
+        return NextResponse.json({
+          error: 'Failed to search content',
+          details: error.message
+        }, { status: 500 });
+      }
+
+      if (!knowledgeData || knowledgeData.length === 0) {
+        return NextResponse.json({
+          answer: "I couldn't find any relevant content for your question.",
+          references: []
+        });
+      }
+
+      // Format the answer using the most relevant content
+      const mostRelevant = knowledgeData[0];
+      const answer = `Based on the video "${mostRelevant.video_title}" by ${mostRelevant["channel name"]}:
+
+${mostRelevant.summary || mostRelevant.transcript.substring(0, 300)}...
+
+You can find more details in the video references below.`;
+
+      return NextResponse.json({
+        answer,
+        references: knowledgeData.map(item => ({
+          title: item.video_title,
+          link: item.link,
+          date: formatDate(item.date)
+        }))
+      });
     }
-
-    return NextResponse.json({ 
-      answer,
-      references: knowledgeData?.map(item => ({
-        title: item.video_title,
-        link: item.link
-      }))
-    });
-
   } catch (error) {
-    console.error('Chat API Error:', error);
+    console.error('Request Error:', error);
     return NextResponse.json(
-      { error: 'Failed to process question' },
+      { error: 'Failed to process request' },
       { status: 500 }
     );
   }
+}
+
+function formatSearchResponse(content: KnowledgeItem[], question: string): string {
+  // For specific video requests
+  if (question.toLowerCase().includes('video') && 
+      question.toLowerCase().includes('title')) {
+    return content
+      .map((item, index) => 
+        `${index + 1}. "${item.video_title}" (${formatDate(item.date)})`
+      )
+      .join('\n');
+  }
+
+  // For content-based questions
+  const mostRelevant = content[0];
+  return `Based on the video "${mostRelevant.video_title}" (${formatDate(mostRelevant.date)}):
+  
+${mostRelevant.summary}
+
+You can find more details in the video link provided below.`;
 } 
