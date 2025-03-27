@@ -1,23 +1,27 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import axios from "axios";
 
-// Force dynamic rendering and disable caching
+// Force dynamic rendering
 export const dynamic = "force-dynamic";
-export const revalidate = 0;
-// Using Edge runtime which requires awaiting params
-export const runtime = "edge";
 
-// Define the route handler with the correct types
 export async function GET(
-  req: NextRequest,
+  request: Request,
   context: { params: { id: string } }
 ) {
   try {
-    // We need to await the params in Edge runtime
-    const { id } = await context.params;
+    const params = await context.params; // Ensure params is awaited
+
+    if (!params?.id) {
+      return NextResponse.json(
+        { error: "Invalid category ID" },
+        { status: 400 }
+      );
+    }
+
+    const categoryId = params.id;
 
     const response = await axios.get(
-      `https://api.coingecko.com/api/v3/coins/categories/${id}`
+      `https://api.coingecko.com/api/v3/coins/categories/${categoryId}`
     );
 
     return NextResponse.json({ data: response.data });
