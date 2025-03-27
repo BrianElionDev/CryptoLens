@@ -97,11 +97,8 @@ export default function CategoryDetailPage() {
     return categoryId;
   }, [categoryId, categoryData, specialCategoryIDs]);
 
-  console.log("Rendering CategoryDetailPage with id:", categoryId);
-
   // Process knowledge data for this category
   const processKnowledgeData = useCallback(() => {
-    console.log("Processing knowledge data for category:", categoryId);
     if (!knowledgeLoading && knowledge.length > 0) {
       const coinData = new Map<string, { rpoints: number; mentions: number }>();
       let totalRpoints = 0;
@@ -159,12 +156,6 @@ export default function CategoryDetailPage() {
         categoryVariants.add("finance");
         categoryVariants.add("decentralized finance");
       }
-
-      // Debug - log all variants we're looking for
-      console.log(
-        "Looking for category variants:",
-        Array.from(categoryVariants)
-      );
 
       knowledge.forEach((item: KnowledgeItem) => {
         const date = new Date(item.date);
@@ -235,11 +226,6 @@ export default function CategoryDetailPage() {
         });
       });
 
-      // Log how many matches we found
-      console.log(
-        `Found ${categoryCoins.size} matching coins for category ${categoryId}`
-      );
-
       // Sort coins by rpoints
       const coinBreakdown = Array.from(coinData.entries())
         .map(([name, data]) => ({
@@ -259,7 +245,6 @@ export default function CategoryDetailPage() {
         coinBreakdown,
       };
 
-      console.log("Category analytics processed:", analytics);
       setCategoryAnalytics(analytics);
       setIsLoading(false);
     } else if (!knowledgeLoading) {
@@ -275,7 +260,6 @@ export default function CategoryDetailPage() {
 
     async function fetchCategoryData() {
       try {
-        console.log("Fetching category data for:", categoryId);
         setIsLoading(true);
 
         // Mark as fetched to prevent loops
@@ -285,23 +269,16 @@ export default function CategoryDetailPage() {
           `/api/categories/${encodeURIComponent(categoryId)}?t=${Date.now()}`,
           {
             cache: "no-store",
-            // Remove the timeout that was causing issues
           }
         );
 
-        console.log("Response status:", response.status);
-
         if (response.status === 404) {
-          console.error("Category not found, redirecting to 404");
           notFound();
           return;
         }
 
         if (!response.ok) {
           // Handle other error codes like rate limiting (429) or server errors (500)
-          const errorText = await response.text();
-          console.error(`API error (${response.status}):`, errorText);
-
           if (response.status === 429 || response.status === 503) {
             setError("CoinGecko API is rate limited. Please try again later.");
           } else {
@@ -311,17 +288,15 @@ export default function CategoryDetailPage() {
         }
 
         const data = await response.json();
-        console.log("Data received:", data);
 
+        // The data is now wrapped in a data property
         if (data.data) {
-          console.log("Category data received:", data.data.name);
           setCategoryData(data.data);
         } else {
-          console.error("No data property in response", data);
-          setError(data.error || "Failed to load category data");
+          // If no data property, use the response directly
+          setCategoryData(data);
         }
-      } catch (error) {
-        console.error("Failed to fetch category data:", error);
+      } catch {
         setError(
           "Failed to load category data. Please try refreshing the page."
         );
