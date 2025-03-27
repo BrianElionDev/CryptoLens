@@ -1,39 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
 
-// Disable all Next.js optimizations that are causing our error
+// Force dynamic rendering and disable caching
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-// Explicitly tell Next.js this is a static route within
-// the dynamic segment (eliminates the params error)
-export const preferredRegion = "auto";
+// Using Edge runtime which requires awaiting params
 export const runtime = "edge";
 
-// The actual route handler
+// Define the route handler with the correct types
 export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+  req: NextRequest,
+  context: { params: { id: string } }
 ) {
   try {
-    const categoryId = params.id;
+    // We need to await the params in Edge runtime
+    const { id } = await context.params;
+
     const response = await axios.get(
-      `https://api.coingecko.com/api/v3/coins/categories/${categoryId}`,
-      {
-        params: {
-          localization: false,
-          tickers: false,
-          market_data: true,
-          community_data: false,
-          developer_data: false,
-        },
-      }
+      `https://api.coingecko.com/api/v3/coins/categories/${id}`
     );
 
-    // Wrap the response in a data property to match expected format
     return NextResponse.json({ data: response.data });
   } catch (error) {
     if (axios.isAxiosError(error)) {
+      if (error.response?.status === 404) {
+        return NextResponse.json(
+          { error: "Category not found" },
+          { status: 404 }
+        );
+      }
       return NextResponse.json(
         { error: "Failed to fetch category data" },
         { status: error.response?.status || 500 }
