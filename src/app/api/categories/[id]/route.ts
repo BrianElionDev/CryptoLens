@@ -4,17 +4,15 @@ import axios from "axios";
 // API route handler for GET requests
 export async function GET(
   request: Request,
-  context: { params: { id: string } }
+  { params }: { params: { id: string } }
 ) {
-  const { id } = await context.params;
-
-  if (!id) {
+  if (!params?.id) {
     return NextResponse.json({ error: "Invalid category ID" }, { status: 400 });
   }
 
   try {
     const response = await axios.get(
-      `https://api.coingecko.com/api/v3/coins/categories/${id}`
+      `https://api.coingecko.com/api/v3/coins/categories/${params.id}`
     );
 
     return NextResponse.json({ data: response.data });
