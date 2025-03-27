@@ -12,11 +12,25 @@ import React, {
 import axios from "axios";
 import { toast } from "react-hot-toast";
 import type { Project } from "@/types/knowledge";
+import { useCMC } from "./CMCContext";
 
 interface CoinGeckoData {
   id: string;
   symbol: string;
   name: string;
+  price?: number;
+  market_cap?: number;
+  total_volume?: number;
+  price_change_percentage_24h?: number;
+  price_change_percentage_7d?: number;
+  price_change_percentage_1h?: number;
+  market_cap_rank?: number;
+  circulating_supply?: number;
+  total_supply?: number;
+  max_supply?: number;
+  market_cap_change_percentage_24h?: number;
+  fully_diluted_valuation?: number;
+  image?: string;
 }
 
 interface CoinGeckoContextType {
@@ -36,6 +50,7 @@ export function CoinGeckoProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [lastFetchTime, setLastFetchTime] = useState(0);
+  const { topCoins: cmcCoins } = useCMC();
   const matchCache = useRef<
     Map<string, { matched: boolean; data?: CoinGeckoData }>
   >(new Map());
@@ -198,52 +213,51 @@ export function CoinGeckoProvider({ children }: { children: React.ReactNode }) {
 
       console.debug("Fetching fresh coin data from CoinGecko...");
 
-      // Fetch coins in batches of 250
-      const allCoins: CoinGeckoData[] = [];
-      for (let page = 1; page <= 3; page++) {
-        console.debug(`Fetching page ${page} of coins...`);
-        try {
-          const response = await axios.get(
-            "https://api.coingecko.com/api/v3/coins/markets",
-            {
-              params: {
-                vs_currency: "usd",
-                order: "market_cap_desc",
-                per_page: 250,
-                page: page,
-                sparkline: false,
-              },
-              headers: {
-                "Cache-Control": "max-age=300", // Cache for 5 minutes
-              },
-            }
-          );
+      // Fetch all coins in one request
+      const response = await axios.get(`/api/coins/markets`, {
+        headers: {
+          "Cache-Control": "max-age=300", // Cache for 5 minutes
+        },
+      });
 
-          if (!response.data || !Array.isArray(response.data)) {
-            throw new Error("Invalid response from CoinGecko API");
+      if (!response.data || !Array.isArray(response.data)) {
+        throw new Error("Invalid response from API");
+      }
+
+      const allCoins = response.data.map((coin: CoinGeckoData) => ({
+        id: coin.id,
+        symbol: coin.symbol,
+        name: coin.name,
+        image: coin.image,
+      }));
+
+      // Merge with CMC data if available
+      if (cmcCoins.length > 0) {
+        const cmcMap = new Map(
+          cmcCoins.map((coin) => [coin.symbol.toLowerCase(), coin])
+        );
+
+        allCoins.forEach((coin) => {
+          const cmcCoin = cmcMap.get(coin.symbol.toLowerCase());
+          if (cmcCoin) {
+            // Update coin data with CMC data
+            Object.assign(coin, {
+              price: cmcCoin.price,
+              market_cap: cmcCoin.market_cap,
+              total_volume: cmcCoin.volume_24h,
+              price_change_percentage_24h: cmcCoin.percent_change_24h,
+              price_change_percentage_7d: cmcCoin.percent_change_7d,
+              price_change_percentage_1h: cmcCoin.percent_change_1h,
+              market_cap_rank: cmcCoin.rank,
+              circulating_supply: cmcCoin.circulating_supply,
+              total_supply: cmcCoin.total_supply,
+              max_supply: cmcCoin.max_supply,
+              market_cap_change_percentage_24h: cmcCoin.market_cap_dominance,
+              fully_diluted_valuation: cmcCoin.fully_diluted_market_cap,
+              image: cmcCoin.image || coin.image,
+            });
           }
-
-          const pageCoins = response.data.map((coin: CoinGeckoData) => ({
-            id: coin.id,
-            symbol: coin.symbol,
-            name: coin.name,
-          }));
-
-          allCoins.push(...pageCoins);
-
-          // Add a longer delay between requests to avoid rate limiting
-          if (page < 3) {
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-          }
-        } catch (error) {
-          if (axios.isAxiosError(error) && error.response?.status === 429) {
-            // If rate limited, wait longer and retry
-            await new Promise((resolve) => setTimeout(resolve, 5000));
-            page--; // Retry this page
-            continue;
-          }
-          throw error;
-        }
+        });
       }
 
       console.debug("Successfully fetched coin data:", {
@@ -273,7 +287,7 @@ export function CoinGeckoProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [topCoins.length, lastFetchTime]);
+  }, [topCoins.length, lastFetchTime, cmcCoins]);
 
   // Initial fetch
   useEffect(() => {

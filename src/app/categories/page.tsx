@@ -7,20 +7,8 @@ import type { KnowledgeItem, Project } from "@/types/knowledge";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LoadingState, CardSkeleton } from "@/components/LoadingState";
 import { Button } from "@/components/ui/button";
-import { Filter, X } from "lucide-react";
-
-type CategoryData = {
-  name: string;
-  coins: string[];
-  totalRpoints: number;
-  mentions: number;
-  marketCapDistribution: {
-    large: number;
-    medium: number;
-    small: number;
-  };
-  recentActivity: number;
-};
+import { Filter, X, ArrowRight } from "lucide-react";
+import Link from "next/link";
 
 type SortOption = "rpoints" | "mentions" | "coins" | "recent";
 
@@ -29,8 +17,6 @@ function CategoriesContent() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<SortOption>("rpoints");
-  const [selectedCategoryData, setSelectedCategoryData] =
-    useState<CategoryData | null>(null);
   const [showCategorySelector, setShowCategorySelector] = useState(false);
 
   // Process data to get category insights
@@ -38,6 +24,7 @@ function CategoriesContent() {
     const categories = new Map<
       string,
       {
+        id: string;
         coins: Set<string>;
         totalRpoints: number;
         mentions: number;
@@ -62,6 +49,7 @@ function CategoriesContent() {
 
           if (!categories.has(category)) {
             categories.set(category, {
+              id: category.toLowerCase(),
               coins: new Set(),
               totalRpoints: 0,
               mentions: 0,
@@ -93,6 +81,7 @@ function CategoriesContent() {
     return Array.from(categories.entries())
       .map(([name, data]) => ({
         name,
+        id: data.id || name.toLowerCase(),
         coins: Array.from(data.coins),
         totalRpoints: Math.round(data.totalRpoints * 100) / 100, // Round to 2 decimal places
         mentions: data.mentions,
@@ -333,235 +322,144 @@ function CategoriesContent() {
 
               {/* Category Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredCategories.map((category, index) => (
-                  <motion.div
-                    key={category.name}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 hover:border-blue-500/50 transition-all duration-300 cursor-pointer hover:bg-gray-800/70"
-                    onClick={() => setSelectedCategoryData(category)}
-                  >
-                    <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-xl font-semibold text-cyan-200">
-                        {category.name}
-                      </h2>
-                      <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-900/30 text-blue-300 border border-blue-500/30">
-                        {category.coins.length.toString()} Coins
-                      </span>
-                    </div>
+                {filteredCategories.map((category, index) => {
+                  // Special case mappings for commonly searched categories
+                  const specialCategoryMapping: Record<string, string> = {
+                    "meme coins": "meme-token",
+                    "layer 1": "layer-1",
+                    "layer-1": "layer-1",
+                    ai: "artificial-intelligence-ai",
+                    "artificial intelligence": "artificial-intelligence-ai",
+                    gaming: "gaming-entertainment-social",
+                    defi: "decentralized-finance-defi",
+                  };
 
-                    {/* Category Stats */}
-                    <div className="grid grid-cols-2 gap-4 mb-6">
-                      <div className="bg-gray-900/50 rounded-lg p-3">
-                        <div className="text-sm text-gray-400">
-                          Total R-Points
-                        </div>
-                        <div className="text-lg font-semibold text-blue-300">
-                          {category.totalRpoints.toLocaleString()}
-                        </div>
-                      </div>
-                      <div className="bg-gray-900/50 rounded-lg p-3">
-                        <div className="text-sm text-gray-400">Mentions</div>
-                        <div className="text-lg font-semibold text-purple-300">
-                          {category.mentions.toString()}
-                        </div>
-                      </div>
-                    </div>
+                  // Check if we have a special mapping for this category
+                  const categoryPath =
+                    specialCategoryMapping[category.name.toLowerCase()] ||
+                    category.id ||
+                    category.name.toLowerCase();
 
-                    {/* Market Cap Distribution */}
-                    <div className="mb-4">
-                      <div className="text-sm text-gray-400 mb-2">
-                        Market Cap Distribution
-                      </div>
-                      <div className="flex gap-2">
-                        {Object.entries(category.marketCapDistribution).map(
-                          ([cap, count]) => (
-                            <div
-                              key={cap}
-                              className={`flex-1 rounded-lg p-2 text-center ${
-                                cap === "large"
-                                  ? "bg-green-900/30 text-green-300 border border-green-500/30"
-                                  : cap === "medium"
-                                  ? "bg-yellow-900/30 text-yellow-300 border border-yellow-500/30"
-                                  : "bg-red-900/30 text-red-300 border border-red-500/30"
-                              }`}
-                            >
-                              <div className="text-xs capitalize">{cap}</div>
-                              <div className="text-sm font-medium">{count}</div>
+                  return (
+                    <Link
+                      key={category.name}
+                      href={`/categories/${encodeURIComponent(categoryPath)}`}
+                      className="block"
+                    >
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                        className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 hover:border-blue-500/50 transition-all duration-300 cursor-pointer group"
+                      >
+                        <div className="flex items-center justify-between mb-4">
+                          <h2 className="text-xl font-semibold text-cyan-200">
+                            {category.name}
+                          </h2>
+                          <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-900/30 text-blue-300 border border-blue-500/30">
+                            {category.coins.length.toString()} Coins
+                          </span>
+                        </div>
+
+                        {/* Category Stats */}
+                        <div className="grid grid-cols-2 gap-4 mb-6">
+                          <div className="bg-gray-900/50 rounded-lg p-3">
+                            <div className="text-sm text-gray-400">
+                              Total R-Points
                             </div>
-                          )
-                        )}
-                      </div>
-                    </div>
+                            <div className="text-lg font-semibold text-blue-300">
+                              {category.totalRpoints.toLocaleString()}
+                            </div>
+                          </div>
+                          <div className="bg-gray-900/50 rounded-lg p-3">
+                            <div className="text-sm text-gray-400">
+                              Mentions
+                            </div>
+                            <div className="text-lg font-semibold text-purple-300">
+                              {category.mentions.toString()}
+                            </div>
+                          </div>
+                        </div>
 
-                    {/* Recent Activity */}
-                    <div className="bg-gray-900/50 rounded-lg p-3">
-                      <div className="text-sm text-gray-400">
-                        Recent Activity (7d)
-                      </div>
-                      <div className="text-lg font-semibold text-pink-300">
-                        {category.recentActivity} mentions
-                      </div>
-                    </div>
+                        {/* Market Cap Distribution */}
+                        <div className="mb-4">
+                          <div className="text-sm text-gray-400 mb-2">
+                            Market Cap Distribution
+                          </div>
+                          <div className="flex gap-2">
+                            {Object.entries(category.marketCapDistribution).map(
+                              ([cap, count]) => (
+                                <div
+                                  key={cap}
+                                  className={`flex-1 rounded-lg p-2 text-center ${
+                                    cap === "large"
+                                      ? "bg-green-900/30 text-green-300 border border-green-500/30"
+                                      : cap === "medium"
+                                      ? "bg-yellow-900/30 text-yellow-300 border border-yellow-500/30"
+                                      : "bg-red-900/30 text-red-300 border border-red-500/30"
+                                  }`}
+                                >
+                                  <div className="text-xs capitalize">
+                                    {cap}
+                                  </div>
+                                  <div className="text-sm font-medium">
+                                    {count}
+                                  </div>
+                                </div>
+                              )
+                            )}
+                          </div>
+                        </div>
 
-                    {/* Top Coins */}
-                    <div className="mt-4">
-                      <div className="text-sm text-gray-400 mb-2">
-                        Top Coins
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {category.coins.slice(0, 5).map((coin) => (
-                          <span
-                            key={coin}
-                            className="px-2 py-1 rounded-full text-xs bg-gray-900/50 text-gray-300 border border-gray-700/50"
-                          >
-                            {coin}
+                        {/* Recent Activity */}
+                        <div className="bg-gray-900/50 rounded-lg p-3">
+                          <div className="text-sm text-gray-400">
+                            Recent Activity (7d)
+                          </div>
+                          <div className="text-lg font-semibold text-pink-300">
+                            {category.recentActivity} mentions
+                          </div>
+                        </div>
+
+                        {/* Top Coins */}
+                        <div className="mt-4">
+                          <div className="text-sm text-gray-400 mb-2">
+                            Top Coins
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {category.coins.slice(0, 5).map((coin) => (
+                              <span
+                                key={coin}
+                                className="px-2 py-1 rounded-full text-xs bg-gray-900/50 text-gray-300 border border-gray-700/50"
+                              >
+                                {coin}
+                              </span>
+                            ))}
+                            {category.coins.length > 5 && (
+                              <span className="px-2 py-1 rounded-full text-xs bg-gray-900/50 text-gray-400">
+                                +{category.coins.length - 5} more
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* View Details Link */}
+                        <div className="mt-5 pt-4 border-t border-gray-700/50 text-right">
+                          <span className="inline-flex items-center text-sm text-blue-400 hover:text-blue-300 font-medium group-hover:underline">
+                            View Analytics{" "}
+                            <ArrowRight className="ml-1 h-4 w-4" />
                           </span>
-                        ))}
-                        {category.coins.length > 5 && (
-                          <span className="px-2 py-1 rounded-full text-xs bg-gray-900/50 text-gray-400">
-                            +{category.coins.length - 5} more
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
+                        </div>
+                      </motion.div>
+                    </Link>
+                  );
+                })}
               </div>
             </div>
 
             {/* Category Selector Modal */}
             <AnimatePresence>
               {showCategorySelector && <CategorySelectorModal />}
-            </AnimatePresence>
-
-            {/* Category Detail Modal */}
-            <AnimatePresence>
-              {selectedCategoryData && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-                  onClick={() => setSelectedCategoryData(null)}
-                >
-                  <motion.div
-                    initial={{ scale: 0.95, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.95, opacity: 0 }}
-                    className="bg-gray-800/90 backdrop-blur-xl rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-700/50"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {/* Modal Header */}
-                    <div className="flex items-center justify-between mb-6">
-                      <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500">
-                        {selectedCategoryData.name}
-                      </h2>
-                      <button
-                        onClick={() => setSelectedCategoryData(null)}
-                        className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors"
-                      >
-                        <svg
-                          className="w-6 h-6 text-gray-400"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M6 18L18 6M6 6l12 12"
-                          />
-                        </svg>
-                      </button>
-                    </div>
-
-                    {/* Modal Content */}
-                    <div className="space-y-6">
-                      {/* Stats Grid */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                        <div className="bg-gray-900/50 rounded-lg p-4">
-                          <div className="text-sm text-gray-400">
-                            Total Coins
-                          </div>
-                          <div className="text-xl font-semibold text-blue-300">
-                            {selectedCategoryData.coins.length}
-                          </div>
-                        </div>
-                        <div className="bg-gray-900/50 rounded-lg p-4">
-                          <div className="text-sm text-gray-400">R-Points</div>
-                          <div className="text-xl font-semibold text-purple-300">
-                            {selectedCategoryData.totalRpoints.toLocaleString()}
-                          </div>
-                        </div>
-                        <div className="bg-gray-900/50 rounded-lg p-4">
-                          <div className="text-sm text-gray-400">Mentions</div>
-                          <div className="text-xl font-semibold text-pink-300">
-                            {selectedCategoryData.mentions}
-                          </div>
-                        </div>
-                        <div className="bg-gray-900/50 rounded-lg p-4">
-                          <div className="text-sm text-gray-400">
-                            Recent Activity
-                          </div>
-                          <div className="text-xl font-semibold text-cyan-300">
-                            {selectedCategoryData.recentActivity}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Market Cap Distribution */}
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-200 mb-3">
-                          Market Cap Distribution
-                        </h3>
-                        <div className="grid grid-cols-3 gap-4">
-                          {Object.entries(
-                            selectedCategoryData.marketCapDistribution
-                          ).map(([cap, count]) => (
-                            <div
-                              key={cap}
-                              className={`rounded-lg p-4 text-center ${
-                                cap === "large"
-                                  ? "bg-green-900/30 text-green-300 border border-green-500/30"
-                                  : cap === "medium"
-                                  ? "bg-yellow-900/30 text-yellow-300 border border-yellow-500/30"
-                                  : "bg-red-900/30 text-red-300 border border-red-500/30"
-                              }`}
-                            >
-                              <div className="text-sm capitalize font-medium">
-                                {cap}
-                              </div>
-                              <div className="text-2xl font-bold mt-1">
-                                {count}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* All Coins */}
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-200 mb-3">
-                          All Coins
-                        </h3>
-                        <div className="flex flex-wrap gap-2">
-                          {selectedCategoryData.coins.map((coin: string) => (
-                            <span
-                              key={coin}
-                              className="px-3 py-1.5 rounded-full text-sm bg-gray-900/50 text-gray-300 border border-gray-700/50"
-                            >
-                              {coin}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                </motion.div>
-              )}
             </AnimatePresence>
           </Suspense>
         </ErrorBoundary>

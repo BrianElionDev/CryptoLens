@@ -44,6 +44,7 @@ const CellContent = <TData,>({
       ref={cellRef}
       className="transition-all duration-300"
       data-cell-key={cellKey}
+      data-column-id={cell.column.id}
     >
       {flexRender(cell.column.columnDef.cell, cell.getContext())}
     </div>

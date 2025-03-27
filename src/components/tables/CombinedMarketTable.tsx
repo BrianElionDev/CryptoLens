@@ -149,6 +149,7 @@ export function CombinedMarketTable({
         circulating_supply: coin.circulating_supply || 0,
         image: coin.image || "",
         coingecko_id: coin.id,
+        cmc_id: coin.cmc_id,
         market_cap_rank: coin.market_cap_rank || 0,
         fully_diluted_valuation: coin.fully_diluted_valuation || 0,
         total_volume: coin.total_volume || coin.volume_24h || 0,
@@ -170,6 +171,7 @@ export function CombinedMarketTable({
         last_updated: coin.last_updated || "",
         rpoints: coin.rpoints || 0,
         total_mentions: coin.total_mentions || 0,
+        data_source: coin.data_source || (coin.cmc_id ? "cmc" : "coingecko"),
       },
     });
   };
@@ -319,13 +321,15 @@ export function CombinedMarketTable({
           existing.points = coin.rpoints;
           existing.date = coin.date;
         }
-        // Use total_count which is specific to this coin
-        existing.mentions += coin.total_count || 0;
+        // Add total_count to mentions only if from selected channels
+        if (channelSet.has(coin.channel)) {
+          existing.mentions += coin.total_count || 1;
+        }
       } else {
-        // Initialize new entry with total_count
+        // Initialize new entry with total_count only if from selected channels
         coinStatsMap.set(key, {
           points: coin.rpoints,
-          mentions: coin.total_count || 0,
+          mentions: channelSet.has(coin.channel) ? coin.total_count || 1 : 0,
           date: coin.date,
         });
       }
@@ -341,20 +345,18 @@ export function CombinedMarketTable({
 
         if (matchedCoins.has(coinId)) return null;
 
-        const statsBySymbol = coinStatsMap.get(cleanSymbol);
-        const statsByName = coinStatsMap.get(cleanName);
-        const stats = statsBySymbol || statsByName;
+        // Use exact matching like ChannelMentionsTable
+        const stats =
+          coinStatsMap.get(cleanSymbol) || coinStatsMap.get(cleanName);
+        if (!stats) return null;
 
-        if (stats) {
-          matchedCoins.add(coinId);
-          return {
-            ...coin,
-            rpoints: stats.points,
-            total_mentions: stats.mentions,
-          };
-        }
-
-        return null;
+        matchedCoins.add(coinId);
+        return {
+          ...coin,
+          rpoints: stats.points,
+          total_mentions: stats.mentions,
+          data_source: coin.cmc_id ? "cmc" : "coingecko",
+        };
       })
       .filter((coin): coin is ExtendedCoinData => coin !== null)
       .sort((a, b) => b.rpoints - a.rpoints || b.market_cap - a.market_cap);
@@ -408,9 +410,20 @@ export function CombinedMarketTable({
               />
             )}
             <div className="flex flex-col items-start">
-              <span className="text-[15px] font-medium text-gray-100">
-                {row.original.name}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[15px] font-medium text-gray-100">
+                  {row.original.name}
+                </span>
+                <span
+                  className={`text-xs px-2 py-0.5 rounded-full ${
+                    row.original.data_source === "cmc"
+                      ? "bg-purple-500/20 text-purple-400"
+                      : "bg-blue-500/20 text-blue-400"
+                  }`}
+                >
+                  {row.original.data_source === "cmc" ? "CMC" : "CG"}
+                </span>
+              </div>
               <span className="text-xs text-gray-400">
                 {row.original.symbol?.toUpperCase()}
               </span>
@@ -421,12 +434,39 @@ export function CombinedMarketTable({
       {
         accessorKey: "price",
         header: "Price",
+        cell: ({ row }: { row: Row<ExtendedCoinData> }) => {
+          const price = row.original.price || row.original.current_price || 0;
+          const priceChange = row.original.price_change_percentage_24h || 0;
+
+          // Format price based on its value
+          let formattedPrice;
+          if (price < 0.00001) {
+            formattedPrice = price.toFixed(8).replace(/\.?0+$/, "");
+          } else if (price < 0.01) {
+            formattedPrice = price.toFixed(6).replace(/\.?0+$/, "");
+          } else if (price < 1) {
+            formattedPrice = price.toFixed(4).replace(/\.?0+$/, "");
+          } else if (price < 100) {
+            formattedPrice = price.toFixed(2).replace(/\.?0+$/, "");
+          } else {
+            formattedPrice = formatCurrency(price);
+          }
+
+          return (
+            <div
+              className={`font-medium transition-colors duration-300 text-right ${
+                priceChange > 0
+                  ? "text-green-400"
+                  : priceChange < 0
+                  ? "text-red-400"
+                  : "text-gray-100"
+              }`}
+            >
+              ${formattedPrice}
+            </div>
+          );
+        },
         size: 150,
-        cell: ({ row }: { row: Row<ExtendedCoinData> }) => (
-          <div className="text-[15px] font-medium text-gray-100">
-            {formatCurrency(row.original.price)}
-          </div>
-        ),
       },
       {
         accessorKey: "percent_change_24h",
@@ -478,6 +518,18 @@ export function CombinedMarketTable({
     ],
     []
   );
+
+  const onRowClick = (row: ExtendedCoinData) => {
+    handleCoinSelect(row);
+
+    // Use different ID format based on data source
+    if (row.data_source === "cmc") {
+      const coinId = `cmc-${row.cmc_id}`;
+      router.push(`/coin/${coinId}`);
+    } else {
+      router.push(`/coin/${row.id}`);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -598,7 +650,7 @@ export function CombinedMarketTable({
                       }
                     } catch (e) {
                       console.log(e);
-                      // Invalid date format  
+                      // Invalid date format
                     }
                   }}
                   className="w-[140px] bg-gray-900/60 border-gray-700/50 text-gray-200 h-9 px-3 pr-10 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/50 transition-colors [&::-webkit-calendar-picker-indicator]:hidden"
@@ -654,10 +706,7 @@ export function CombinedMarketTable({
         <DataTable
           columns={memoizedColumns}
           data={sortedCoinData}
-          onRowClick={(row) => {
-            handleCoinSelect(row);
-            router.push(`/coin/${row.coingecko_id}`);
-          }}
+          onRowClick={onRowClick}
           virtualizeRows={true}
           isLoading={isFetching}
         />

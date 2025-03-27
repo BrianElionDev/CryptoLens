@@ -7,6 +7,7 @@ export interface KnowledgeItem {
   link: string;
   summary?: string;
   llm_answer: LLMAnswer;
+  video_type: "video" | "short";
 }
 
 export interface LLMAnswer {
@@ -26,5 +27,25 @@ export interface Project {
     id: string;
     symbol: string;
     name: string;
+  };
+  cmc_matched?: boolean;
+  cmc_data?: {
+    id: string;
+    name: string;
+    symbol: string;
+    price: number;
+    market_cap: number;
+    volume_24h: number;
+    percent_change_24h: number;
+    percent_change_7d: number;
+    percent_change_1h: number;
+    cmc_id: number;
+    rank: number;
+    circulating_supply: number;
+    total_supply: number;
+    max_supply: number;
+    market_cap_dominance: number;
+    fully_diluted_market_cap: number;
+    image: string;
   };
 }

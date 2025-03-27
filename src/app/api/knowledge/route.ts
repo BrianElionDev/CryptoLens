@@ -51,6 +51,7 @@ export async function GET() {
       answer: item.answer || "",
       summary: item.summary || "",
       llm_answer: item.llm_answer || { projects: [] },
+      video_type: item.video_type || "video",
     }));
 
     return NextResponse.json({ knowledge: transformedData });
@@ -118,6 +119,11 @@ export async function POST(request: Request) {
       if (!item.channel_name && !item["channel name"])
         missingFields.push("channel_name");
       if (!item.transcript) missingFields.push("transcript");
+      if (item.video_type && !["video", "short"].includes(item.video_type)) {
+        validationErrors.push(
+          `Item ${index}: video_type must be either "video" or "short"`
+        );
+      }
 
       // Detailed llm_answer validation
       if (!item.llm_answer) {
@@ -187,6 +193,9 @@ export async function POST(request: Request) {
           link: item.link || "",
           summary: item.answer || "",
           llm_answer,
+          video_type: ["video", "short"].includes(item.video_type)
+            ? item.video_type
+            : "video",
           created_at: new Date().toISOString(),
         };
       } catch (error) {

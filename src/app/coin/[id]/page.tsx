@@ -29,10 +29,28 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import ChannelMentionsTable from "./ChannelMentionsTable";
 
-async function getCoinData(id: string) {
-  const res = await fetch(`/api/coins/${id}`);
-  if (!res.ok) throw new Error("Failed to fetch coin");
-  return res.json();
+async function getCoinData(id: string | undefined) {
+  if (!id) throw new Error("No coin ID provided");
+
+  try {
+    // Check if it's a CMC ID (format: cmc-123)
+    const isCMC = id.startsWith("cmc-");
+    const cleanId = isCMC ? id.replace("cmc-", "") : id;
+
+    const url = `/api/coins/${cleanId}${isCMC ? "?source=cmc" : ""}`;
+
+    const res = await fetch(url, {
+      next: { revalidate: 60 }, // Cache for 60 seconds
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to fetch coin: ${res.status} ${res.statusText}`);
+    }
+
+    return res.json();
+  } catch (error) {
+    throw error;
+  }
 }
 
 export default function CoinPage({
@@ -45,8 +63,11 @@ export default function CoinPage({
   const { data, isError, isLoading } = useQuery({
     queryKey: ["coin", resolvedParams.id],
     queryFn: () => getCoinData(resolvedParams.id),
-    staleTime: 60 * 1000, // Consider data fresh for 1 minute
+    staleTime: resolvedParams.id.startsWith("cmc-")
+      ? 15 * 60 * 1000
+      : 60 * 1000, // 15 min for CMC, 1 min for CoinGecko
     retry: 2,
+    enabled: !!resolvedParams.id,
   });
 
   if (isLoading) {
@@ -81,6 +102,8 @@ export default function CoinPage({
     volume_24h: data.market_data?.total_volume?.usd || 0,
     circulating_supply: data.market_data?.circulating_supply || 0,
     coingecko_id: data.id || resolvedParams.id,
+    cmc_id: data.cmc_id,
+    data_source: data.data_source || "coingecko",
   };
 
   return (
@@ -126,9 +149,15 @@ export default function CoinPage({
             <CoinsIcon className="w-12 h-12 text-blue-400" aria-hidden="true" />
           )}
         </div>
-        <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400">
-          {displayData.name} ({displayData.symbol.toUpperCase()})
-        </h1>
+        <div>
+          <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400">
+            {displayData.name} ({displayData.symbol.toUpperCase()})
+          </h1>
+          <span className="text-sm text-gray-400">
+            Source:{" "}
+            {displayData.data_source === "cmc" ? "CoinMarketCap" : "CoinGecko"}
+          </span>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
