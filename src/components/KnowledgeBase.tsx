@@ -2,11 +2,12 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import type { KnowledgeItem } from "@/types/knowledge";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { VideoModal } from "./modals/VideoModal";
 import { PlayCircle } from "lucide-react";
 import { StatsModal } from "./modals/StatsModal";
 import { useCoinGecko } from "@/contexts/CoinGeckoContext";
+import { useCMC } from "@/contexts/CMCContext";
 
 interface KnowledgeBaseProps {
   items: KnowledgeItem[];
@@ -15,14 +16,58 @@ interface KnowledgeBaseProps {
 export default function KnowledgeBase({ items }: KnowledgeBaseProps) {
   const [activeVideo, setActiveVideo] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<KnowledgeItem | null>(null);
-  const { matchCoins } = useCoinGecko();
+  const { matchCoins: matchCoingecko } = useCoinGecko();
+  const { matchCoins: matchCMC } = useCMC();
+  const [matchedItems, setMatchedItems] = useState<KnowledgeItem[]>([]);
+
+  useEffect(() => {
+    const matchProjects = async () => {
+      const matched = await Promise.all(
+        items.map(async (item) => {
+          const projects = item.llm_answer.projects;
+          let matchedProjects = matchCoingecko(projects);
+          const unmatchedProjects = matchedProjects.filter(
+            (p) => !p.coingecko_matched
+          );
+          const cmcMatchedProjects = await matchCMC(unmatchedProjects);
+
+          matchedProjects = matchedProjects.map((project) => {
+            const cmcMatch = cmcMatchedProjects.find(
+              (p) => p.coin_or_project === project.coin_or_project
+            );
+            if (cmcMatch?.cmc_matched) {
+              return {
+                ...project,
+                cmc_matched: true,
+                cmc_data: cmcMatch.cmc_data,
+              };
+            }
+            return project;
+          });
+
+          return {
+            ...item,
+            llm_answer: {
+              ...item.llm_answer,
+              projects: matchedProjects,
+            },
+          };
+        })
+      );
+      setMatchedItems(matched);
+    };
+
+    matchProjects();
+  }, [items, matchCoingecko, matchCMC]);
 
   return (
     <div className="space-y-6">
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {items.map((item, index) => {
-          const validCoins = matchCoins(item.llm_answer.projects).filter(
-            (p) => p.coingecko_matched
+        {matchedItems.map((item, index) => {
+          const projects = item.llm_answer.projects;
+
+          const validCoins = projects.filter(
+            (project) => project.coingecko_matched || project.cmc_matched
           ).length;
 
           return (
@@ -61,6 +106,16 @@ export default function KnowledgeBase({ items }: KnowledgeBaseProps) {
                     <PlayCircle className="w-4 h-4" />
                     <span>Watch</span>
                   </button>
+                  {/* Video Type Badge */}
+                  <div
+                    className={`text-xs px-2 py-1 rounded-md capitalize ${
+                      item.video_type === "short"
+                        ? "bg-purple-500/20 text-purple-300"
+                        : "bg-emerald-500/20 text-emerald-300"
+                    }`}
+                  >
+                    {item.video_type}
+                  </div>
                   {/* Coin Count */}
                   <div className="text-sm text-gray-400 bg-gray-900/40 px-2 py-1 rounded-md shrink-0">
                     {validCoins} coins

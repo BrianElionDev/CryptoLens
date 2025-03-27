@@ -1,0 +1,94 @@
+### Variables
+@baseUrl = {{$dotenv BASE_URL}}
+@cmcApiKey = {{$dotenv CMC_API_KEY}}
+@contentType = application/json
+
+### Market Data Endpoints
+### CoinGecko Market Data (Main Table)
+POST {{baseUrl}}/api/coingecko
+Content-Type: {{contentType}}
+Accept: {{contentType}}
+
+{
+  "symbols": ["btc", "eth", "sol", "xrp", "ada"],
+  "mode": "quick"
+}
+
+### CoinGecko Detail Page
+GET {{baseUrl}}/api/coingecko/btc
+Accept: {{contentType}}
+
+### CoinMarketCap Fallback (When CoinGecko Missing)
+POST {{baseUrl}}/api/coinmarketcap
+Content-Type: {{contentType}}
+Accept: {{contentType}}
+X-CMC_PRO_API_KEY: {{cmcApiKey}}
+
+{
+  "symbols": ["btc", "eth", "sol"],
+  "fallbackMode": true,
+  "reason": "Testing CMC fallback"
+}
+
+### CMC Detail Page
+GET {{baseUrl}}/api/coinmarketcap/1
+Accept: {{contentType}}
+X-CMC_PRO_API_KEY: {{cmcApiKey}}
+
+### Coin Detail Pages
+### Get Coin Details
+GET {{baseUrl}}/api/coins/btc
+Accept: {{contentType}}
+
+### Get Coin History
+GET {{baseUrl}}/api/coins/btc/history?days=7
+Accept: {{contentType}}
+
+### Categories
+### Get All Categories
+GET {{baseUrl}}/api/categories
+Accept: {{contentType}}
+
+### Knowledge Base
+### Get Knowledge Base Data
+GET {{baseUrl}}/api/knowledge
+Accept: {{contentType}}
+
+### Add Knowledge Base Data
+POST {{baseUrl}}/api/knowledge
+Content-Type: {{contentType}}
+Accept: {{contentType}}
+
+{
+  "video_title": "Test Video",
+  "channel_name": "Test Channel",
+  "transcript": "Test transcript content",
+  "link": "https://example.com",
+  "llm_answer": [{
+    "projects": [{
+      "coin_or_project": "BTC",
+      "marketcap": "Large",
+      "rpoints": 8,
+      "total_count": 5,
+      "category": ["DeFi"]
+    }],
+    "total_count": 5,
+    "total_rpoints": 8  
+  }]
+}
+
+### FAQ
+### Get FAQ Answer
+POST {{baseUrl}}/api/faq
+Content-Type: {{contentType}}
+Accept: {{contentType}}
+
+{
+  "question": "How is bitcoin doing?"
+}
+
+### Revalidation
+### Revalidate Data
+POST {{baseUrl}}/api/revalidate
+Content-Type: {{contentType}}
+Accept: {{contentType}} 
