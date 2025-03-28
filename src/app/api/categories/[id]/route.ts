@@ -8,11 +8,11 @@ export const runtime = "edge";
 // API route handler for GET requests
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Safely destructure params to avoid the Next.js error
-    const { id } = params;
+    const resolvedParams = await context.params;
+    const { id } = resolvedParams;
 
     if (!id || typeof id !== "string") {
       return NextResponse.json(
