@@ -7,12 +7,11 @@ export const runtime = "edge";
 
 // API route handler for GET requests
 export async function GET(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  request: Request,
+  { params }: { params: { id: string } }
 ) {
   try {
-    const resolvedParams = await context.params;
-    const { id } = resolvedParams;
+    const { id } = params;
 
     if (!id || typeof id !== "string") {
       return NextResponse.json(
