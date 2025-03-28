@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 // Disable Next.js optimizations that cause params validation errors
 export const dynamic = "force-dynamic";
