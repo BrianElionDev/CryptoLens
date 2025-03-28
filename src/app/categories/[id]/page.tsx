@@ -266,7 +266,9 @@ export default function CategoryDetailPage() {
         setHasFetched(true);
 
         const response = await fetch(
-          `/api/categories/${encodeURIComponent(categoryId)}?t=${Date.now()}`,
+          `https://api.coingecko.com/api/v3/coins/categories/${encodeURIComponent(
+            categoryId
+          )}`,
           {
             cache: "no-store",
           }
@@ -288,14 +290,7 @@ export default function CategoryDetailPage() {
         }
 
         const data = await response.json();
-
-        // The data is now wrapped in a data property
-        if (data.data) {
-          setCategoryData(data.data);
-        } else {
-          // If no data property, use the response directly
-          setCategoryData(data);
-        }
+        setCategoryData(data);
       } catch {
         setError(
           "Failed to load category data. Please try refreshing the page."
@@ -606,8 +601,8 @@ export default function CategoryDetailPage() {
           </h1>
           {categoryData && (
             <p className="text-gray-400 mt-1">
-              Market Cap: ${formatNumber(categoryData.market_cap)} • 24h Volume:
-              ${formatNumber(categoryData.volume_24h)}
+              Market Cap: ${formatNumber(categoryData?.market_cap)} • 24h
+              Volume: ${formatNumber(categoryData?.volume_24h)}
             </p>
           )}
         </div>
@@ -899,7 +894,8 @@ export default function CategoryDetailPage() {
                         alt={`Top ${index + 1} coin`}
                         width={48}
                         height={48}
-                        className="rounded-full"
+                        className="rounded-full w-auto h-auto"
+                        style={{ width: "48px", height: "48px" }}
                       />
                     </div>
                   ))}
@@ -909,13 +905,13 @@ export default function CategoryDetailPage() {
                   <div className="bg-gray-900/60 rounded-lg p-4 border border-gray-700/50">
                     <h4 className="text-sm text-gray-400 mb-1">Market Cap</h4>
                     <p className="text-xl font-medium text-green-300">
-                      ${formatNumber(categoryData.market_cap)}
+                      ${formatNumber(categoryData?.market_cap)}
                     </p>
                   </div>
                   <div className="bg-gray-900/60 rounded-lg p-4 border border-gray-700/50">
                     <h4 className="text-sm text-gray-400 mb-1">24h Volume</h4>
                     <p className="text-xl font-medium text-cyan-300">
-                      ${formatNumber(categoryData.volume_24h)}
+                      ${formatNumber(categoryData?.volume_24h)}
                     </p>
                   </div>
                 </div>
@@ -1015,7 +1011,8 @@ function MetricCard({
   );
 }
 
-function formatNumber(num: number): string {
+function formatNumber(num: number | undefined | null): string {
+  if (num === undefined || num === null) return "0";
   if (num >= 1_000_000_000) {
     return (num / 1_000_000_000).toFixed(2) + "B";
   }
