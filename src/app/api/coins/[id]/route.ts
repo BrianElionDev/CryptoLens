@@ -12,11 +12,11 @@ export const runtime = "edge";
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
   try {
     // Safely destructure params to avoid the Next.js error
-    const { id } = params;
+    const { id } = context.params;
     const { searchParams } = new URL(request.url);
     const source = searchParams.get("source");
     const coinId = id.toLowerCase();
