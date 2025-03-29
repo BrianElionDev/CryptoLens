@@ -35,6 +35,14 @@ function getCacheDuration(mode: string) {
 let secondaryPageCache: CoinGeckoMarketResponse[] | null = null;
 let secondaryPageTimestamp = 0;
 
+// Add a tertiary cache for the third page
+let tertiaryPageCache: CoinGeckoMarketResponse[] | null = null;
+let tertiaryPageTimestamp = 0;
+
+// Add a quaternary cache for the fourth page
+let quaternaryPageCache: CoinGeckoMarketResponse[] | null = null;
+let quaternaryPageTimestamp = 0;
+
 // Modify cache interface to store quick and full data separately
 interface CacheEntry {
   quickData: Record<string, CoinData>;
@@ -90,23 +98,135 @@ function findCoinMatch(
     .replace(/[^a-z0-9\s-]/g, "")
     .trim();
 
+  // Special handling for Bitcoin to ensure we get the correct one
+  if (
+    cleanName === "bitcoin" ||
+    cleanName === "btc" ||
+    extractedSymbol === "btc"
+  ) {
+    const bitcoinMatches = marketData.filter(
+      (coin) =>
+        coin.id === "bitcoin" ||
+        coin.symbol.toLowerCase() === "btc" ||
+        coin.name.toLowerCase().includes("bitcoin")
+    );
+
+    if (bitcoinMatches.length > 0) {
+      // Sort by market cap and return the highest one
+      return bitcoinMatches.sort((a, b) => b.market_cap - a.market_cap)[0];
+    }
+  }
+
   // Direct mappings for common variations
   const directMappings: Record<string, string> = {
+    // Bitcoin and its variants
     bitcoin: "bitcoin",
     btc: "bitcoin",
+    "bit coin": "bitcoin",
+    "bitcoin cash": "bitcoin-cash",
+    bch: "bitcoin-cash",
+    "bitcoin sv": "bitcoin-cash-sv",
+    bsv: "bitcoin-cash-sv",
+
+    // Ethereum and its ecosystem
     ethereum: "ethereum",
     eth: "ethereum",
+    "ethereum classic": "ethereum-classic",
+    etc: "ethereum-classic",
+
+    // Major Layer 1s
     solana: "solana",
     sol: "solana",
-    xrp: "ripple",
-    doge: "dogecoin",
+    cardano: "cardano",
     ada: "cardano",
+    polkadot: "polkadot",
     dot: "polkadot",
-    link: "chainlink",
+    avalanche: "avalanche-2",
     avax: "avalanche-2",
-    bnb: "binancecoin",
+    polygon: "matic-network",
     matic: "matic-network",
+    cosmos: "cosmos",
+    atom: "cosmos",
+    "near protocol": "near",
+    near: "near",
+    arbitrum: "arbitrum",
+    arb: "arbitrum",
+    optimism: "optimism",
+    op: "optimism",
+
+    // Major DeFi and Exchange tokens
+    binance: "binancecoin",
+    bnb: "binancecoin",
+    ripple: "ripple",
+    xrp: "ripple",
+    chainlink: "chainlink",
+    link: "chainlink",
+    uniswap: "uniswap",
+    uni: "uniswap",
+    aave: "aave",
+    maker: "maker",
+    mkr: "maker",
+    compound: "compound",
+    comp: "compound",
+    curve: "curve-dao-token",
+    crv: "curve-dao-token",
+
+    // Popular altcoins
+    dogecoin: "dogecoin",
+    doge: "dogecoin",
+    litecoin: "litecoin",
+    ltc: "litecoin",
+    tron: "tron",
+    trx: "tron",
+    "shiba inu": "shiba-inu",
+    shib: "shiba-inu",
+    pepe: "pepe",
+    stellar: "stellar",
+    xlm: "stellar",
+    monero: "monero",
+    xmr: "monero",
+    filecoin: "filecoin",
+    fil: "filecoin",
+
+    // Stablecoins
+    tether: "tether",
+    usdt: "tether",
+    "usd coin": "usd-coin",
+    usdc: "usd-coin",
+    dai: "dai",
+    trueusd: "true-usd",
+    tusd: "true-usd",
+    frax: "frax",
+
+    // Gaming and Metaverse
+    "the sandbox": "the-sandbox",
+    sand: "the-sandbox",
+    decentraland: "decentraland",
+    mana: "decentraland",
+    "axie infinity": "axie-infinity",
+    axie: "axie-infinity",
+    gala: "gala",
+    illuvium: "illuvium",
+    ilv: "illuvium",
+    enjin: "enjincoin",
+    enj: "enjincoin",
+
+    // Additional tokens
+    sui: "sui",
+    celestia: "celestia",
+    tia: "celestia",
+    brett: "brett",
+    ultra: "ultra",
+    uos: "ultra",
+    singularitynet: "singularitynet",
+    agix: "singularitynet",
+    zklink: "zklink",
+    zkl: "zklink",
     "official trump": "trump",
+    trump: "trump",
+    "trump digital trading card": "trump",
+    "trump nft": "trump",
+    "trump token": "trump",
   };
 
   // Try exact matches first
@@ -115,7 +235,9 @@ function findCoinMatch(
       coin.id === cleanName ||
       coin.symbol.toLowerCase() === cleanName ||
       coin.symbol.toLowerCase() === extractedSymbol ||
-      coin.name.toLowerCase() === cleanName
+      coin.name.toLowerCase() === cleanName ||
+      coin.id === directMappings[cleanName] ||
+      coin.id === directMappings[extractedSymbol]
   );
   if (exactMatch) return exactMatch;
 
@@ -287,18 +409,36 @@ export async function POST(request: Request) {
     const allMarketData: CoinGeckoMarketResponse[] = [];
     let hasError = false;
 
-    // Try to use secondary cache first if it exists and is fresh
+    // Try to use secondary, tertiary, and quaternary cache first if they exist and are fresh
     if (
       secondaryPageCache &&
       Date.now() - secondaryPageTimestamp < MAX_CACHE_DURATION
     ) {
       allMarketData.push(...secondaryPageCache);
     }
+    if (
+      tertiaryPageCache &&
+      Date.now() - tertiaryPageTimestamp < MAX_CACHE_DURATION
+    ) {
+      allMarketData.push(...tertiaryPageCache);
+    }
+    if (
+      quaternaryPageCache &&
+      Date.now() - quaternaryPageTimestamp < MAX_CACHE_DURATION
+    ) {
+      allMarketData.push(...quaternaryPageCache);
+    }
 
     // Always fetch first page
     try {
       const firstPagePromise = fetchMarketDataPage(1);
       let secondPagePromise: Promise<{
+        data: CoinGeckoMarketResponse[];
+      } | null> | null = null;
+      let thirdPagePromise: Promise<{
+        data: CoinGeckoMarketResponse[];
+      } | null> | null = null;
+      let fourthPagePromise: Promise<{
         data: CoinGeckoMarketResponse[];
       } | null> | null = null;
 
@@ -313,9 +453,37 @@ export async function POST(request: Request) {
         });
       }
 
+      // If we need third page and don't have fresh cache, fetch it in parallel
+      if (
+        !tertiaryPageCache ||
+        Date.now() - tertiaryPageTimestamp > MAX_CACHE_DURATION
+      ) {
+        thirdPagePromise = fetchMarketDataPage(3).catch((error) => {
+          console.error("Error fetching third page:", error);
+          return null;
+        });
+      }
+
+      // If we need fourth page and don't have fresh cache, fetch it in parallel
+      if (
+        !quaternaryPageCache ||
+        Date.now() - quaternaryPageTimestamp > MAX_CACHE_DURATION
+      ) {
+        fourthPagePromise = fetchMarketDataPage(4).catch((error) => {
+          console.error("Error fetching fourth page:", error);
+          return null;
+        });
+      }
+
       const firstPageResponse = await firstPagePromise;
       const secondPageResponse = secondPagePromise
         ? await secondPagePromise
+        : null;
+      const thirdPageResponse = thirdPagePromise
+        ? await thirdPagePromise
+        : null;
+      const fourthPageResponse = fourthPagePromise
+        ? await fourthPagePromise
         : null;
 
       if (!firstPageResponse.data || !Array.isArray(firstPageResponse.data)) {
@@ -333,6 +501,26 @@ export async function POST(request: Request) {
       } else if (secondaryPageCache) {
         // Use existing secondary cache if available
         allMarketData.push(...secondaryPageCache);
+      }
+
+      // Update tertiary cache if we got third page data
+      if (thirdPageResponse?.data && Array.isArray(thirdPageResponse.data)) {
+        tertiaryPageCache = thirdPageResponse.data;
+        tertiaryPageTimestamp = Date.now();
+        allMarketData.push(...thirdPageResponse.data);
+      } else if (tertiaryPageCache) {
+        // Use existing tertiary cache if available
+        allMarketData.push(...tertiaryPageCache);
+      }
+
+      // Update quaternary cache if we got fourth page data
+      if (fourthPageResponse?.data && Array.isArray(fourthPageResponse.data)) {
+        quaternaryPageCache = fourthPageResponse.data;
+        quaternaryPageTimestamp = Date.now();
+        allMarketData.push(...fourthPageResponse.data);
+      } else if (quaternaryPageCache) {
+        // Use existing quaternary cache if available
+        allMarketData.push(...quaternaryPageCache);
       }
     } catch (error) {
       hasError = true;
