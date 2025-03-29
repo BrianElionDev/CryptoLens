@@ -13,7 +13,6 @@ import {
 
 interface CoinChartProps {
   coingecko_id: string;
-  cmc_id?: string;
   data_source?: string;
 }
 
