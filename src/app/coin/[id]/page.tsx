@@ -309,7 +309,6 @@ export default function CoinPage({
           <CardContent>
             <CoinChart
               coingecko_id={displayData.coingecko_id}
-              cmc_id={displayData.cmc_id}
               data_source={displayData.data_source}
             />
           </CardContent>
