@@ -53,6 +53,9 @@ const columns: ColumnDef<ChannelMention>[] = [
 export default function ChannelMentionsTable({ coinId }: { coinId: string }) {
   const { data: knowledge, isLoading } = useKnowledgeData();
 
+  console.log("CoinId:", coinId);
+  console.log("Knowledge data:", knowledge);
+
   const channelMentions = useMemo(() => {
     if (!knowledge) return [];
 
@@ -67,30 +70,213 @@ export default function ChannelMentionsTable({ coinId }: { coinId: string }) {
         projects.forEach((project) => {
           if (project.coin_or_project) {
             const symbolMatch = project.coin_or_project.match(/\(\$([^)]+)\)/);
-            const symbol = symbolMatch ? symbolMatch[1].toLowerCase() : "";
+            const extractedSymbol = symbolMatch
+              ? symbolMatch[1].toLowerCase()
+              : "";
             const cleanName = project.coin_or_project
               .replace(/\s*\(\$[^)]+\)/g, "")
               .toLowerCase()
               .trim();
-            const key = symbol || cleanName;
 
-            // Match using the same logic as CombinedMarketTable
-            if (key === coinId.toLowerCase()) {
+            console.log("Project:", {
+              original: project.coin_or_project,
+              cleanName,
+              extractedSymbol,
+              coinId: coinId.toLowerCase(),
+            });
+
+            // Special handling for Bitcoin
+            if (
+              cleanName === "bitcoin" ||
+              cleanName === "btc" ||
+              extractedSymbol === "btc"
+            ) {
+              if (
+                coinId.toLowerCase() === "bitcoin" ||
+                coinId.toLowerCase() === "btc"
+              ) {
+                const channel = item["channel name"];
+                const count = project.total_count || 1;
+                mentions.set(channel, (mentions.get(channel) || 0) + count);
+                console.log("Found Bitcoin match:", { channel, count });
+              }
+              return;
+            }
+
+            // Direct mappings for common variations
+            const directMappings: Record<string, string> = {
+              // Bitcoin and its variants
+              bitcoin: "bitcoin",
+              btc: "bitcoin",
+              "bit coin": "bitcoin",
+              "bitcoin cash": "bitcoin-cash",
+              bch: "bitcoin-cash",
+              "bitcoin sv": "bitcoin-cash-sv",
+              bsv: "bitcoin-cash-sv",
+
+              // Ethereum and its ecosystem
+              ethereum: "ethereum",
+              eth: "ethereum",
+              "ethereum classic": "ethereum-classic",
+              etc: "ethereum-classic",
+
+              // Major Layer 1s
+              solana: "solana",
+              sol: "solana",
+              cardano: "cardano",
+              ada: "cardano",
+              polkadot: "polkadot",
+              dot: "polkadot",
+              avalanche: "avalanche-2",
+              avax: "avalanche-2",
+              polygon: "matic-network",
+              matic: "matic-network",
+              cosmos: "cosmos",
+              atom: "cosmos",
+              "near protocol": "near",
+              near: "near",
+              arbitrum: "arbitrum",
+              arb: "arbitrum",
+              optimism: "optimism",
+              op: "optimism",
+
+              // Major DeFi and Exchange tokens
+              binance: "binancecoin",
+              bnb: "binancecoin",
+              ripple: "ripple",
+              xrp: "ripple",
+              chainlink: "chainlink",
+              link: "chainlink",
+              uniswap: "uniswap",
+              uni: "uniswap",
+              aave: "aave",
+              maker: "maker",
+              mkr: "maker",
+              compound: "compound",
+              comp: "compound",
+              curve: "curve-dao-token",
+              crv: "curve-dao-token",
+
+              // Popular altcoins
+              dogecoin: "dogecoin",
+              doge: "dogecoin",
+              litecoin: "litecoin",
+              ltc: "litecoin",
+              tron: "tron",
+              trx: "tron",
+              "shiba inu": "shiba-inu",
+              shib: "shiba-inu",
+              pepe: "pepe",
+              stellar: "stellar",
+              xlm: "stellar",
+              monero: "monero",
+              xmr: "monero",
+              filecoin: "filecoin",
+              fil: "filecoin",
+
+              // Stablecoins
+              tether: "tether",
+              usdt: "tether",
+              "usd coin": "usd-coin",
+              usdc: "usd-coin",
+              dai: "dai",
+              trueusd: "true-usd",
+              tusd: "true-usd",
+              frax: "frax",
+
+              // Gaming and Metaverse
+              "the sandbox": "the-sandbox",
+              sand: "the-sandbox",
+              decentraland: "decentraland",
+              mana: "decentraland",
+              "axie infinity": "axie-infinity",
+              axie: "axie-infinity",
+              gala: "gala",
+              illuvium: "illuvium",
+              ilv: "illuvium",
+              enjin: "enjincoin",
+              enj: "enjincoin",
+
+              // Additional tokens
+              sui: "sui",
+              celestia: "celestia",
+              tia: "celestia",
+              brett: "brett",
+              ultra: "ultra",
+              uos: "ultra",
+              singularitynet: "singularitynet",
+              agix: "singularitynet",
+              zklink: "zklink",
+              zkl: "zklink",
+              "official trump": "trump",
+              trump: "trump",
+              "trump digital trading card": "trump",
+              "trump nft": "trump",
+              "trump token": "trump",
+            };
+
+            // Try exact matches first
+            const exactMatch =
+              cleanName === coinId.toLowerCase() ||
+              extractedSymbol === coinId.toLowerCase() ||
+              directMappings[cleanName] === coinId.toLowerCase() ||
+              directMappings[extractedSymbol] === coinId.toLowerCase() ||
+              cleanName.replace(/\s+/g, "-") === coinId.toLowerCase() ||
+              coinId.toLowerCase().replace(/-/g, " ") === cleanName;
+
+            if (exactMatch) {
               const channel = item["channel name"];
               const count = project.total_count || 1;
               mentions.set(channel, (mentions.get(channel) || 0) + count);
+              console.log("Found exact match:", { channel, count });
+              return;
+            }
+
+            // Try direct mappings
+            const mappedId =
+              directMappings[cleanName] || directMappings[extractedSymbol];
+            if (mappedId === coinId.toLowerCase()) {
+              const channel = item["channel name"];
+              const count = project.total_count || 1;
+              mentions.set(channel, (mentions.get(channel) || 0) + count);
+              console.log("Found mapping match:", { channel, count });
+              return;
+            }
+
+            // Try partial matches with improved handling of hyphens and spaces
+            const coinIdLower = coinId.toLowerCase();
+            const cleanNameNoSpaces = cleanName.replace(/\s+/g, "-");
+            const coinIdNoHyphens = coinIdLower.replace(/-/g, " ");
+
+            if (
+              cleanName.includes(coinIdLower) ||
+              coinIdLower.includes(cleanName) ||
+              cleanNameNoSpaces.includes(coinIdLower) ||
+              coinIdLower.includes(cleanNameNoSpaces) ||
+              cleanName.includes(coinIdNoHyphens) ||
+              coinIdNoHyphens.includes(cleanName) ||
+              extractedSymbol === coinIdLower ||
+              coinIdLower === extractedSymbol
+            ) {
+              const channel = item["channel name"];
+              const count = project.total_count || 1;
+              mentions.set(channel, (mentions.get(channel) || 0) + count);
+              console.log("Found partial match:", { channel, count });
             }
           }
         });
       }
     });
 
-    return Array.from(mentions.entries())
+    const result = Array.from(mentions.entries())
       .map(([channel, count]) => ({
         channel,
         total_count: count,
       }))
       .sort((a, b) => b.total_count - a.total_count);
+
+    console.log("Final mentions:", result);
+    return result;
   }, [knowledge, coinId]);
 
   const table = useReactTable({

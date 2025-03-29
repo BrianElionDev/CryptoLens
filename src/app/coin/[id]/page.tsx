@@ -33,22 +33,13 @@ async function getCoinData(id: string | undefined) {
   if (!id) throw new Error("No coin ID provided");
 
   try {
-    // Check if it's a CMC ID (format: cmc-123)
-    const isCMC = id.startsWith("cmc-");
-    const cleanId = isCMC ? id.replace("cmc-", "") : id;
-
-    const url = `/api/coins/${cleanId}${isCMC ? "?source=cmc" : ""}`;
-
-    const res = await fetch(url, {
-      next: { revalidate: 60 }, // Cache for 60 seconds
-    });
-
-    if (!res.ok) {
-      throw new Error(`Failed to fetch coin: ${res.status} ${res.statusText}`);
+    const response = await fetch(`/api/coins/${id}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch coin data: ${response.status}`);
     }
-
-    return res.json();
+    return response.json();
   } catch (error) {
+    console.error("Error fetching coin data:", error);
     throw error;
   }
 }
@@ -316,7 +307,11 @@ export default function CoinPage({
             <CardTitle className="text-gray-200">Price Chart</CardTitle>
           </CardHeader>
           <CardContent>
-            <CoinChart coingecko_id={displayData.coingecko_id} />
+            <CoinChart
+              coingecko_id={displayData.coingecko_id}
+              cmc_id={displayData.cmc_id}
+              data_source={displayData.data_source}
+            />
           </CardContent>
         </Card>
       </div>
