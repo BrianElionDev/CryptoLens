@@ -4,7 +4,7 @@ interface ChatHistoryProps {
   chats: Array<{
     id: string;
     title: string;
-    createdAt: number;
+    created_at: string;
   }>;
   onSelectChat: (chatId: string) => void;
   onNewChat: () => void;
@@ -39,7 +39,7 @@ const ChatHistory = ({ chats, onSelectChat, onNewChat, activeChat }: ChatHistory
             >
               {chat.title || 'New Chat'}
               <div className="text-xs text-gray-500 mt-1">
-                {new Date(chat.createdAt).toLocaleDateString()}
+                {new Date(chat.created_at).toLocaleDateString()}
               </div>
             </button>
           ))}

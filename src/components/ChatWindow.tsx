@@ -19,47 +19,51 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
   const [showHistory, setShowHistory] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Load chats from Supabase
+  // Load chats from Supabase with proper ordering
   useEffect(() => {
     const loadChats = async () => {
-      const { data, error } = await supabase
-        .from('chats')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (data && !error) {
-        setChats(data.map(chat => ({
-          id: chat.id,
-          title: chat.title,
-          messages: chat.messages,
-          createdAt: new Date(chat.created_at).getTime()
-        })));
+      try {
+        console.log('Loading chats from Supabase...');
+        const { data, error } = await supabase
+          .from('chats')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        if (error) {
+          console.error('Error loading chats:', error);
+          return;
+        }
+
+        console.log('Loaded chats:', data);
+        
+        if (data) {
+          const formattedChats = data.map(chat => ({
+            id: chat.id,
+            title: chat.title || 'Untitled Chat',
+            messages: chat.messages || [],
+            created_at: chat.created_at
+          }));
+          setChats(formattedChats);
+          
+          // Set current chat if none selected
+          if (!currentChat && formattedChats.length > 0) {
+            setCurrentChat(formattedChats[0]);
+          }
+        }
+      } catch (error) {
+        console.error('Error in loadChats:', error);
       }
     };
     
     loadChats();
   }, []);
 
-  // Create a new chat if none exists
-  useEffect(() => {
-    if (!currentChat && chats.length === 0) {
-      const newChat = {
-        id: uuidv4(),
-        title: 'New Chat',
-        messages: [],
-        createdAt: Date.now()
-      };
-      setCurrentChat(newChat);
-      setChats([newChat]);
-    } else if (!currentChat && chats.length > 0) {
-      setCurrentChat(chats[0]);
-    }
-  }, [currentChat, chats]);
-
-  // Scroll to bottom of messages
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [currentChat?.messages]);
+  // Generate title from first message
+  const generateTitle = (message: string): string => {
+    return message.length > 30 
+      ? `${message.substring(0, 30)}...`
+      : message;
+  };
 
   const sendMessage = async () => {
     if (!input.trim() || !currentChat) return;
@@ -71,10 +75,14 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
       timestamp: Date.now()
     };
     
+    // Generate title if this is the first message
+    const isNewChat = currentChat.messages.length === 0;
+    const chatTitle = isNewChat ? generateTitle(input) : currentChat.title;
+    
     const updatedChat = {
       ...currentChat,
-      messages: [...currentChat.messages, userMessage],
-      title: currentChat.messages.length === 0 ? input.slice(0, 30) : currentChat.title
+      title: chatTitle,
+      messages: [...currentChat.messages, userMessage]
     };
     
     setCurrentChat(updatedChat);
@@ -82,6 +90,23 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
     setLoading(true);
     
     try {
+      console.log('Saving initial message to Supabase:', updatedChat);
+      // Save to Supabase immediately
+      const { error: initialError } = await supabase
+        .from('chats')
+        .upsert({
+          id: updatedChat.id,
+          title: chatTitle,
+          messages: updatedChat.messages,
+          created_at: new Date().toISOString()
+        });
+
+      if (initialError) {
+        console.error('Error saving initial message:', initialError);
+        return;
+      }
+
+      // Process response and update chat
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -108,18 +133,35 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
       
       setCurrentChat(finalChat);
       
-      // Update in Supabase
-      await supabase
+      console.log('Saving final chat to Supabase:', finalChat);
+      // Update final version in Supabase
+      const { error: finalError } = await supabase
         .from('chats')
         .upsert({
           id: finalChat.id,
-          title: finalChat.title,
+          title: chatTitle,
           messages: finalChat.messages,
-          created_at: new Date(finalChat.createdAt).toISOString()
+          created_at: new Date().toISOString()
         });
+
+      if (finalError) {
+        console.error('Error saving final chat:', finalError);
+        return;
+      }
+      
+      // Update local chat list
+      setChats(prevChats => {
+        const chatIndex = prevChats.findIndex(c => c.id === finalChat.id);
+        if (chatIndex !== -1) {
+          const newChats = [...prevChats];
+          newChats[chatIndex] = finalChat;
+          return newChats;
+        }
+        return [finalChat, ...prevChats];
+      });
       
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('Error in sendMessage:', error);
     } finally {
       setLoading(false);
     }
@@ -130,7 +172,7 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
       id: uuidv4(),
       title: 'New Chat',
       messages: [],
-      createdAt: Date.now()
+      created_at: new Date().toISOString()
     };
     setCurrentChat(newChat);
     setChats([newChat, ...chats]);
@@ -150,6 +192,27 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
       setShowHistory(false);
     }
   };
+
+  const saveChat = async (messages: Message[]) => {
+    try {
+      console.log('Attempting to save chat:', messages);
+      const { data, error } = await supabase
+        .from('chats')
+        .upsert({
+          messages: messages,
+          title: generateTitle(messages[0]?.content || 'New Chat'),
+          created_at: new Date().toISOString(),
+        });
+      
+      console.log('Supabase response:', { data, error });
+      
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error saving chat:', error);
+      throw error;
+    }
+  }
 
   return (
     <div className="fixed inset-0 bg-[#1A1B1E] bg-opacity-95 flex items-center justify-center z-50">
