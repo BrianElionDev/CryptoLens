@@ -781,7 +781,7 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
            <button onClick={onClose} className="p-2 rounded-md hover:bg-gray-700" aria-label="Close chat">...</button>
         </div>
         {/* Chat History Sidebar */}
-         {showHistory && <ChatHistory chats={chats} activeChatId={currentChat?.id || ''} onSelectChat={selectChat} onNewChat={startNewChat} onClose={() => setShowHistory(false)} />}
+         {showHistory && <ChatHistory chats={chats} activeChat={currentChat?.id || ''} onSelectChat={selectChat} onNewChat={startNewChat} onClose={() => setShowHistory(false)} />}
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
           {!currentChat || currentChat.messages.length === 0 ? (
