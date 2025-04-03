@@ -165,16 +165,18 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
         answer = result.answer;
         references = result.references;
       }
-      else if (/give me (?:the )?(?:summary|transcript) of (.+?)(?:$|\s*video)/i.test(input)) {
-        const titleMatch = input.match(/give me (?:the )?(?:summary|transcript) of (.+?)(?:$|\s*video)/i);
-        const videoTitle = titleMatch ? titleMatch[1].trim() : '';
-        const result = await getVideoContent(videoTitle);
+      else if (/give me a summary about (.+?)(?:$|\.|\?|topic)/i.test(input)) {
+        const topicMatch = input.match(/give me a summary about (.+?)(?:$|\.|\?|topic)/i);
+        const topic = topicMatch ? topicMatch[1].trim() : '';
+        console.log('Extracted topic for summary:', topic);
+        const result = await getTopicSummary(topic);
         answer = result.answer;
         references = result.references;
       }
       else if (/find videos(?:.+?)about (.+?)(?:$|\s*topic)/i.test(input)) {
-        const topicMatch = input.match(/find videos(?:.+?)about (.+?)(?:$|\s*topic)/i);
+        const topicMatch = input.match(/find videos(?:.+?)about (.+)$/i);
         const topic = topicMatch ? topicMatch[1].trim() : '';
+        console.log('Extracted topic for video search:', topic);
         const result = await getVideosByTopic(topic);
         answer = result.answer;
         references = result.references;
@@ -189,8 +191,9 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
         references = result.references;
       }
       else if (/give me a summary about (.+?)(?:$|\s*topic)?/i.test(input)) {
-        const topicMatch = input.match(/give me a summary about (.+?)(?:$|\s*topic)?/i);
+        const topicMatch = input.match(/give me a summary about (.+)$/i);
         const topic = topicMatch ? topicMatch[1].trim() : '';
+        console.log('Extracted topic for summary:', topic);
         const result = await getTopicSummary(topic);
         answer = result.answer;
         references = result.references;
@@ -279,6 +282,54 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
       setLoading(false);
     }
   };
+
+  // Function to generate embedding for the user's query text
+  async function getQueryEmbedding(queryText: string): Promise<number[] | null> {
+     try {
+       console.log(`Generating embedding for query: "${queryText}"`);
+       
+       // Add a timeout to the fetch request
+       const controller = new AbortController();
+       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+       
+       const { data, error } = await supabase.functions.invoke('generate-embedding', {
+         body: { inputText: queryText },
+         signal: controller.signal,
+       });
+       
+       // Clear the timeout
+       clearTimeout(timeoutId);
+       
+       if (error) {
+         console.error('Edge function invocation error:', error);
+         // Try to provide more details about the error
+         if (error.message.includes('FunctionsFetchError')) {
+           console.error('Function fetch error. This could indicate:');
+           console.error('1. The function is not deployed correctly');
+           console.error('2. There are network issues connecting to Supabase');
+           console.error('3. The OPENAI_API_KEY is missing or invalid on the server');
+         }
+         
+         // Implement a simplified fallback if needed
+         console.log('Using fallback method (no semantic search) due to embedding generation failure.');
+         return null;
+       }
+       
+       if (!data?.embedding) {
+         console.error('Invalid embedding data received:', data);
+         return null;
+       }
+       
+       console.log('Successfully received query embedding.');
+       return data.embedding;
+     } catch (error) {
+       console.error('Error getting query embedding:', error);
+       if (error instanceof DOMException && error.name === 'AbortError') {
+         console.error('Request timed out after 10 seconds');
+       }
+       return null;
+     }
+  }
 
   // Helper function to get recent videos (last 7 days)
   const getRecentVideos = async (count = 10) => {
@@ -438,45 +489,208 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
     }
   };
 
-  // Helper function to get summary about a topic
+  // Helper function to get summary about a topic (USING EMBEDDINGS)
   const getTopicSummary = async (topic: string) => {
     try {
       if (!topic) {
-        return {
-          answer: "Please specify a topic to summarize.",
-          references: []
-        };
+        return { answer: "Please specify a topic to summarize.", references: [] };
+      }
+
+      console.log(`Summarizing topic: "${topic}" using embeddings...`);
+      const queryEmbedding = await getQueryEmbedding(topic);
+      
+      // If we can't get embeddings, fall back to web search
+      if (!queryEmbedding) {
+        console.log('Embedding generation failed. Falling back to web search...');
+        return await webSearchFallback(topic);
+      }
+
+      // Fetch top N relevant videos using RPC based on embedding similarity
+      console.log('Finding relevant videos for summary...');
+      const { data: videos, error: rpcError } = await supabase.rpc('match_videos', {
+        query_embedding: queryEmbedding,
+        match_threshold: 0.70, // Lower threshold to get broader context for summary
+        match_count: 5      // Get top 5 videos for context
+      });
+
+      if (rpcError) {
+        console.error('RPC match_videos error:', rpcError);
+        // Fall back to web search if RPC fails
+        console.log('RPC call failed. Falling back to web search...');
+        return await webSearchFallback(topic);
+      }
+
+      if (!videos || videos.length === 0) {
+        console.log('No matching videos found via embeddings. Trying web search...');
+        return await webSearchFallback(topic);
+      }
+
+      console.log(`Found ${videos.length} relevant videos. Fetching details...`);
+      // Now fetch the full content (summary/transcript) for these matched videos
+      const videoIds = videos.map(v => v.id);
+      const { data: videoDetails, error: detailError } = await supabase
+        .from('knowledge')
+        .select('new_id, video_title, link, "channel name", date, summary, transcript')
+        .in('new_id', videoIds);
+
+      if (detailError) {
+        console.error('Error fetching video details:', detailError);
+        throw detailError;
+      }
+      if (!videoDetails) {
+        console.error('No details found for matched video IDs.');
+        return { answer: "Error fetching details for summary.", references: [] };
+      }
+
+      // *** START - LLM Summarization Placeholder ***
+      // In a real application, you would:
+      // 1. Combine the 'summary' or 'transcript' from 'videoDetails'
+      // 2. Send this combined context to an LLM (e.g., via another Edge Function/API route)
+      // 3. Use the LLM's response as the 'summarizedContent'
+
+      console.log('Preparing content for LLM summarization...');
+      let combinedTextForLLM = videoDetails
+        .map(v => `Video Title: ${v.video_title}\nChannel: ${v['channel name']}\nDate: ${new Date(v.date).toLocaleDateString()}\nContent: ${v.summary || v.transcript || 'No text content.'}`)
+        .join('\n\n---\n\n');
+
+      // Call our generate-summary Edge Function
+      console.log('Calling generate-summary Edge Function...');
+      let summarizedContent;
+      try {
+        const { data, error } = await supabase.functions.invoke('generate-summary', {
+          body: { 
+            topic: topic,
+            content: combinedTextForLLM 
+          },
+        });
+        
+        if (error) {
+          console.error('Error from summary function:', error);
+          // Fallback if the LLM summarization fails
+          summarizedContent = `Based on ${videoDetails.length} videos related to "${topic}":\n\n`;
+          videoDetails.forEach((video, index) => {
+            summarizedContent += `### Video ${index + 1}: ${video.video_title}\n`;
+            summarizedContent += `${(video.summary || video.transcript || 'No content available.').substring(0, 150)}...\n\n`;
+          });
+        } else {
+          // Use the LLM-generated summary
+          summarizedContent = data.summary;
+          console.log('Successfully received LLM-generated summary.');
+        }
+      } catch (error) {
+        console.error('Error calling summary function:', error);
+        // Fallback if the function call fails
+        summarizedContent = `Based on ${videoDetails.length} videos related to "${topic}":\n\n`;
+        videoDetails.forEach((video, index) => {
+          summarizedContent += `### Video ${index + 1}: ${video.video_title}\n`;
+          summarizedContent += `${(video.summary || video.transcript || 'No content available.').substring(0, 150)}...\n\n`;
+        });
+      }
+      // *** END - LLM Summarization Integration ***
+
+      // Format the final response using Markdown
+      let response = `## Summary about ${topic}\n\n${summarizedContent}\n\n### Referenced Videos\n\n`;
+      videoDetails.forEach((video, index) => {
+        const similarityScore = videos.find(v => v.id === video.new_id)?.similarity; // Find similarity score
+        response += `${index + 1}. **${video.video_title}** ${similarityScore ? `(Relevance: ${similarityScore.toFixed(2)})` : ''}\n`;
+        response += `   - **Channel**: ${video['channel name']}\n`;
+        response += `   - **Date**: ${new Date(video.date).toLocaleDateString()}\n\n`; // Adjusted spacing
+      });
+
+      const references = videoDetails.map(video => ({
+        title: video.video_title,
+        link: video.link,
+        date: new Date(video.date).toLocaleDateString()
+      }));
+
+      console.log('Summary generation complete.');
+      return { answer: response, references };
+
+    } catch (error) {
+      console.error('Error generating topic summary (embeddings): ', error);
+      return { answer: `I encountered an error summarizing "${topic}". Please check the logs.`, references: [] };
+    }
+  };
+
+  // Helper function for web search fallback (new function)
+  const webSearchFallback = async (topic: string) => {
+    try {
+      console.log(`Trying web search for: "${topic}"`);
+      
+      const response = await fetch('/api/web-search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query: topic }),
+      });
+      
+      if (!response.ok) {
+        console.error(`Web search failed with status: ${response.status}`);
+        // If web search fails, fall back to keyword search
+        console.log('Web search failed. Falling back to keyword search...');
+        return await getVideosByKeywords(topic);
       }
       
-      // Get videos containing the topic in transcript or summary
+      const data = await response.json();
+      
+      // Format the response
+      let answer = `## Information about ${topic}\n\n`;
+      answer += data.answer;
+      
+      // Add a section about source if there are references
+      if (data.references && data.references.length > 0) {
+        answer += `\n\n## Web Sources\n\n`;
+        data.references.forEach((ref: any, index: number) => {
+          answer += `${index + 1}. [${ref.title}](${ref.link})\n`;
+        });
+      }
+      
+      // Add a note about the information source
+      answer += `\n\n*Note: This information was retrieved from the web as of ${new Date().toLocaleDateString()} since no matching videos were found in our database.*`;
+      
+      return {
+        answer,
+        references: data.references || [],
+        // Add a flag to indicate this is from web search
+        isFromWeb: true
+      };
+    } catch (error) {
+      console.error('Error in web search fallback:', error);
+      // If web search fails with an exception, fall back to keyword search
+      console.log('Web search threw an exception. Falling back to keyword search...');
+      return await getVideosByKeywords(topic);
+    }
+  };
+
+  // Helper function for keyword-based topic summary (fallback when embeddings fail)
+  const getTopicSummaryByKeywords = async (topic: string) => {
+    try {
+      console.log(`Searching for "${topic}" using keyword search fallback...`);
+      
+      // Use ILIKE for simple text search (basic fallback)
       const { data, error } = await supabase
         .from('knowledge')
-        .select('video_title, link, "channel name", date, transcript, summary')
-        .or(`transcript.ilike.%${topic}%,summary.ilike.%${topic}%`)
-        .order('date', { ascending: false })
-        .limit(10);
+        .select('video_title, link, "channel name", date, summary, transcript')
+        .or(`summary.ilike.%${topic}%,transcript.ilike.%${topic}%,video_title.ilike.%${topic}%`)
+        .limit(5);
       
-      if (error) throw error;
+      if (error) {
+        console.error('Keyword search error:', error);
+        throw error;
+      }
       
       if (!data || data.length === 0) {
         return {
-          answer: `I couldn't find any information about "${topic}" in the recent videos. Please try a different topic.`,
+          answer: `I couldn't find any videos related to "${topic}". Try using different keywords.`,
           references: []
         };
       }
       
-      // Collect all relevant information
-      let allContent = data.map(video => video.summary || video.transcript || "").join(" ");
-      
-      // Simple summary extraction - in a real application, this would use LLM for synthesis
-      let summarizedContent = `Based on ${data.length} recent videos, here's what I found about ${topic}:\n\n`;
-      summarizedContent += `The topic "${topic}" appears in videos from channels like ${Array.from(new Set(data.map(v => v['channel name']))).join(", ")}. `;
-      summarizedContent += `Most recent coverage was on ${new Date(data[0].date).toLocaleDateString()}.`;
-      
-      // Format response with markdown
+      // Format markdown response
       let response = `## Summary about ${topic}\n\n`;
-      response += summarizedContent + "\n\n";
-      response += "### Referenced Videos\n\n";
+      response += `Found ${data.length} videos related to your topic through keyword search.\n\n`;
+      response += `### Videos about ${topic}\n\n`;
       
       data.forEach((video, index) => {
         response += `${index + 1}. **${video.video_title}**\n`;
@@ -490,47 +704,104 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
         date: new Date(video.date).toLocaleDateString()
       }));
       
-      return {
-        answer: response,
-        references
-      };
+      return { answer: response, references };
+      
     } catch (error) {
-      console.error('Error generating topic summary:', error);
-      return {
-        answer: `I encountered an error while summarizing information about "${topic}". Please try again later.`,
-        references: []
+      console.error('Error in keyword fallback search:', error);
+      return { 
+        answer: `I encountered an error while searching for information about "${topic}".`, 
+        references: [] 
       };
     }
   };
 
-  // Helper function to get videos by topic
+  // Helper function to get videos by topic (USING EMBEDDINGS)
   const getVideosByTopic = async (topic: string, count = 10) => {
     try {
       if (!topic) {
-        return {
-          answer: "Please specify a topic to find videos about.",
-          references: []
-        };
+        return { answer: "Please specify a topic to find videos about.", references: [] };
       }
+
+      console.log(`Searching videos about "${topic}" using embeddings...`);
+      const queryEmbedding = await getQueryEmbedding(topic);
       
+      // If embeddings failed, fall back to keyword search
+      if (!queryEmbedding) {
+        console.log('Embedding generation failed. Trying web search fallback...');
+        return await webSearchFallback(topic);
+      }
+
+      // Call the RPC function for similarity search
+      const { data, error } = await supabase.rpc('match_videos', {
+        query_embedding: queryEmbedding,
+        match_threshold: 0.75, // Similarity threshold (adjust as needed)
+        match_count: count
+      });
+
+      if (error) {
+        console.error('RPC match_videos error:', error);
+        // Fall back to web search if RPC fails
+        console.log('RPC call failed. Trying web search fallback...');
+        return await webSearchFallback(topic);
+      }
+
+      if (!data || data.length === 0) {
+        console.log('No matching videos found via embeddings. Trying web search...');
+        return await webSearchFallback(topic);
+      }
+
+      console.log(`Found ${data.length} videos via similarity search.`);
+      // Format response with markdown, including similarity score
+      let response = `## Videos about ${topic}\n\nBased on content similarity, here are the top results:\n\n`;
+      data.forEach((video, index) => {
+        response += `${index + 1}. **${video.video_title}** (Relevance: ${video.similarity.toFixed(2)})\n`;
+        response += `   - **Channel**: ${video.channel_name}\n`;
+        response += `   - **Date**: ${new Date(video.date).toLocaleDateString()}\n\n`; // Removed extra newline
+      });
+
+      const references = data.map(video => ({
+        title: video.video_title,
+        link: video.link,
+        date: new Date(video.date).toLocaleDateString()
+      }));
+
+      return { answer: response, references };
+
+    } catch (error) {
+      console.error('Error fetching videos by topic (embeddings):', error);
+      return { 
+        answer: `I encountered an error searching for videos about "${topic}". Please check the logs.`, 
+        references: [] 
+      };
+    }
+  };
+
+  // Helper function for keyword-based search (fallback when embeddings fail)
+  const getVideosByKeywords = async (topic: string, count = 10) => {
+    try {
+      console.log(`Searching for "${topic}" using keyword search fallback...`);
+      
+      // Use ILIKE for simple text search
       const { data, error } = await supabase
         .from('knowledge')
         .select('video_title, link, "channel name", date')
-        .or(`transcript.ilike.%${topic}%,summary.ilike.%${topic}%,video_title.ilike.%${topic}%`)
-        .order('date', { ascending: false })
+        .or(`summary.ilike.%${topic}%,transcript.ilike.%${topic}%,video_title.ilike.%${topic}%`)
         .limit(count);
       
-      if (error) throw error;
+      if (error) {
+        console.error('Keyword search error:', error);
+        throw error;
+      }
       
       if (!data || data.length === 0) {
         return {
-          answer: `I couldn't find any videos about "${topic}". Please try a different topic.`,
+          answer: `I couldn't find any videos related to "${topic}". Try using different keywords.`,
           references: []
         };
       }
       
-      // Format response with markdown
-      let response = `## Videos about ${topic}\n\n`;
+      // Format markdown response
+      let response = `## Videos about ${topic} (Keyword Search)\n\n`;
       
       data.forEach((video, index) => {
         response += `${index + 1}. **${video.video_title}**\n`;
@@ -544,15 +815,13 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
         date: new Date(video.date).toLocaleDateString()
       }));
       
-      return {
-        answer: response,
-        references
-      };
+      return { answer: response, references };
+      
     } catch (error) {
-      console.error('Error fetching videos by topic:', error);
-      return {
-        answer: `I encountered an error while searching for videos about "${topic}". Please try again later.`,
-        references: []
+      console.error('Error in keyword search:', error);
+      return { 
+        answer: `I encountered an error while searching for videos about "${topic}".`, 
+        references: [] 
       };
     }
   };

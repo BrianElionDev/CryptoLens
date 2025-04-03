@@ -1,15 +1,11 @@
-// Follow this setup guide to integrate the Deno language server with your editor:
-// https://deno.land/manual/getting_started/setup_your_environment
-// This enables autocomplete, go to definition, etc.
-
 // Setup type definitions for built-in Supabase Runtime APIs
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 
-console.log("Generate-embedding function started!")
+console.log("Generate-summary function started!")
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
-import { OpenAI } from 'https://deno.land/x/openai@v4.52.7/mod.ts'; // Use Deno compatible import
-import { corsHeaders } from '../_shared/cors.ts'; // Import CORS headers
+import { OpenAI } from 'https://deno.land/x/openai@v4.52.7/mod.ts'
+import { corsHeaders } from '../_shared/cors.ts'
 
 // Get OpenAI API key from environment variables
 const apiKey = Deno.env.get('OPENAI_API_KEY');
@@ -17,12 +13,10 @@ if (!apiKey) {
   console.error('OPENAI_API_KEY is not set in environment variables');
 }
 
-// Ensure OPENAI_API_KEY is set in your Supabase project's secrets
+// Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: apiKey,
 });
-
-const embeddingModel = "text-embedding-ada-002"; // Or your preferred model
 
 serve(async (req: Request) => {
   // Handle CORS preflight request
@@ -35,7 +29,7 @@ serve(async (req: Request) => {
   }
 
   try {
-    console.log('Received request to generate embedding');
+    console.log('Received request to generate summary');
     
     // Ensure the request method is POST
     if (req.method !== 'POST') {
@@ -50,13 +44,13 @@ serve(async (req: Request) => {
     }
 
     const requestData = await req.json();
-    const { inputText } = requestData;
+    const { topic, content } = requestData;
 
-    console.log('Processing input text:', inputText ? `"${inputText.substring(0, 50)}${inputText.length > 50 ? '...' : ''}"` : 'undefined');
+    console.log(`Processing summary request for topic: "${topic}"`);
 
-    if (!inputText) {
-      console.warn('Missing inputText in request body');
-      return new Response(JSON.stringify({ error: 'Missing inputText in request body' }), {
+    if (!topic || !content) {
+      console.warn('Missing required fields in request body');
+      return new Response(JSON.stringify({ error: 'Missing required fields: topic and content are required' }), {
         status: 400,
         headers: { 
           'Content-Type': 'application/json',
@@ -65,17 +59,45 @@ serve(async (req: Request) => {
       });
     }
 
-    // Generate the embedding
-    console.log(`Calling OpenAI API for embedding with model: ${embeddingModel}`);
-    const embeddingResponse = await openai.embeddings.create({
-      model: embeddingModel,
-      input: inputText,
+    // Create prompt for the summarization
+    const prompt = `
+I need you to create a coherent summary about "${topic}" based on the information from multiple videos.
+Below is content from ${content.split('---').length} different videos related to this topic.
+
+${content}
+
+Please provide:
+1. A comprehensive summary about "${topic}" based on these videos
+2. Key points and insights that seem most important
+3. Any consensus or disagreements between the videos on the topic
+
+Your summary should be well-structured with headings and bullet points where appropriate.
+Be objective and informative, highlight factual information, and avoid unnecessary repetition.
+Format your response in Markdown.
+`;
+
+    // Call OpenAI API for chat completion
+    console.log(`Calling OpenAI API for summarization...`);
+    const response = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+          content: "You are a helpful assistant that creates informative summaries from video content. Your summaries are objective, well-structured, and highlight the most important information."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      temperature: 0.5,
+      max_tokens: 1500,
     });
 
-    const embedding = embeddingResponse.data[0].embedding;
-    console.log(`Successfully generated embedding of length: ${embedding.length}`);
+    const summary = response.choices[0].message.content;
+    console.log(`Successfully generated summary (${summary.length} chars)`);
 
-    return new Response(JSON.stringify({ embedding }), {
+    return new Response(JSON.stringify({ summary }), {
       headers: {
         'Content-Type': 'application/json',
         ...corsHeaders
@@ -84,7 +106,7 @@ serve(async (req: Request) => {
     });
 
   } catch (error) {
-    console.error('Error generating embedding:', error);
+    console.error('Error generating summary:', error);
     // Detailed error logging
     if (error instanceof Error) {
       console.error('Error name:', error.name);
@@ -111,16 +133,4 @@ serve(async (req: Request) => {
       },
     });
   }
-});
-
-/* To invoke locally:
-
-  1. Run `supabase start` (see: https://supabase.com/docs/reference/cli/supabase-start)
-  2. Make an HTTP request:
-
-  curl -i --location --request POST 'http://127.0.0.1:54321/functions/v1/generate-embedding' \
-    --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0' \
-    --header 'Content-Type: application/json' \
-    --data '{"inputText":"Test embedding generation"}'
-
-*/
+}); 
