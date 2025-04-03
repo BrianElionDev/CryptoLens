@@ -387,23 +387,26 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
   async function getQueryEmbedding(queryText: string): Promise<number[] | null> {
      try {
        console.log(`Generating embedding for query: "${queryText}"`);
-       const controller = new AbortController();
-       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+       // Removed AbortController logic as it's not directly compatible with invoke
+       // const controller = new AbortController();
+       // const timeoutId = setTimeout(() => controller.abort(), 10000);
 
        const { data, error } = await supabase.functions.invoke('generate-embedding', {
          body: { inputText: queryText },
-         signal: controller.signal,
+         // signal: controller.signal, // Removed incompatible signal property
        });
-       clearTimeout(timeoutId);
+
+       // clearTimeout(timeoutId); // Removed timeout clearing
 
        if (error) {
          console.error('Edge function invocation error:', error);
-         // ... (keep existing detailed error logging) ...
+         // Keep detailed error logging
          if (error.message.includes('FunctionsFetchError')) {
             console.error('Function fetch error details...');
-         } else if (error.name === 'AbortError') {
+         } /* // Removed AbortError check as controller is removed
+         else if (error.name === 'AbortError') {
             console.error('Edge function request timed out.');
-         }
+         } */
          return null;
        }
        if (!data?.embedding || !Array.isArray(data.embedding)) {
@@ -412,11 +415,10 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
        }
        console.log('Successfully received query embedding.');
        return data.embedding;
-     } catch (error: unknown) { // Use unknown for caught errors
+     } catch (error: unknown) {
        console.error('Error getting query embedding:', error);
-       if (error instanceof Error && error.name === 'AbortError') {
-         console.error('Embedding request timed out after 10 seconds.');
-       }
+       // Removed AbortError check
+       // if (error instanceof Error && error.name === 'AbortError') { ... }
        return null;
      }
   }
