@@ -6,15 +6,6 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 );
 
-interface KnowledgeItem {
-  date: string;
-  transcript: string;
-  video_title: string;
-  "channel name": string;
-  link: string;
-  summary: string;
-}
-
 // Helper function to determine query type
 const getQueryType = (question: string): 'recent' | 'search' => {
   const recentPatterns = [
@@ -29,19 +20,18 @@ const getQueryType = (question: string): 'recent' | 'search' => {
   ) ? 'recent' : 'search';
 };
 
-// Helper function to format date for display
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', { 
-    year: 'numeric', 
-    month: 'short', 
-    day: 'numeric' 
+// Helper function to format date consistently
+const formatDate = (date: string) => {
+  return new Date(date).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
   });
-}
+};
 
 export async function POST(request: Request) {
   try {
-    const { question } = await request.json();
+    const { question, chatId } = await request.json();
     console.log('Received question:', question);
 
     const queryType = getQueryType(question);
@@ -142,4 +132,24 @@ You can find more details in the video references below.`;
       { status: 500 }
     );
   }
+}
+
+function formatSearchResponse(content: KnowledgeItem[], question: string): string {
+  // For specific video requests
+  if (question.toLowerCase().includes('video') && 
+      question.toLowerCase().includes('title')) {
+    return content
+      .map((item, index) => 
+        `${index + 1}. "${item.video_title}" (${formatDate(item.date)})`
+      )
+      .join('\n');
+  }
+
+  // For content-based questions
+  const mostRelevant = content[0];
+  return `Based on the video "${mostRelevant.video_title}" (${formatDate(mostRelevant.date)}):
+  
+${mostRelevant.summary}
+
+You can find more details in the video link provided below.`;
 } 
