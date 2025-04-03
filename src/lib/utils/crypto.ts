@@ -12,6 +12,8 @@ interface NormalizedCoinData extends CoinData {
 
 export async function fetchCryptoData(symbols: string[]): Promise<ApiResponse> {
   try {
+    console.log("Fetching data for symbols:", symbols);
+
     // Try CoinGecko first
     const geckoResponse = await fetch("/api/coingecko", {
       method: "POST",
@@ -22,10 +24,49 @@ export async function fetchCryptoData(symbols: string[]): Promise<ApiResponse> {
     });
 
     if (geckoResponse.ok) {
-      return await geckoResponse.json();
+      const geckoData = await geckoResponse.json();
+      const foundSymbols = new Set(
+        Object.keys(geckoData.data).map((s) => s.toLowerCase())
+      );
+      const missingSymbols = symbols.filter(
+        (s) => !foundSymbols.has(s.toLowerCase())
+      );
+
+      console.log("CoinGecko found symbols:", Array.from(foundSymbols));
+      console.log("Missing symbols to try with CMC:", missingSymbols);
+
+      // If all symbols found in CoinGecko, return the data
+      if (missingSymbols.length === 0) {
+        return geckoData;
+      }
+
+      // Try CMC for missing symbols
+      console.log("Trying CMC for missing symbols");
+      const cmcResponse = await fetch("/api/coinmarketcap", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          symbols: missingSymbols,
+          fallbackMode: true,
+          reason: "Symbols not found in CoinGecko",
+        }),
+      });
+
+      if (cmcResponse.ok) {
+        const cmcData = await cmcResponse.json();
+        console.log("CMC found data:", Object.keys(cmcData.data));
+        // Merge data from both APIs
+        return {
+          data: { ...geckoData.data, ...cmcData.data },
+          fromCache: geckoData.fromCache || cmcData.fromCache,
+          fromCMC: true,
+        };
+      }
     }
 
-    // If CoinGecko fails, try CMC as fallback
+    // If CoinGecko completely fails, try CMC as full fallback
     const cmcResponse = await fetch("/api/coinmarketcap", {
       method: "POST",
       headers: {

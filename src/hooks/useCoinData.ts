@@ -5,12 +5,6 @@ import type { KnowledgeItem } from "@/types/knowledge";
 import { toast } from "react-hot-toast";
 import { useRef, useEffect } from "react";
 
-interface CoinResponse {
-  data: CoinData[];
-  timestamp: number;
-  loadedCount?: number;
-}
-
 // Keep track of market data between renders
 const marketDataRef: { current: Record<string, CoinData> } = { current: {} };
 const loadedSymbolsRef: { current: Set<string> } = { current: new Set() };
@@ -45,7 +39,9 @@ export interface CoinData {
   price: number;
   volume_24h: number;
   percent_change_24h: number;
-  coingecko_id: string;
+  coingecko_id?: string;
+  cmc_id?: number;
+  data_source: "coingecko" | "cmc";
 }
 
 export interface CoinHistoryData {
@@ -61,10 +57,6 @@ export function useCoinData(
   refreshKey = 0,
   mode: "quick" | "full" = "full"
 ) {
-  const queryClient = useQueryClient();
-  const queryKey = ["coinData", symbols.sort().join(","), mode, refreshKey];
-  const allData: Record<string, CoinData> = { ...marketDataRef.current };
-
   // Extract dependencies for useEffect
   const symbolsKey = symbols.sort().join(",");
 
@@ -79,66 +71,91 @@ export function useCoinData(
     };
   }, [symbolsKey, symbols]);
 
-  const marketQuery = useQuery<CoinResponse, AxiosError>({
-    queryKey,
-    queryFn: async (): Promise<CoinResponse> => {
-      try {
-        const response = await axios.post<{
-          data: Record<string, CoinData>;
-        }>(
-          "/api/coingecko",
-          {
-            symbols,
-            mode,
-          },
-          { timeout: API_TIMEOUT }
-        );
-
-        // Clear previous data for these symbols
-        symbols.forEach((symbol) => {
-          const key = symbol.toLowerCase();
-          delete marketDataRef.current[key];
-          loadedSymbolsRef.current.delete(key);
-        });
-
-        Object.assign(allData, response.data.data);
-        Object.assign(marketDataRef.current, allData);
-
-        Object.values(allData).forEach((coin) =>
-          loadedSymbolsRef.current.add(coin.symbol.toLowerCase())
-        );
-
-        return {
-          data: Object.values(allData),
-          timestamp: Date.now(),
-          loadedCount: loadedSymbolsRef.current.size,
-        };
-      } catch (error) {
-        // If request fails, try to return cached data
-        const cachedData = queryClient.getQueryData<CoinResponse>(queryKey);
-        if (cachedData) {
-          return {
-            ...cachedData,
-            timestamp: Date.now(),
-          };
-        }
-        throw error;
-      }
+  // CoinGecko Query
+  const geckoQuery = useQuery<
+    {
+      data: Record<string, CoinData>;
+      timestamp: number;
+    },
+    AxiosError
+  >({
+    queryKey: ["coinGeckoData", symbolsKey, mode, refreshKey],
+    queryFn: async () => {
+      const response = await axios.post(
+        "/api/coingecko",
+        {
+          symbols,
+          mode,
+        },
+        { timeout: API_TIMEOUT }
+      );
+      return response.data;
     },
     staleTime: 10000,
     gcTime: 30000,
     refetchInterval: 15000,
-    refetchOnMount: true,
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
-    retry: false,
   });
 
+  // Get missing symbols from CoinGecko response
+  const foundInGecko = new Set(
+    Object.keys(geckoQuery.data?.data || {}).map((s) => s.toLowerCase())
+  );
+  const missingSymbols = symbols.filter(
+    (s) => !foundInGecko.has(s.toLowerCase())
+  );
+
+  // CMC Query - only runs for missing symbols
+  const cmcQuery = useQuery<
+    {
+      data: Record<string, CoinData>;
+      timestamp: number;
+    },
+    AxiosError
+  >({
+    queryKey: ["cmcData", missingSymbols.sort().join(","), mode, refreshKey],
+    queryFn: async () => {
+      if (missingSymbols.length === 0) {
+        return { data: {}, timestamp: Date.now() };
+      }
+      const response = await axios.post(
+        "/api/coinmarketcap",
+        {
+          symbols: missingSymbols,
+          fallbackMode: true,
+          reason: "Symbols not found in CoinGecko",
+        },
+        { timeout: API_TIMEOUT }
+      );
+      return response.data;
+    },
+    enabled: missingSymbols.length > 0,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    gcTime: 15 * 60 * 1000, // 15 minutes
+    refetchInterval: 15 * 60 * 1000, // 15 minutes
+  });
+
+  // Merge data from both queries
+  const mergedData = {
+    data: [
+      ...Object.values(geckoQuery.data?.data || {}),
+      ...Object.values(cmcQuery.data?.data || {}),
+    ],
+    timestamp: Math.max(
+      geckoQuery.data?.timestamp || 0,
+      cmcQuery.data?.timestamp || 0
+    ),
+    loadedCount: loadedSymbolsRef.current.size,
+  };
+
   return {
-    data: marketQuery.data,
-    isLoading: marketQuery.isLoading,
-    isError: marketQuery.isError,
-    isFetching: marketQuery.isFetching,
+    data: mergedData,
+    isLoading:
+      geckoQuery.isLoading || (missingSymbols.length > 0 && cmcQuery.isLoading),
+    isError:
+      geckoQuery.isError || (missingSymbols.length > 0 && cmcQuery.isError),
+    isFetching:
+      geckoQuery.isFetching ||
+      (missingSymbols.length > 0 && cmcQuery.isFetching),
   };
 }
 

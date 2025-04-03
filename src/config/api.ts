@@ -10,4 +10,9 @@ export const API_ENDPOINTS = {
     ENTRY: (id: string) => `${BASE_URL}/api/knowledge/${id}`,
   },
   COINGECKO: `${BASE_URL}/api/coingecko`,
+  CMC: `${BASE_URL}/api/coinmarketcap`,
+  CATEGORIES: {
+    LIST: `${BASE_URL}/api/categories`,
+    DETAIL: (id: string) => `${BASE_URL}/api/categories/${id}`,
+  },
 } as const;

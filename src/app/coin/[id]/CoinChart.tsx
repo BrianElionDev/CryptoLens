@@ -13,6 +13,7 @@ import {
 
 interface CoinChartProps {
   coingecko_id: string;
+  data_source?: string;
 }
 
 interface CandlestickData {
@@ -32,28 +33,38 @@ interface CoinHistoryData {
 }
 
 async function getCoinHistory(id: string, days: string) {
-  const res = await fetch(`/api/coins/${id}/history?days=${days}`);
-  if (!res.ok) {
-    const error = await res.json();
+  const response = await fetch(`/api/coins/${id}/history?days=${days}`);
+  if (!response.ok) {
+    const error = await response.json();
     throw new Error(error.error || "Failed to fetch history");
   }
-  return res.json();
+  return response.json();
 }
 
-export default function CoinChart({ coingecko_id }: CoinChartProps) {
+export default function CoinChart({
+  coingecko_id,
+  data_source,
+}: Omit<CoinChartProps, "cmc_id">) {
   const [timeframe, setTimeframe] = useState("1");
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  const [days, setDays] = useState("1");
+
+  const handleTimeframeChange = (value: string) => {
+    setTimeframe(value);
+    setDays(value);
+  };
 
   const {
     data: chartData,
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["coinHistory", coingecko_id, timeframe],
-    queryFn: () => getCoinHistory(coingecko_id, timeframe),
+    queryKey: ["coin-history", coingecko_id, days],
+    queryFn: () => getCoinHistory(coingecko_id, days),
     staleTime: 60 * 1000,
     retry: 2,
+    enabled: !!coingecko_id && data_source !== "cmc",
   });
 
   useEffect(() => {
@@ -65,7 +76,7 @@ export default function CoinChart({ coingecko_id }: CoinChartProps) {
         textColor: "#94a3b8",
       },
       width: chartContainerRef.current.clientWidth,
-      height: 500,
+      height: chartContainerRef.current.clientHeight,
       timeScale: {
         timeVisible: true,
         secondsVisible: false,
@@ -141,11 +152,51 @@ export default function CoinChart({ coingecko_id }: CoinChartProps) {
     };
   }, [chartData]);
 
+  if (data_source === "cmc") {
+    return (
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+          <h3 className="text-lg font-semibold text-gray-200">Price History</h3>
+          <Tabs defaultValue={timeframe} onValueChange={handleTimeframeChange}>
+            <TabsList className="bg-gray-900/60">
+              <TabsTrigger
+                value="1"
+                className="data-[state=active]:bg-gray-800"
+              >
+                24h
+              </TabsTrigger>
+              <TabsTrigger
+                value="7"
+                className="data-[state=active]:bg-gray-800"
+              >
+                7d
+              </TabsTrigger>
+              <TabsTrigger
+                value="30"
+                className="data-[state=active]:bg-gray-800"
+              >
+                30d
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+        <div className="h-[400px] w-full min-w-[400px] relative rounded-lg border border-gray-800 bg-gray-900/50 p-4 flex items-center justify-center">
+          <div className="text-center text-gray-400">
+            <p>Historical data is not available in the free version of CMC</p>
+            <p className="text-sm mt-2">
+              Please upgrade to CMC Pro for historical data
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold text-gray-200">Price History</h3>
-        <Tabs defaultValue={timeframe} onValueChange={setTimeframe}>
+        <Tabs defaultValue={timeframe} onValueChange={handleTimeframeChange}>
           <TabsList className="bg-gray-900/60">
             <TabsTrigger value="1" className="data-[state=active]:bg-gray-800">
               24h
@@ -169,10 +220,7 @@ export default function CoinChart({ coingecko_id }: CoinChartProps) {
             {error.message}
           </div>
         ) : (
-          <div
-            ref={chartContainerRef}
-            className="w-full h-full absolute inset-0"
-          />
+          <div ref={chartContainerRef} className="w-full h-full" />
         )}
       </div>
     </div>

@@ -18,6 +18,11 @@ const nextConfig: NextConfig = {
         hostname: "coin-images.coingecko.com",
         pathname: "/**",
       },
+      {
+        protocol: "https",
+        hostname: "s2.coinmarketcap.com",
+        pathname: "/static/img/coins/**",
+      },
     ],
   },
   typescript: {
