@@ -1,5 +1,3 @@
-import { NextRequest } from 'next/server';
-
 // Interface for the web search response
 export interface WebSearchResult {
   query: string;
