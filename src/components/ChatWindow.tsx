@@ -528,8 +528,8 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
 
             let response = `## Summary about ${topic}\n\n${summarizedContent}\n\n### Referenced Videos (from Database)\n\n`;
             videoDetails.forEach((video, index) => {
-              const similarityScore = videos.find((v: { id: string }) => v.id === video.new_id)?.similarity;
-              response += `${index + 1}. **${video.video_title}** ...\n`;
+              // const similarityScore = videos.find((v: { id: string }) => v.id === video.new_id)?.similarity; // Removed as unused
+              response += `${index + 1}. **${video.video_title}** ...\n`; // Simplified output
             });
             const references: WebSearchResultReference[] = videoDetails.map(video => ({ title: video.video_title, link: video.link, date: new Date(video.date).toLocaleDateString() }));
             console.log('Summary generation from database complete.');
@@ -744,7 +744,7 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
         return { answer: `No videos found for channel "${channelName}".`, references: [] };
       }
       const video = data[0];
-      let response = `## Latest Video from ${video['channel name']}\n\n**${video.video_title}**\n...`; // Abbreviated
+      const response = `## Latest Video from ${video['channel name']}\n\n**${video.video_title}**\n...`; // Abbreviated
       const references: WebSearchResultReference[] = [{ title: video.video_title, link: video.link, date: new Date(video.date).toLocaleDateString() }];
       return { answer: response, references };
     } catch (error) {

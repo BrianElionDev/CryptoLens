@@ -31,7 +31,7 @@ const formatDate = (date: string) => {
 
 export async function POST(request: Request) {
   try {
-    const { question, chatId } = await request.json();
+    const { question } = await request.json();
     console.log('Received question:', question);
 
     const queryType = getQueryType(question);
@@ -132,24 +132,4 @@ You can find more details in the video references below.`;
       { status: 500 }
     );
   }
-}
-
-function formatSearchResponse(content: KnowledgeItem[], question: string): string {
-  // For specific video requests
-  if (question.toLowerCase().includes('video') && 
-      question.toLowerCase().includes('title')) {
-    return content
-      .map((item, index) => 
-        `${index + 1}. "${item.video_title}" (${formatDate(item.date)})`
-      )
-      .join('\n');
-  }
-
-  // For content-based questions
-  const mostRelevant = content[0];
-  return `Based on the video "${mostRelevant.video_title}" (${formatDate(mostRelevant.date)}):
-  
-${mostRelevant.summary}
-
-You can find more details in the video link provided below.`;
 } 

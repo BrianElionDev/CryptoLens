@@ -1,4 +1,5 @@
-import { NextRequest } from 'next/server';
+// Remove unused import
+// import { NextRequest } from 'next/server';
 
 // Interface for the web search response
 export interface WebSearchResult {
