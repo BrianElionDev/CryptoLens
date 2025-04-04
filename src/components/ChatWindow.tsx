@@ -773,10 +773,13 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black bg-opacity-60 backdrop-blur-sm sm:items-center">
-      <div className="relative flex flex-col w-full max-w-2xl h-[85vh] max-h-[700px] bg-gray-800 text-gray-100 rounded-lg shadow-xl overflow-hidden mx-4 mb-4 sm:mb-0">
+      <div className="relative flex flex-col w-full max-w-4xl h-[85vh] max-h-[700px] bg-gray-800 text-gray-100 rounded-lg shadow-xl overflow-hidden mx-4 mb-4 sm:mb-0">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
-           <button onClick={() => setShowHistory(!showHistory)} className="p-2 rounded-md hover:bg-gray-700" aria-label="Toggle chat history">...</button>
+           <button onClick={() => setShowHistory(!showHistory)} className="flex items-center gap-2 p-2 rounded-md hover:bg-gray-700 transition-colors" aria-label="Toggle chat history">
+             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+             <span className="text-sm">History</span>
+           </button>
           <h2 className="text-lg font-semibold truncate px-2">{currentChat?.title || 'Chat'}</h2>
            <button onClick={onClose} className="p-2 rounded-md hover:bg-gray-700" aria-label="Close chat">...</button>
         </div>
@@ -825,7 +828,10 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
         <div className="border-t border-gray-700 p-4 bg-gray-800">
           <div className="flex items-center gap-3">
             <textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }} onFocus={handleInputFocus} placeholder="Ask about video content..." className="flex-1 bg-gray-700 text-gray-100 rounded-lg px-4 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-700" rows={1} style={{ maxHeight: '100px', overflowY: 'auto' }} disabled={loading} />
-            <button type="button" onClick={sendMessage} disabled={loading || !input.trim()} className="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0" aria-label="Send message">...</button>
+            <button type="button" onClick={sendMessage} disabled={loading || !input.trim()} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0 flex items-center gap-2" aria-label="Send message">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+              <span>Send</span>
+            </button>
           </div>
         </div>
       </div>

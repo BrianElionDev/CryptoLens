@@ -37,7 +37,7 @@ export async function performWebSearch(query: string): Promise<WebSearchResult |
         'Authorization': `Bearer ${PERPLEXITY_API_KEY}`
       },
       body: JSON.stringify({
-        model: "sonar-medium-online", // This model has web search capabilities
+        model: "sonar-online",
         messages: [
           {
             role: "system", 
