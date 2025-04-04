@@ -4,6 +4,7 @@ import { QueryProvider } from "@/providers/QueryProvider";
 import { Toaster } from "react-hot-toast";
 import Navbar from "@/components/Navbar";
 import { CoinGeckoProvider } from "@/contexts/CoinGeckoContext";
+import ChatButton from '@/components/ChatButton';
 
 export const metadata: Metadata = {
   title: "CryptoLens",
@@ -57,6 +58,7 @@ export default function RootLayout({
                 },
               }}
             />
+            <ChatButton />
           </CoinGeckoProvider>
         </QueryProvider>
       </body>
