@@ -52,9 +52,7 @@ const columns: ColumnDef<ChannelMention>[] = [
 
 export default function ChannelMentionsTable({ coinId }: { coinId: string }) {
   const { data: knowledge, isLoading } = useKnowledgeData();
-
-  console.log("CoinId:", coinId);
-  console.log("Knowledge data:", knowledge);
+  const currentCoinId = coinId.toLowerCase();
 
   const channelMentions = useMemo(() => {
     if (!knowledge) return [];
@@ -77,31 +75,6 @@ export default function ChannelMentionsTable({ coinId }: { coinId: string }) {
               .replace(/\s*\(\$[^)]+\)/g, "")
               .toLowerCase()
               .trim();
-
-            console.log("Project:", {
-              original: project.coin_or_project,
-              cleanName,
-              extractedSymbol,
-              coinId: coinId.toLowerCase(),
-            });
-
-            // Special handling for Bitcoin
-            if (
-              cleanName === "bitcoin" ||
-              cleanName === "btc" ||
-              extractedSymbol === "btc"
-            ) {
-              if (
-                coinId.toLowerCase() === "bitcoin" ||
-                coinId.toLowerCase() === "btc"
-              ) {
-                const channel = item["channel name"];
-                const count = project.total_count || 1;
-                mentions.set(channel, (mentions.get(channel) || 0) + count);
-                console.log("Found Bitcoin match:", { channel, count });
-              }
-              return;
-            }
 
             // Direct mappings for common variations
             const directMappings: Record<string, string> = {
@@ -215,69 +188,42 @@ export default function ChannelMentionsTable({ coinId }: { coinId: string }) {
               "trump token": "trump",
             };
 
-            // Try exact matches first
-            const exactMatch =
-              cleanName === coinId.toLowerCase() ||
-              extractedSymbol === coinId.toLowerCase() ||
-              directMappings[cleanName] === coinId.toLowerCase() ||
-              directMappings[extractedSymbol] === coinId.toLowerCase() ||
-              cleanName.replace(/\s+/g, "-") === coinId.toLowerCase() ||
-              coinId.toLowerCase().replace(/-/g, " ") === cleanName;
+            // Map project names to standardized IDs
+            const projectCoinId = 
+              directMappings[cleanName] || 
+              directMappings[extractedSymbol] || 
+              cleanName.replace(/\s+/g, "-");
 
-            if (exactMatch) {
+            // Try exact matches
+            const isExactMatch = 
+              cleanName === currentCoinId ||
+              extractedSymbol === currentCoinId ||
+              projectCoinId === currentCoinId ||
+              cleanName.replace(/\s+/g, "-") === currentCoinId ||
+              currentCoinId.replace(/-/g, " ") === cleanName;
+
+            // Special case for Bitcoin
+            const isBitcoin = 
+              (currentCoinId === "bitcoin" || currentCoinId === "btc") && 
+              (cleanName === "bitcoin" || cleanName === "btc" || extractedSymbol === "btc");
+              
+            if (isExactMatch || isBitcoin) {
               const channel = item["channel name"];
-              const count = project.total_count || 1;
-              mentions.set(channel, (mentions.get(channel) || 0) + count);
-              console.log("Found exact match:", { channel, count });
-              return;
-            }
-
-            // Try direct mappings
-            const mappedId =
-              directMappings[cleanName] || directMappings[extractedSymbol];
-            if (mappedId === coinId.toLowerCase()) {
-              const channel = item["channel name"];
-              const count = project.total_count || 1;
-              mentions.set(channel, (mentions.get(channel) || 0) + count);
-              console.log("Found mapping match:", { channel, count });
-              return;
-            }
-
-            // Try partial matches with improved handling of hyphens and spaces
-            const coinIdLower = coinId.toLowerCase();
-            const cleanNameNoSpaces = cleanName.replace(/\s+/g, "-");
-            const coinIdNoHyphens = coinIdLower.replace(/-/g, " ");
-
-            if (
-              cleanName.includes(coinIdLower) ||
-              coinIdLower.includes(cleanName) ||
-              cleanNameNoSpaces.includes(coinIdLower) ||
-              coinIdLower.includes(cleanNameNoSpaces) ||
-              cleanName.includes(coinIdNoHyphens) ||
-              coinIdNoHyphens.includes(cleanName) ||
-              extractedSymbol === coinIdLower ||
-              coinIdLower === extractedSymbol
-            ) {
-              const channel = item["channel name"];
-              const count = project.total_count || 1;
-              mentions.set(channel, (mentions.get(channel) || 0) + count);
-              console.log("Found partial match:", { channel, count });
+              if (channel) {
+                const count = project.total_count || 1;
+                mentions.set(channel, (mentions.get(channel) || 0) + count);
+              }
             }
           }
         });
       }
     });
 
-    const result = Array.from(mentions.entries())
-      .map(([channel, count]) => ({
-        channel,
-        total_count: count,
-      }))
+    // Convert to array and sort by count
+    return Array.from(mentions.entries())
+      .map(([channel, total_count]) => ({ channel, total_count }))
       .sort((a, b) => b.total_count - a.total_count);
-
-    console.log("Final mentions:", result);
-    return result;
-  }, [knowledge, coinId]);
+  }, [knowledge, currentCoinId]);
 
   const table = useReactTable({
     data: channelMentions,
@@ -287,43 +233,15 @@ export default function ChannelMentionsTable({ coinId }: { coinId: string }) {
 
   if (isLoading) {
     return (
-      <Card className="bg-gray-800/50 border-gray-700/50 backdrop-blur-sm hover:bg-gray-800/70 transition-all duration-300">
+      <Card className="bg-black/40 backdrop-blur-sm border-purple-500/20 hover:bg-black/60 transition-all duration-300">
         <CardHeader>
-          <CardTitle className="text-gray-200">Channel Mentions</CardTitle>
+          <CardTitle className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
+            Loading Mentions...
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-center h-32">
-            <div className="w-8 h-8 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (!knowledge || knowledge.length === 0) {
-    return (
-      <Card className="bg-gray-800/50 border-gray-700/50 backdrop-blur-sm hover:bg-gray-800/70 transition-all duration-300">
-        <CardHeader>
-          <CardTitle className="text-gray-200">Channel Mentions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center text-gray-400 py-8">
-            No knowledge data available
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (channelMentions.length === 0) {
-    return (
-      <Card className="bg-gray-800/50 border-gray-700/50 backdrop-blur-sm hover:bg-gray-800/70 transition-all duration-300">
-        <CardHeader>
-          <CardTitle className="text-gray-200">Channel Mentions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center text-gray-400 py-8">
-            No mentions found for this coin
+          <div className="h-52 flex items-center justify-center">
+            <div className="w-8 h-8 border-2 border-purple-500/20 border-t-purple-500 rounded-full animate-spin" />
           </div>
         </CardContent>
       </Card>
@@ -331,44 +249,43 @@ export default function ChannelMentionsTable({ coinId }: { coinId: string }) {
   }
 
   return (
-    <Card className="bg-gray-800/50 border-gray-700/50 backdrop-blur-sm hover:bg-gray-800/70 transition-all duration-300">
+    <Card className="bg-black/40 backdrop-blur-sm border-purple-500/20 hover:bg-black/60 transition-all duration-300">
       <CardHeader>
-        <CardTitle className="text-gray-200">Channel Mentions</CardTitle>
+        <CardTitle className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
+          Channel Mentions
+        </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="rounded-md border border-gray-800">
-          <Table>
-            <TableHeader>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow
-                  key={headerGroup.id}
-                  className="border-b border-gray-800 hover:bg-transparent"
-                >
-                  {headerGroup.headers.map((header) => (
-                    <TableHead
-                      key={header.id}
-                      className="text-gray-400 h-10 px-4"
-                    >
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody>
-              {table.getRowModel().rows?.length ? (
-                table.getRowModel().rows.map((row) => (
+        {channelMentions.length > 0 ? (
+          <div className="rounded-md overflow-hidden border border-gray-800">
+            <Table>
+              <TableHeader>
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => (
+                      <TableHead
+                        key={header.id}
+                        className="bg-gray-900/40 text-gray-400"
+                      >
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(
+                              header.column.columnDef.header,
+                              header.getContext()
+                            )}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableHeader>
+              <TableBody>
+                {table.getRowModel().rows.map((row) => (
                   <TableRow
                     key={row.id}
-                    className="border-b border-gray-800 hover:bg-gray-800/30"
+                    className="border-b border-gray-800 bg-black/20 hover:bg-black/40"
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} className="px-4 py-2">
+                      <TableCell key={cell.id}>
                         {flexRender(
                           cell.column.columnDef.cell,
                           cell.getContext()
@@ -376,20 +293,16 @@ export default function ChannelMentionsTable({ coinId }: { coinId: string }) {
                       </TableCell>
                     ))}
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={columns.length}
-                    className="h-24 text-center text-gray-500"
-                  >
-                    No channel mentions found
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          <div className="h-52 flex flex-col items-center justify-center gap-2 text-center">
+            <MessageSquare className="w-12 h-12 text-gray-500/40" />
+            <p className="text-gray-500">No mentions found in content</p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

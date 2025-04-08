@@ -9,6 +9,7 @@ import React from "react";
 import { useCoinGecko } from "@/contexts/CoinGeckoContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
 
 interface StatsModalProps {
   item: KnowledgeItem;
@@ -16,6 +17,7 @@ interface StatsModalProps {
 }
 
 export function StatsModal({ item, onClose }: StatsModalProps) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<
     "stats" | "summary" | "transcript"
   >("stats");
@@ -101,6 +103,14 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
   useEffect(() => {
     setCurrentMatchIndex(-1);
   }, [searchQuery]);
+
+  // Handle navigation to category page
+  const handleCategoryClick = (category: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const categoryId = category.toLowerCase().replace(/\s+/g, "-");
+    router.push(`/categories/${categoryId}`);
+    onClose(); // Close modal after navigation
+  };
 
   const renderLLMAnswer = () => {
     try {
@@ -202,7 +212,24 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
                                 : project.marketcap === "medium"
                                 ? "bg-yellow-900/50 text-yellow-300 border border-yellow-500/20"
                                 : "bg-red-900/50 text-red-300 border border-red-500/20"
-                            }`}
+                            } cursor-pointer hover:opacity-80 transition-opacity`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              try {
+                                // Store selected category in sessionStorage
+                                sessionStorage.setItem(
+                                  "selectedMarketCap",
+                                  project.marketcap.toLowerCase()
+                                );
+                              } catch (error) {
+                                console.error(
+                                  "Failed to set session storage:",
+                                  error
+                                );
+                              }
+                              router.push("/marketcap");
+                              onClose(); // Close modal after navigation
+                            }}
                           >
                             {project.marketcap}
                           </span>
@@ -230,7 +257,8 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
                             {project.category?.map((cat: string, i: number) => (
                               <span
                                 key={`${project.coin_or_project}-${cat}-${i}`}
-                                className="px-2 py-0.5 rounded-full text-xs bg-gray-900/50 text-gray-300 border border-gray-700/50"
+                                className="px-2 py-0.5 rounded-full text-xs bg-gray-900/50 text-gray-300 border border-gray-700/50 cursor-pointer hover:bg-blue-900/30 hover:text-blue-200 hover:border-blue-500/30 transition-colors"
+                                onClick={(e) => handleCategoryClick(cat, e)}
                               >
                                 {cat}
                               </span>

@@ -61,9 +61,12 @@ Accept: {{contentType}}
 
 {
   "video_title": "Test Video",
-  "channel_name": "Test Channel",
+  "channel name": "Test Channel",
   "transcript": "Test transcript content",
   "link": "https://example.com",
+  "date": "2024-01-01",
+  "model": "test",
+  "summary": "Test summary",
   "llm_answer": [{
     "projects": [{
       "coin_or_project": "BTC",

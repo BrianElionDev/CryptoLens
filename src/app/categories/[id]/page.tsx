@@ -5,7 +5,6 @@ import { useParams, useRouter } from "next/navigation";
 import { useKnowledgeData } from "@/hooks/useCoinData";
 import { KnowledgeItem, Project } from "@/types/knowledge";
 import { Card } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import {
   ArrowLeft,
@@ -29,7 +28,6 @@ import {
   Legend,
 } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
-import { notFound } from "next/navigation";
 import React from "react";
 import Image from "next/image";
 
@@ -37,8 +35,12 @@ interface CategoryDetailData {
   id: string;
   name: string;
   market_cap: number;
+  market_cap_change_24h: number;
   volume_24h: number;
+  content: string;
   top_3_coins: string[];
+  top_3_coins_id: string[];
+  updated_at: string;
 }
 
 interface CategoryAnalytics {
@@ -58,15 +60,16 @@ interface CategoryAnalytics {
   }[];
 }
 
-const COLORS = ["#4ade80", "#3b82f6", "#8b5cf6"];
-
 export default function CategoryDetailPage() {
   const params = useParams();
+  const router = useRouter();
+  const [previousPath, setPreviousPath] = useState<string | null>(null);
   const categoryId =
-    typeof params.id === "string" ? decodeURIComponent(params.id) : "";
+    typeof params.id === "string"
+      ? decodeURIComponent(params.id).replace(/\s+/g, "-").toLowerCase()
+      : "";
   const { data: knowledge = [], isLoading: knowledgeLoading } =
     useKnowledgeData();
-  const router = useRouter();
 
   const [categoryData, setCategoryData] = useState<CategoryDetailData | null>(
     null
@@ -77,25 +80,50 @@ export default function CategoryDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [hasFetched, setHasFetched] = useState(false);
 
-  // Special case mappings for known categories
-  const specialCategoryIDs = React.useMemo(
-    () =>
-      ({
-        "layer-1": "Layer 1",
-        "meme-token": "Meme",
-        "artificial-intelligence-ai": "AI",
-        "gaming-entertainment-social": "Gaming",
-        "decentralized-finance-defi": "DeFi",
-      } as Record<string, string>),
-    []
-  );
-
   // Get a display name for the category (for UI purposes)
   const displayName = useMemo(() => {
-    if (categoryData?.name) return categoryData.name;
-    if (specialCategoryIDs[categoryId]) return specialCategoryIDs[categoryId];
-    return categoryId;
-  }, [categoryId, categoryData, specialCategoryIDs]);
+    if (!categoryId) return "";
+
+    // Special case mappings for known categories
+    const specialCategoryIDs = {
+      "layer-1": "Layer 1",
+      "meme-token": "Meme Token",
+      "gaming-entertainment-social": "Gaming & Entertainment",
+      "artificial-intelligence-ai": "AI & Machine Learning",
+      "decentralized-finance-defi": "DeFi",
+    };
+
+    return (
+      specialCategoryIDs[categoryId as keyof typeof specialCategoryIDs] ||
+      categoryId
+    );
+  }, [categoryId]);
+
+  // Get back button text and link based on previous path
+  const backButtonInfo = useMemo(() => {
+    if (!previousPath)
+      return { text: "Back to Categories", href: "/categories" };
+
+    if (previousPath.includes("/coin/")) {
+      return { text: "Back to Coin", href: previousPath };
+    }
+    if (previousPath.includes("/categories")) {
+      return { text: "Back to Categories", href: "/categories" };
+    }
+    if (previousPath === "/") {
+      return { text: "Back to Home", href: "/" };
+    }
+    return { text: "Back", href: previousPath };
+  }, [previousPath]);
+
+  // Store previous path when component mounts
+  useEffect(() => {
+    const referrer = document.referrer;
+    if (referrer) {
+      const url = new URL(referrer);
+      setPreviousPath(url.pathname);
+    }
+  }, []);
 
   // Process knowledge data for this category
   const processKnowledgeData = useCallback(() => {
@@ -155,6 +183,19 @@ export default function CategoryDetailPage() {
         categoryVariants.add("defi");
         categoryVariants.add("finance");
         categoryVariants.add("decentralized finance");
+      } else if (
+        categoryId === "payment" ||
+        categoryData?.name?.toLowerCase().includes("payment")
+      ) {
+        categoryVariants.add("payment");
+        categoryVariants.add("payments");
+        categoryVariants.add("payment solution");
+        categoryVariants.add("payment solutions");
+        categoryVariants.add("payment protocol");
+        categoryVariants.add("transaction");
+        categoryVariants.add("remittance");
+        categoryVariants.add("cross-border");
+        categoryVariants.add("cross border");
       }
 
       knowledge.forEach((item: KnowledgeItem) => {
@@ -190,7 +231,14 @@ export default function CategoryDetailPage() {
                 (projectCat.includes("ai") ||
                   projectCat.includes("intelligence"))) ||
               (categoryId === "decentralized-finance-defi" &&
-                (projectCat.includes("defi") || projectCat.includes("finance")))
+                (projectCat.includes("defi") ||
+                  projectCat.includes("finance"))) ||
+              (categoryId === "payment" &&
+                (projectCat.includes("payment") ||
+                  projectCat.includes("transaction") ||
+                  projectCat.includes("remittance") ||
+                  projectCat.includes("cross-border") ||
+                  projectCat.includes("cross border")))
           );
 
           if (categoryMatches) {
@@ -236,6 +284,40 @@ export default function CategoryDetailPage() {
         .sort((a, b) => b.rpoints - a.rpoints)
         .slice(0, 20); // Top 20 coins
 
+      // Add payment-related coins for payment category if we don't have enough data
+      if (categoryId === "payment" && coinBreakdown.length < 5) {
+        // Common payment coins that should be included
+        const paymentCoins = [
+          "XRP (Ripple)",
+          "Stellar (XLM)",
+          "Dogecoin (DOGE)",
+          "Litecoin (LTC)",
+          "Dash",
+          "Bitcoin Cash (BCH)",
+          "Monero (XMR)",
+          "Nano",
+          "Terra Classic (LUNC)",
+          "Celo",
+        ];
+
+        // Add any missing payment coins
+        paymentCoins.forEach((coinName) => {
+          if (!coinData.has(coinName)) {
+            // If the coin doesn't exist in our data, add it with a small rpoints value
+            const newCoin = {
+              name: coinName,
+              rpoints: 1, // Small value to ensure they show up but below actual data
+              mentions: 1,
+            };
+            coinBreakdown.push(newCoin);
+            categoryCoins.add(coinName);
+          }
+        });
+
+        // Resort after adding additional coins
+        coinBreakdown.sort((a, b) => b.rpoints - a.rpoints);
+      }
+
       const analytics = {
         coins: Array.from(categoryCoins),
         totalRpoints: Math.round(totalRpoints * 100) / 100,
@@ -258,50 +340,119 @@ export default function CategoryDetailPage() {
     // Skip if no category ID or if we've already fetched
     if (!categoryId || hasFetched) return;
 
-    async function fetchCategoryData() {
+    const fetchCategoryData = async () => {
       try {
         setIsLoading(true);
+        setError(null); // Reset any previous errors
 
         // Mark as fetched to prevent loops
         setHasFetched(true);
 
+        // Map our category IDs to CoinGecko's category IDs
+        const coingeckoCategoryMapping: Record<string, string> = {
+          // Direct mappings to CoinGecko category IDs
+          payment: "payment-solutions",
+          staking: "staking-pool",
+          gaming: "gaming",
+          "gaming-entertainment-social": "gaming",
+          infrastructure: "infrastructure",
+          oracle: "oracle",
+          scaling: "scaling",
+          "layer-2": "layer-2",
+          privacy: "privacy-coins",
+          "privacy-coins": "privacy-coins",
+          "meme-token": "meme-token",
+          nft: "non-fungible-tokens-nft",
+          "non-fungible-tokens-nft": "non-fungible-tokens-nft",
+          "decentralized-finance-defi": "decentralized-finance-defi",
+          "artificial-intelligence-ai": "artificial-intelligence",
+          "layer-1": "layer-1",
+          "exchange-token": "centralized-exchange-token-cex",
+        };
+
+        // Use the mapped category ID if available, otherwise use the original
+        const coingeckoCategoryId =
+          coingeckoCategoryMapping[categoryId] || categoryId;
+
         const response = await fetch(
-          `https://api.coingecko.com/api/v3/coins/categories/${encodeURIComponent(
-            categoryId
-          )}`,
+          `https://api.coingecko.com/api/v3/coins/categories/${coingeckoCategoryId}`,
           {
             cache: "no-store",
+            headers: {
+              Accept: "application/json",
+            },
           }
         );
 
         if (response.status === 404) {
-          notFound();
+          setError(`Category "${categoryId}" not found on CoinGecko.`);
+          return;
+        }
+
+        if (response.status === 429) {
+          setError(
+            "CoinGecko API rate limit reached. Please try again in a few minutes."
+          );
+          return;
+        }
+
+        if (response.status === 503) {
+          setError(
+            "CoinGecko API is currently unavailable. Please try again later."
+          );
           return;
         }
 
         if (!response.ok) {
-          // Handle other error codes like rate limiting (429) or server errors (500)
-          if (response.status === 429 || response.status === 503) {
-            setError("CoinGecko API is rate limited. Please try again later.");
-          } else {
-            setError(`Failed to load category data (${response.status})`);
-          }
+          setError(
+            `Failed to load category data (${response.status}). Please try again later.`
+          );
           return;
         }
 
         const data = await response.json();
+
+        // Validate the response data
+        if (!data || typeof data !== "object") {
+          setError(
+            "Invalid response from CoinGecko API. Please try again later."
+          );
+          return;
+        }
+
+        // Special handling for payment category if CoinGecko returns empty data
+        if (Object.keys(data).length === 0 && categoryId === "payment") {
+          // Create synthetic data for payment category if API returns empty
+          const syntheticPaymentData = {
+            id: "payment-solutions",
+            name: "Payment Solutions",
+            coins: [
+              // Add popular payment coins manually
+              { id: "bitcoin", name: "Bitcoin", symbol: "btc" },
+              { id: "litecoin", name: "Litecoin", symbol: "ltc" },
+              { id: "ripple", name: "XRP", symbol: "xrp" },
+              { id: "stellar", name: "Stellar", symbol: "xlm" },
+              { id: "nano", name: "Nano", symbol: "xno" },
+              { id: "dash", name: "Dash", symbol: "dash" },
+            ],
+          };
+
+          return syntheticPaymentData;
+        }
+
         setCategoryData(data);
-      } catch {
+      } catch (error) {
+        console.error("Error fetching category data:", error);
         setError(
-          "Failed to load category data. Please try refreshing the page."
+          "Failed to load category data. Please check your connection and try again."
         );
       } finally {
         setIsLoading(false);
       }
-    }
+    };
 
     fetchCategoryData();
-  }, [categoryId, hasFetched]); // Simplified dependencies
+  }, [categoryId, hasFetched]);
 
   // Process analytics when data changes - separate from fetch
   useEffect(() => {
@@ -321,9 +472,9 @@ export default function CategoryDetailPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen pt-24 bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900 relative">
+      <div className="min-h-screen pt-24 bg-gradient-to-br from-black via-green-900/20 to-black relative overflow-hidden">
         <div className="container mx-auto px-4 md:px-6 lg:px-20 py-8">
-          <div className="p-6 bg-gray-800/80 backdrop-blur-md border border-red-500/30 rounded-xl">
+          <div className="p-6 bg-black/80 backdrop-blur-md border border-red-500/30 rounded-xl">
             <h2 className="text-xl font-bold text-red-400 mb-2">Error</h2>
             <p className="text-gray-300">{error}</p>
             <div className="mt-4">
@@ -335,7 +486,7 @@ export default function CategoryDetailPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="border-blue-600/30 text-blue-400 hover:bg-blue-900/20"
+                    className="border-green-500/30 text-green-400 hover:bg-green-500/10"
                   >
                     Layer 1
                   </Button>
@@ -344,7 +495,7 @@ export default function CategoryDetailPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="border-purple-600/30 text-purple-400 hover:bg-purple-900/20"
+                    className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
                   >
                     Meme Coins
                   </Button>
@@ -353,7 +504,7 @@ export default function CategoryDetailPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="border-green-600/30 text-green-400 hover:bg-green-900/20"
+                    className="border-teal-500/30 text-teal-400 hover:bg-teal-500/10"
                   >
                     Gaming
                   </Button>
@@ -362,7 +513,7 @@ export default function CategoryDetailPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="border-pink-600/30 text-pink-400 hover:bg-pink-900/20"
+                    className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
                   >
                     AI
                   </Button>
@@ -370,7 +521,11 @@ export default function CategoryDetailPage() {
               </div>
             </div>
             <Link href="/categories" className="mt-6 inline-block">
-              <Button variant="outline" size="sm">
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-gray-500/30 text-gray-400 hover:bg-gray-500/10"
+              >
                 <ArrowLeft className="h-4 w-4 mr-2" /> Back to Categories
               </Button>
             </Link>
@@ -387,14 +542,15 @@ export default function CategoryDetailPage() {
   // Show a user-friendly message if no data was found for this category
   if (!categoryData) {
     return (
-      <div className="min-h-screen pt-24 bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900 relative">
+      <div className="min-h-screen pt-24 bg-gradient-to-br from-black via-green-900/20 to-black relative overflow-hidden">
         <div className="container mx-auto px-4 md:px-6 lg:px-20 py-8">
-          <div className="p-6 bg-gray-800/80 backdrop-blur-md border border-yellow-500/30 rounded-xl">
+          <div className="p-6 bg-black/80 backdrop-blur-md border border-yellow-500/30 rounded-xl">
             <h2 className="text-xl font-bold text-yellow-400 mb-2">
               No Data Found
             </h2>
             <p className="text-gray-300">
-              We couldn&apos;t find the category you&apos;re looking for.
+              We&apos;re looking for &quot;{categoryId}&quot; but couldn&apos;t
+              find it.
             </p>
             <div className="mt-4">
               <p className="text-sm text-gray-400 mb-4">
@@ -405,7 +561,7 @@ export default function CategoryDetailPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="border-blue-600/30 text-blue-400 hover:bg-blue-900/20"
+                    className="border-green-500/30 text-green-400 hover:bg-green-500/10"
                   >
                     Layer 1
                   </Button>
@@ -414,7 +570,7 @@ export default function CategoryDetailPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="border-purple-600/30 text-purple-400 hover:bg-purple-900/20"
+                    className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
                   >
                     Meme Coins
                   </Button>
@@ -423,7 +579,7 @@ export default function CategoryDetailPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="border-green-600/30 text-green-400 hover:bg-green-900/20"
+                    className="border-teal-500/30 text-teal-400 hover:bg-teal-500/10"
                   >
                     Gaming
                   </Button>
@@ -432,7 +588,7 @@ export default function CategoryDetailPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="border-pink-600/30 text-pink-400 hover:bg-pink-900/20"
+                    className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
                   >
                     AI
                   </Button>
@@ -440,7 +596,11 @@ export default function CategoryDetailPage() {
               </div>
             </div>
             <Link href="/categories" className="mt-6 inline-block">
-              <Button variant="outline" size="sm">
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-gray-500/30 text-gray-400 hover:bg-gray-500/10"
+              >
                 <ArrowLeft className="h-4 w-4 mr-2" /> Back to Categories
               </Button>
             </Link>
@@ -573,30 +733,30 @@ export default function CategoryDetailPage() {
   }
 
   return (
-    <div className="min-h-screen pt-24 bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900 relative overflow-hidden">
+    <div className="min-h-screen pt-24 bg-gradient-to-br from-black via-green-900/20 to-black relative overflow-hidden">
       {/* Background Animation */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
         <div className="absolute -inset-[10px] opacity-50">
-          <div className="absolute top-1/4 -left-20 w-[500px] h-[500px] bg-purple-500/30 rounded-full mix-blend-multiply filter blur-xl" />
-          <div className="absolute top-1/3 -right-20 w-[600px] h-[600px] bg-cyan-500/30 rounded-full mix-blend-multiply filter blur-xl" />
-          <div className="absolute -bottom-32 left-1/3 w-[600px] h-[600px] bg-pink-500/30 rounded-full mix-blend-multiply filter blur-xl" />
+          <div className="absolute top-1/4 -left-20 w-[500px] h-[500px] bg-green-500/20 rounded-full mix-blend-multiply filter blur-xl" />
+          <div className="absolute top-1/3 -right-20 w-[600px] h-[600px] bg-emerald-500/20 rounded-full mix-blend-multiply filter blur-xl" />
+          <div className="absolute -bottom-32 left-1/3 w-[600px] h-[600px] bg-teal-500/20 rounded-full mix-blend-multiply filter blur-xl" />
         </div>
-        <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 via-gray-900/50 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent" />
         <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
       </div>
 
       <div className="container mx-auto px-4 md:px-6 lg:px-20 py-8 relative z-10">
         <div className="mb-8">
-          <Link href="/categories">
+          <Link href={backButtonInfo.href}>
             <Button
               variant="ghost"
               size="sm"
-              className="mb-4 text-gray-300 hover:text-white hover:bg-gray-800/50"
+              className="mb-4 text-gray-300 hover:text-green-300 hover:bg-green-500/10"
             >
-              <ArrowLeft className="h-4 w-4 mr-2" /> Back to Categories
+              <ArrowLeft className="h-4 w-4 mr-2" /> {backButtonInfo.text}
             </Button>
           </Link>
-          <h1 className="text-3xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500">
+          <h1 className="text-3xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-green-400 via-emerald-500 to-teal-500">
             {displayName}
           </h1>
           {categoryData && (
@@ -607,24 +767,33 @@ export default function CategoryDetailPage() {
           )}
         </div>
 
+        {/* Description */}
+        {categoryData?.content && (
+          <div className="mb-8">
+            <p className="text-gray-300 max-w-3xl text-lg leading-relaxed ">
+              {categoryData.content}
+            </p>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <MetricCard
             title="Total rPoints"
             value={categoryAnalytics?.totalRpoints || 0}
-            icon={<TrendingUp className="h-5 w-5 text-blue-400" />}
-            color="blue"
+            icon={<TrendingUp className="h-5 w-5 text-green-400" />}
+            color="green"
           />
           <MetricCard
             title="Total Mentions"
             value={categoryAnalytics?.mentions || 0}
-            icon={<Users className="h-5 w-5 text-purple-400" />}
-            color="purple"
+            icon={<Users className="h-5 w-5 text-emerald-400" />}
+            color="emerald"
           />
           <MetricCard
             title="Unique Coins"
             value={categoryAnalytics?.coins.length || 0}
-            icon={<Hash className="h-5 w-5 text-pink-400" />}
-            color="pink"
+            icon={<Hash className="h-5 w-5 text-teal-400" />}
+            color="teal"
           />
           <MetricCard
             title="Recent Activity"
@@ -635,296 +804,272 @@ export default function CategoryDetailPage() {
           />
         </div>
 
-        <Tabs defaultValue="analytics" className="w-full">
-          <TabsList className="mb-6 bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 p-1">
-            <TabsTrigger
-              value="analytics"
-              className="data-[state=active]:bg-blue-900/50 data-[state=active]:text-blue-100"
-            >
-              Analytics
-            </TabsTrigger>
-            <TabsTrigger
-              value="coins"
-              className="data-[state=active]:bg-purple-900/50 data-[state=active]:text-purple-100"
-            >
-              Top Coins
-            </TabsTrigger>
-            {categoryData?.top_3_coins && (
-              <TabsTrigger
-                value="coingecko"
-                className="data-[state=active]:bg-cyan-900/50 data-[state=active]:text-cyan-100"
-              >
-                CoinGecko Data
-              </TabsTrigger>
-            )}
-          </TabsList>
+        {/* Analytics Section */}
+        <div className="space-y-8">
+          {/* CoinGecko Data */}
+          {categoryData && (
+            <Card className="p-6 bg-black/80 backdrop-blur-sm ring-2 ring-cyan-500/20 hover:ring-cyan-500/30 transition-all duration-300">
+              <h3 className="text-lg font-medium mb-4 text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-teal-400">
+                CoinGecko Category Data
+              </h3>
 
-          <TabsContent
-            value="analytics"
-            className="focus-visible:outline-none focus-visible:ring-0"
-          >
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              <Card className="p-6 bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 hover:border-blue-500/30 transition-all duration-300">
-                <h3 className="text-lg font-medium mb-4 text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-400">
-                  Market Cap Distribution
-                </h3>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={[
-                          {
-                            name: "Large Cap",
-                            value:
-                              categoryAnalytics?.marketCapDistribution.large ||
-                              0,
-                          },
-                          {
-                            name: "Medium Cap",
-                            value:
-                              categoryAnalytics?.marketCapDistribution.medium ||
-                              0,
-                          },
-                          {
-                            name: "Small Cap",
-                            value:
-                              categoryAnalytics?.marketCapDistribution.small ||
-                              0,
-                          },
-                        ]}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        paddingAngle={5}
-                        dataKey="value"
-                        label={({ name, percent }) =>
-                          percent > 0.05
-                            ? `${name}: ${(percent * 100).toFixed(0)}%`
-                            : ""
-                        }
-                      >
-                        {COLORS.map((color, index) => (
-                          <Cell key={`cell-${index}`} fill={color} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value) => [`${value} coins`, ""]} />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </Card>
-
-              <Card className="p-6 bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 hover:border-purple-500/30 transition-all duration-300">
-                <h3 className="text-lg font-medium mb-4 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
-                  Top Coins by rPoints
-                </h3>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={categoryAnalytics?.coinBreakdown.slice(0, 10) || []}
-                      layout="vertical"
-                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                    >
-                      <XAxis type="number" />
-                      <YAxis
-                        dataKey="name"
-                        type="category"
-                        width={100}
-                        tick={{ fontSize: 12 }}
-                      />
-                      <Tooltip
-                        formatter={(value) => [`${value} rPoints`, ""]}
-                      />
-                      <Bar
-                        dataKey="rpoints"
-                        fill="#3b82f6"
-                        radius={[0, 4, 4, 0]}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </Card>
-            </div>
-          </TabsContent>
-
-          <TabsContent
-            value="coins"
-            className="focus-visible:outline-none focus-visible:ring-0"
-          >
-            <div className="grid grid-cols-1 gap-4">
-              <Card className="p-6 bg-gray-800/50 backdrop-blur-sm border border-gray-700/50">
-                <h3 className="text-lg font-medium mb-4 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
-                  Top Coins in {categoryData?.name || categoryId}
-                </h3>
-                {!categoryAnalytics?.coinBreakdown.length ? (
-                  <p className="text-gray-400 py-4 text-center">
-                    No coins found for this category in our knowledge data.
+              {/* Market Stats Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="bg-black/60 rounded-lg p-4 ring-2 ring-cyan-500/20">
+                  <h4 className="text-sm text-gray-400 mb-1">Market Cap</h4>
+                  <p className="text-xl font-medium text-cyan-300">
+                    ${formatNumber(categoryData?.market_cap)}
                   </p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr className="border-b border-gray-700">
-                          <th className="text-left py-3 px-4 text-gray-300">
-                            Coin
-                          </th>
-                          <th className="text-right py-3 px-4 text-gray-300">
-                            rPoints
-                          </th>
-                          <th className="text-right py-3 px-4 text-gray-300">
-                            Total Mentions
-                          </th>
-                          <th className="text-right py-3 px-4 text-gray-300">
-                            Actions
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {categoryAnalytics.coinBreakdown.map((coin) => {
-                          // Calculate total mentions across all videos
-                          const totalMentions = knowledge.reduce(
-                            (total, item) => {
-                              if (item.llm_answer?.projects) {
-                                const projects = Array.isArray(
-                                  item.llm_answer.projects
-                                )
-                                  ? item.llm_answer.projects
-                                  : [item.llm_answer.projects];
+                  <p
+                    className={`text-sm ${
+                      (categoryData?.market_cap_change_24h ?? 0) >= 0
+                        ? "text-green-400"
+                        : "text-red-400"
+                    }`}
+                  >
+                    {(categoryData?.market_cap_change_24h ?? 0) >= 0 ? "+" : ""}
+                    {(categoryData?.market_cap_change_24h ?? 0).toFixed(2)}% 24h
+                  </p>
+                </div>
+                <div className="bg-black/60 rounded-lg p-4 ring-2 ring-cyan-500/20">
+                  <h4 className="text-sm text-gray-400 mb-1">24h Volume</h4>
+                  <p className="text-xl font-medium text-teal-300">
+                    ${formatNumber(categoryData?.volume_24h)}
+                  </p>
+                </div>
+                <div className="bg-black/60 rounded-lg p-4 ring-2 ring-cyan-500/20">
+                  <h4 className="text-sm text-gray-400 mb-1">Last Updated</h4>
+                  <p className="text-xl font-medium text-emerald-300">
+                    {new Date(
+                      categoryData?.updated_at ?? ""
+                    ).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
 
-                                return (
-                                  total +
-                                  projects.reduce((sum, project) => {
-                                    const symbolMatch =
-                                      project.coin_or_project?.match(
-                                        /\(\$([^)]+)\)/
-                                      );
-                                    const symbol = symbolMatch
-                                      ? symbolMatch[1].toLowerCase()
-                                      : "";
-                                    const cleanName = project.coin_or_project
-                                      .replace(/\s*\(\$[^)]+\)/g, "")
-                                      .toLowerCase()
-                                      .trim();
-                                    const key = symbol || cleanName;
-
-                                    if (key === coin.name.toLowerCase()) {
-                                      return sum + (project.total_count || 1);
-                                    }
-                                    return sum;
-                                  }, 0)
-                                );
-                              }
-                              return total;
-                            },
-                            0
-                          );
-
-                          return (
-                            <tr
-                              key={coin.name}
-                              className="border-b border-gray-800 hover:bg-gray-800/50 cursor-pointer transition-colors"
-                              onClick={() => {
-                                const cleanName = coin.name
-                                  .toLowerCase()
-                                  .trim();
-                                const safeId = cleanName
-                                  .replace(/[^\w\s-]/g, "")
-                                  .replace(/\s+/g, "-");
-                                router.push(`/coin/${safeId}`);
-                              }}
-                            >
-                              <td className="py-3 px-4 font-medium text-gray-100">
-                                {coin.name}
-                              </td>
-                              <td className="py-3 px-4 text-right text-blue-300">
-                                {coin.rpoints}
-                              </td>
-                              <td className="py-3 px-4 text-right text-purple-300">
-                                {totalMentions.toLocaleString()}
-                              </td>
-                              <td className="py-3 px-4 text-right">
-                                <Link
-                                  href={`/coin/${coin.name
-                                    .toLowerCase()
-                                    .replace(/[^\w\s-]/g, "")
-                                    .replace(/\s+/g, "-")}`}
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="text-gray-300 hover:text-white hover:bg-gray-700/50"
-                                  >
-                                    View{" "}
-                                    <ExternalLink className="h-3 w-3 ml-1" />
-                                  </Button>
-                                </Link>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+              {/* Top 3 Coins */}
+              {categoryData?.top_3_coins &&
+                categoryData.top_3_coins.length > 0 && (
+                  <div className="mt-6">
+                    <h4 className="text-sm text-gray-400 mb-4">Top 3 Coins</h4>
+                    <div className="flex flex-wrap gap-4">
+                      {categoryData.top_3_coins.map((coinImageUrl, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center bg-black/60 p-3 rounded-lg ring-2 ring-cyan-500/20"
+                        >
+                          <Image
+                            src={coinImageUrl}
+                            alt={`${categoryData.top_3_coins_id[index]} coin`}
+                            width={48}
+                            height={48}
+                            className="rounded-full"
+                            style={{ height: "auto" }}
+                          />
+                          <span className="ml-3 text-gray-300 capitalize">
+                            {categoryData.top_3_coins_id[index]}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
-              </Card>
-            </div>
-          </TabsContent>
+            </Card>
+          )}
 
-          <TabsContent
-            value="coingecko"
-            className="focus-visible:outline-none focus-visible:ring-0"
-          >
-            {categoryData?.top_3_coins &&
-            categoryData.top_3_coins.length > 0 ? (
-              <Card className="p-6 bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 hover:border-cyan-500/30 transition-all duration-300">
-                <h3 className="text-lg font-medium mb-4 text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">
-                  Top 3 Coins by CoinGecko
-                </h3>
-                <div className="flex flex-wrap gap-4 mb-6">
-                  {categoryData.top_3_coins.map((coinImageUrl, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center bg-gray-900/60 p-3 rounded-lg border border-gray-700/50"
+          {/* Market Cap Distribution and Top Coins by rPoints */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Market Cap Distribution */}
+            <Card className="p-6 bg-black/80 backdrop-blur-sm ring-2 ring-green-500/20 hover:ring-green-500/30 transition-all duration-300">
+              <h3 className="text-lg font-medium mb-4 text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-400">
+                Market Cap Distribution
+              </h3>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={[
+                        {
+                          name: "Large Cap",
+                          value:
+                            categoryAnalytics?.marketCapDistribution.large || 0,
+                        },
+                        {
+                          name: "Medium Cap",
+                          value:
+                            categoryAnalytics?.marketCapDistribution.medium ||
+                            0,
+                        },
+                        {
+                          name: "Small Cap",
+                          value:
+                            categoryAnalytics?.marketCapDistribution.small || 0,
+                        },
+                      ]}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      paddingAngle={5}
+                      dataKey="value"
+                      label={({ name, percent }) =>
+                        percent > 0.05
+                          ? `${name}: ${(percent * 100).toFixed(0)}%`
+                          : ""
+                      }
                     >
-                      <Image
-                        src={coinImageUrl}
-                        alt={`Top ${index + 1} coin`}
-                        width={48}
-                        height={48}
-                        className="rounded-full w-auto h-auto"
-                        style={{ width: "48px", height: "48px" }}
-                      />
-                    </div>
-                  ))}
-                </div>
+                      {["#4ade80", "#10b981", "#059669"].map((color, index) => (
+                        <Cell key={`cell-${index}`} fill={color} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => [`${value} coins`, ""]} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
-                  <div className="bg-gray-900/60 rounded-lg p-4 border border-gray-700/50">
-                    <h4 className="text-sm text-gray-400 mb-1">Market Cap</h4>
-                    <p className="text-xl font-medium text-green-300">
-                      ${formatNumber(categoryData?.market_cap)}
-                    </p>
-                  </div>
-                  <div className="bg-gray-900/60 rounded-lg p-4 border border-gray-700/50">
-                    <h4 className="text-sm text-gray-400 mb-1">24h Volume</h4>
-                    <p className="text-xl font-medium text-cyan-300">
-                      ${formatNumber(categoryData?.volume_24h)}
-                    </p>
-                  </div>
-                </div>
-              </Card>
+            {/* Top Coins by rPoints */}
+            <Card className="p-6 bg-black/80 backdrop-blur-sm ring-2 ring-emerald-500/20 hover:ring-emerald-500/30 transition-all duration-300">
+              <h3 className="text-lg font-medium mb-4 text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-green-400">
+                Top Coins by rPoints
+              </h3>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={categoryAnalytics?.coinBreakdown.slice(0, 10) || []}
+                    layout="vertical"
+                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                  >
+                    <XAxis type="number" />
+                    <YAxis
+                      dataKey="name"
+                      type="category"
+                      width={100}
+                      tick={{ fontSize: 12 }}
+                    />
+                    <Tooltip formatter={(value) => [`${value} rPoints`, ""]} />
+                    <Bar
+                      dataKey="rpoints"
+                      fill="#4ade80"
+                      radius={[0, 4, 4, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
+          </div>
+
+          {/* Top Coins Table */}
+          <Card className="p-6 bg-black/80 backdrop-blur-sm ring-2 ring-teal-500/20 hover:ring-teal-500/30 transition-all duration-300">
+            <h3 className="text-lg font-medium mb-4 text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-emerald-400">
+              Top Coins in {categoryData?.name || categoryId}
+            </h3>
+            {!categoryAnalytics?.coinBreakdown.length ? (
+              <p className="text-gray-400 py-4 text-center">
+                No coins found for this category in our knowledge data.
+              </p>
             ) : (
-              <Card className="p-6 bg-gray-800/50 backdrop-blur-sm border border-gray-700/50">
-                <p className="text-gray-400 py-4 text-center">
-                  No CoinGecko data available for this category.
-                </p>
-              </Card>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b border-teal-500/20">
+                      <th className="text-left py-3 px-4 text-gray-300">
+                        Coin
+                      </th>
+                      <th className="text-right py-3 px-4 text-gray-300">
+                        rPoints
+                      </th>
+                      <th className="text-right py-3 px-4 text-gray-300">
+                        Total Mentions
+                      </th>
+                      <th className="text-right py-3 px-4 text-gray-300">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {categoryAnalytics.coinBreakdown.map((coin) => {
+                      const totalMentions = knowledge.reduce((total, item) => {
+                        if (item.llm_answer?.projects) {
+                          const projects = Array.isArray(
+                            item.llm_answer.projects
+                          )
+                            ? item.llm_answer.projects
+                            : [item.llm_answer.projects];
+
+                          return (
+                            total +
+                            projects.reduce((sum, project) => {
+                              const symbolMatch =
+                                project.coin_or_project?.match(/\(\$([^)]+)\)/);
+                              const symbol = symbolMatch
+                                ? symbolMatch[1].toLowerCase()
+                                : "";
+                              const cleanName = project.coin_or_project
+                                .replace(/\s*\(\$[^)]+\)/g, "")
+                                .toLowerCase()
+                                .trim();
+                              const key = symbol || cleanName;
+
+                              if (key === coin.name.toLowerCase()) {
+                                return sum + (project.total_count || 1);
+                              }
+                              return sum;
+                            }, 0)
+                          );
+                        }
+                        return total;
+                      }, 0);
+
+                      return (
+                        <tr
+                          key={coin.name}
+                          className="border-b border-teal-500/10 hover:bg-teal-500/5 cursor-pointer transition-colors"
+                          onClick={() => {
+                            const cleanName = coin.name.toLowerCase().trim();
+                            const safeId = cleanName
+                              .replace(/[^\w\s-]/g, "")
+                              .replace(/\s+/g, "-");
+                            router.push(`/coin/${safeId}`);
+                          }}
+                        >
+                          <td className="py-3 px-4 font-medium text-gray-100">
+                            {coin.name}
+                          </td>
+                          <td className="py-3 px-4 text-right text-teal-300">
+                            {coin.rpoints}
+                          </td>
+                          <td className="py-3 px-4 text-right text-emerald-300">
+                            {totalMentions.toLocaleString()}
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <Link
+                              href={`/coin/${coin.name
+                                .toLowerCase()
+                                .replace(/[^\w\s-]/g, "")
+                                .replace(/\s+/g, "-")}`}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-gray-300 hover:text-teal-300 hover:bg-teal-500/10"
+                              >
+                                View <ExternalLink className="h-3 w-3 ml-1" />
+                              </Button>
+                            </Link>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
-          </TabsContent>
-        </Tabs>
+          </Card>
+        </div>
       </div>
     </div>
   );
@@ -932,7 +1077,7 @@ export default function CategoryDetailPage() {
 
 function LoadingState() {
   return (
-    <div className="min-h-screen pt-24 bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900 relative overflow-hidden">
+    <div className="min-h-screen pt-24 bg-gradient-to-br from-black via-green-900/20 to-black relative overflow-hidden">
       <div className="container mx-auto px-4 md:px-6 lg:px-20 py-8">
         <div className="mb-6">
           <Skeleton className="h-8 w-28 mb-4" />
@@ -946,7 +1091,7 @@ function LoadingState() {
             .map((_, i) => (
               <Card
                 key={i}
-                className="p-4 bg-gray-800/50 backdrop-blur-sm border border-gray-700/50"
+                className="p-4 bg-black/40 backdrop-blur-sm border border-green-500/20"
               >
                 <Skeleton className="h-5 w-24 mb-2" />
                 <Skeleton className="h-8 w-20" />
@@ -957,12 +1102,12 @@ function LoadingState() {
         <Skeleton className="h-10 w-full max-w-md mb-6" />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="p-4 bg-gray-800/50 backdrop-blur-sm border border-gray-700/50">
+          <Card className="p-4 bg-black/40 backdrop-blur-sm border border-green-500/20">
             <Skeleton className="h-6 w-48 mb-4" />
             <Skeleton className="h-64 w-full rounded-md" />
           </Card>
 
-          <Card className="p-4 bg-gray-800/50 backdrop-blur-sm border border-gray-700/50">
+          <Card className="p-4 bg-black/40 backdrop-blur-sm border border-green-500/20">
             <Skeleton className="h-6 w-48 mb-4" />
             <Skeleton className="h-64 w-full rounded-md" />
           </Card>
@@ -977,25 +1122,24 @@ function MetricCard({
   value,
   suffix,
   icon,
-  color = "blue",
+  color = "green",
 }: {
   title: string;
   value: number;
   suffix?: string;
   icon?: React.ReactNode;
-  color?: "blue" | "purple" | "pink" | "cyan";
+  color?: "green" | "emerald" | "teal" | "cyan";
 }) {
   const colorClasses = {
-    blue: "from-blue-600 to-blue-800 shadow-blue-500/20 border-blue-500/30",
-    purple:
-      "from-purple-600 to-purple-800 shadow-purple-500/20 border-purple-500/30",
-    pink: "from-pink-600 to-pink-800 shadow-pink-500/20 border-pink-500/30",
-    cyan: "from-cyan-600 to-cyan-800 shadow-cyan-500/20 border-cyan-500/30",
+    green: "ring-green-500/20 hover:ring-green-500/30",
+    emerald: "ring-emerald-500/20 hover:ring-emerald-500/30",
+    teal: "ring-teal-500/20 hover:ring-teal-500/30",
+    cyan: "ring-cyan-500/20 hover:ring-cyan-500/30",
   };
 
   return (
     <Card
-      className={`p-4 flex flex-col bg-gradient-to-br ${colorClasses[color]} backdrop-blur-sm shadow-lg border`}
+      className={`p-4 flex flex-col bg-black/80 backdrop-blur-sm ring-2 ${colorClasses[color]} transition-all duration-300`}
     >
       <div className="flex justify-between items-center mb-2">
         <h3 className="text-sm font-medium text-gray-200">{title}</h3>
