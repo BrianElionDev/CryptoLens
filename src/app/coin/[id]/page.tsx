@@ -90,6 +90,30 @@ function getMarketCapSize(marketCap: number): {
   }
 }
 
+// Format price with appropriate decimal places
+function formatPriceDisplay(price: number | undefined | null) {
+  if (price === undefined || price === null) return "N/A";
+
+  // For very small numbers, use more decimal places
+  if (price < 0.000001) return "$" + price.toFixed(10).replace(/\.?0+$/, "");
+  if (price < 0.00001) return "$" + price.toFixed(8).replace(/\.?0+$/, "");
+  if (price < 0.0001) return "$" + price.toFixed(7).replace(/\.?0+$/, "");
+  if (price < 0.001) return "$" + price.toFixed(6).replace(/\.?0+$/, "");
+  if (price < 0.01) return "$" + price.toFixed(5).replace(/\.?0+$/, "");
+  if (price < 0.1) return "$" + price.toFixed(4).replace(/\.?0+$/, "");
+  if (price < 1) return "$" + price.toFixed(3).replace(/\.?0+$/, "");
+  if (price < 10) return "$" + price.toFixed(2);
+
+  // For larger numbers use standard formatting
+  return (
+    "$" +
+    price.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })
+  );
+}
+
 export default function CoinPage({
   params,
 }: {
@@ -306,11 +330,7 @@ export default function CoinPage({
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-gray-200">
-                $
-                {displayData.price.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
+                {formatPriceDisplay(displayData.price)}
               </div>
             </CardContent>
           </Card>
