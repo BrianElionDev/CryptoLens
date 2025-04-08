@@ -1,4 +1,6 @@
 // Create new file for Categories tab
+import { useRouter } from "next/navigation";
+
 interface CategoriesTabProps {
   processedData: {
     categoryDistribution: { name: string; value: number }[];
@@ -16,6 +18,8 @@ export const CategoriesTab = ({
   processedData,
   selectedChannels,
 }: CategoriesTabProps) => {
+  const router = useRouter();
+
   const filteredCategories = processedData.categoryDistribution
     .filter((cat) =>
       processedData.coinCategories.some(
@@ -25,6 +29,12 @@ export const CategoriesTab = ({
       )
     )
     .sort((a, b) => b.value - a.value);
+
+  const handleCategoryClick = (category: string) => {
+    // Transform the category name into a URL-friendly ID format
+    const categoryId = category.toLowerCase().replace(/\s+/g, "-");
+    router.push(`/categories/${categoryId}`);
+  };
 
   return (
     <div className="space-y-8">
@@ -50,7 +60,8 @@ export const CategoriesTab = ({
               {filteredCategories.map((category, index) => (
                 <tr
                   key={`${category.name}-${index}`}
-                  className="border-b border-gray-800 hover:bg-gray-900/40 transition-colors"
+                  className="border-b border-gray-800 hover:bg-gray-900/40 transition-colors cursor-pointer"
+                  onClick={() => handleCategoryClick(category.name)}
                 >
                   <td className="py-4 px-6 text-sm text-gray-300">
                     {category.name}

@@ -28,12 +28,18 @@ interface CoinGeckoResponse {
   id: string;
   symbol: string;
   name: string;
+  categories: string[];
+  description: {
+    en: string;
+  };
   market_data: CoinGeckoMarketData;
   image: {
     large: string;
     small: string;
     thumb: string;
   };
+  sentiment_votes_up_percentage: number;
+  sentiment_votes_down_percentage: number;
 }
 
 export async function GET(
@@ -76,6 +82,37 @@ export async function GET(
           throw new Error("Coin not found in CMC response");
         }
 
+        // Try to get metadata (optional)
+        let description = "";
+        let tags = [];
+
+        try {
+          const metaResponse = await fetch(
+            `${CMC_API}/cryptocurrency/info?id=${cleanId}`,
+            {
+              headers: {
+                "X-CMC_PRO_API_KEY": CMC_API_KEY,
+                Accept: "application/json",
+              },
+              next: { revalidate: 86400 }, // Cache for 24 hours
+            }
+          );
+
+          if (metaResponse.ok) {
+            const metaData = await metaResponse.json();
+            const meta = metaData.data?.[cleanId];
+            if (meta) {
+              description = meta.description || "";
+              tags = meta.tags || [];
+              if (meta.category && !tags.includes(meta.category)) {
+                tags.unshift(meta.category);
+              }
+            }
+          }
+        } catch {
+          console.warn("Metadata fetch failed, continuing with basic data");
+        }
+
         // Get CoinGecko ID from symbol
         const symbol = coin.symbol.toLowerCase();
         const coinGeckoResponse = await fetch(
@@ -96,6 +133,8 @@ export async function GET(
           symbol: coin.symbol.toLowerCase(),
           name: coin.name,
           cmc_id: coin.id,
+          categories: tags,
+          description: { en: description },
           market_data: {
             current_price: {
               usd: coin.quote.USD.price,
@@ -118,6 +157,8 @@ export async function GET(
             small: `https://s2.coinmarketcap.com/static/img/coins/32x32/${coin.id}.png`,
             thumb: `https://s2.coinmarketcap.com/static/img/coins/16x16/${coin.id}.png`,
           },
+          sentiment_votes_up_percentage: 0,
+          sentiment_votes_down_percentage: 0,
           data_source: "cmc",
         });
       } catch (cmcError) {
@@ -148,22 +189,47 @@ export async function GET(
 
         const coinList = (await coinListResponse.json()) as CoinGeckoListItem[];
 
-        // Try to find the coin by symbol first
+        // First try to find exact match by ID, which is more reliable
         let coinGeckoCoin = coinList.find(
-          (c) => c.symbol.toLowerCase() === cleanId.toLowerCase()
+          (c) => c.id.toLowerCase() === cleanId.toLowerCase()
         );
 
-        // If not found by symbol, try by name
-        if (!coinGeckoCoin) {
+        // Well-known coins mapping to ensure we get the main coin
+        const wellKnownCoins: Record<string, string> = {
+          bitcoin: "bitcoin",
+          btc: "bitcoin",
+          ethereum: "ethereum",
+          eth: "ethereum",
+          tether: "tether",
+          usdt: "tether",
+        };
+
+        // Check if we have a well-known match
+        if (!coinGeckoCoin && wellKnownCoins[cleanId.toLowerCase()]) {
+          const wellKnownId = wellKnownCoins[cleanId.toLowerCase()];
           coinGeckoCoin = coinList.find(
-            (c) => c.name.toLowerCase() === cleanId.toLowerCase()
+            (c) => c.id.toLowerCase() === wellKnownId
           );
         }
 
-        // If still not found, try by ID
+        // If not found by ID, try to find by symbol
+        if (!coinGeckoCoin) {
+          // For symbols, we need to be more careful as many coins can have the same symbol
+          const symbolMatches = coinList.filter(
+            (c) => c.symbol.toLowerCase() === cleanId.toLowerCase()
+          );
+
+          if (symbolMatches.length > 0) {
+            // Prioritize main coins (shorter IDs are usually the main coins)
+            symbolMatches.sort((a, b) => a.id.length - b.id.length);
+            coinGeckoCoin = symbolMatches[0];
+          }
+        }
+
+        // If still not found, try by name
         if (!coinGeckoCoin) {
           coinGeckoCoin = coinList.find(
-            (c) => c.id.toLowerCase() === cleanId.toLowerCase()
+            (c) => c.name.toLowerCase() === cleanId.toLowerCase()
           );
         }
 
