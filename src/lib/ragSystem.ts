@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
-import { WebSearchResult } from './webSearch';
+import { OpenAIEmbeddings } from "@langchain/openai";
+import { SupabaseVectorStore } from "@langchain/community/vectorstores/supabase";
+import { performWebSearch } from './webSearch'; // Assuming webSearch now handles OpenAI directly
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -7,260 +9,383 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 );
 
-// Query classification types - now focused only on video-related queries
-export type QueryType = 
-  | 'video_summary' 
-  | 'video_transcript' 
-  | 'video_list' 
-  | 'channel_list' 
-  | 'web_search';
+// Initialize OpenAI Embeddings
+const embeddings = new OpenAIEmbeddings({ openAIApiKey: process.env.OPENAI_API_KEY });
 
-// Interface for RAG response
-export interface RAGResponse {
+// RAG Response Interface
+interface RAGResponse {
   answer: string;
-  references: {
-    title: string;
-    link: string;
-    snippet?: string;
-    date?: string;
-  }[];
-  source: 'database' | 'web' | 'hybrid';
+  references: any[];
+  source: 'database' | 'web' | 'hybrid' | 'none';
   confidence: number;
 }
 
-// Query classification patterns - updated for video-specific queries
-const queryPatterns: Record<QueryType, RegExp[]> = {
-  video_summary: [
-    /summarize|summary|overview of|tell me about/i,
-    /what is the summary of|give me a summary of/i
-  ],
-  video_transcript: [
-    /transcript|full text|complete text|entire content/i,
-    /show me the transcript of|what does it say in/i
-  ],
-  video_list: [
-    /list|show|find|search for videos|videos about/i,
-    /what videos are there about|show me videos/i
-  ],
-  channel_list: [
-    /channels|creators|youtubers|content creators/i,
-    /who makes|who creates|who produces/i
-  ],
-  web_search: [] // Default fallback for non-video queries
-};
+// Query Classification Types
+type QueryType = 
+  | 'list_channels'
+  | 'get_transcript'
+  | 'get_summary'
+  | 'check_channel'
+  | 'recent_channel_info'
+  | 'recent_video_info'
+  | 'video_search' // Existing general video search
+  | 'current_info' // Requires web search
+  | 'definition'   // Could be RAG or web
+  | 'tabular'      // Requires specific formatting, likely web/complex RAG
+  | 'investment'   // Likely requires web search
+  | 'channel_info' // Could be RAG (check_channel) or web
+  | 'generic';     // Fallback
 
-// Classify query type
-export function classifyQuery(query: string): QueryType {
-  for (const [type, patterns] of Object.entries(queryPatterns)) {
-    if (patterns.some(pattern => pattern.test(query))) {
-      return type as QueryType;
-    }
-  }
-  return 'web_search';
+// --- Helper: Query Classification ---
+function classifyQuery(query: string): QueryType {
+  query = query.toLowerCase();
+
+  if (/^(list|show|give|provide)\s*(me)?\s*(the)?\s*(unique|list of)?\s*(channel names?|creators|video creators)/.test(query)) return 'list_channels';
+  if (/^(what is|give me|show me|provide) (the )?transcript of (?:the video )?['"“](.+)['"”]$/.test(query)) return 'get_transcript';
+  if (/^(what is|give me|show me|provide) (the )?summary of (?:the video )?['"“](.+)['"”]$/.test(query)) return 'get_summary';
+  if (/^(do you have|is there information on|tell me about) (?:the channel )?['"“](.+)['"”]$/.test(query)) return 'check_channel'; // Might need refinement based on video title check
+  if (/^(what is the latest|recent info|sentiment on) (?:channel )?['"“](.+)['"”]$/.test(query)) return 'recent_channel_info';
+  if (/^(what is the latest|recent info|sentiment on) (?:video )?['"“](.+)['"”]$/.test(query)) return 'recent_video_info';
+  if (/(price|stock|market|trading|buy|sell|hold|investment recommendation)/.test(query)) return 'investment';
+  if (/^(what is|define) /.test(query)) return 'definition';
+  if (/^(compare|vs|versus|difference between)/.test(query)) return 'tabular'; // Or could be generic/web
+  if (/(latest|recent) videos?$/.test(query)) return 'video_search'; // Or a specific 'recent_videos' type
+  if (/(who are you|what can you do)/.test(query)) return 'generic'; // Or specific 'about_bot'
+
+  // Default classifications (can be refined)
+  if (/(how to|why|when|where)/.test(query) || query.endsWith('?')) return 'generic'; // Needs RAG/Web check
+  
+  return 'video_search'; // Default to searching video content
 }
 
-// Get embedding for query
-async function getQueryEmbedding(query: string): Promise<number[] | null> {
+// --- Helper: Database Search Functions ---
+
+async function searchWithEmbeddings(query: string, count = 3): Promise<any[]> {
   try {
-    const { data, error } = await supabase.functions.invoke('generate-embedding', {
-      body: { inputText: query }
+    const vectorStore = new SupabaseVectorStore(embeddings, {
+      client: supabase,
+      tableName: 'knowledge',
+      queryName: 'match_documents',
     });
+    const results = await vectorStore.similaritySearch(query, count);
 
-    if (error || !data?.embedding || !Array.isArray(data.embedding)) {
-      console.error('Embedding generation failed:', error);
-      return null;
-    }
+    // ---- DEBUGGING ----
+    console.log("Raw results from similaritySearch:", JSON.stringify(results, null, 2));
+    // ---- END DEBUGGING ----
 
-    return data.embedding;
+    // Map to desired reference format with corrected field names
+    return results.map(doc => {
+       // ---- DEBUGGING ----
+       console.log("Processing doc.metadata:", JSON.stringify(doc.metadata, null, 2));
+       // ---- END DEBUGGING ----
+       return {
+         title: doc.metadata?.video_title, // Add optional chaining just in case
+         channel_name: doc.metadata?.["channel name"], // Add optional chaining
+         link: doc.metadata?.link,
+         date: doc.metadata?.date,
+         created_at: doc.metadata?.created_at,
+         summary: doc.metadata?.summary,
+         similarity: (doc as any).similarity
+       };
+    });
   } catch (error) {
-    console.error('Error getting query embedding:', error);
-    return null;
+    console.error('Error searching with embeddings:', error);
+    return [];
   }
 }
 
-// Search database using embeddings
-async function searchWithEmbeddings(query: string, threshold = 0.7, count = 5): Promise<RAGResponse | null> {
-  const embedding = await getQueryEmbedding(query);
-  if (!embedding) return null;
-
-  try {
-    const { data, error } = await supabase.rpc('match_videos', {
-      query_embedding: embedding,
-      match_threshold: threshold,
-      match_count: count
-    });
-
-    if (error || !data || data.length === 0) {
-      console.error('Embedding search failed:', error);
-      return null;
-    }
-
-    const references = data.map((item: any) => ({
-      title: item.video_title,
-      link: item.link,
-      date: new Date(item.date).toLocaleDateString(),
-      snippet: item.summary?.substring(0, 150) || ''
-    }));
-
-    return {
-      answer: `Based on the video content, here's what I found:\n\n${data[0].summary || data[0].transcript?.substring(0, 300) || 'No summary available.'}`,
-      references,
-      source: 'database',
-      confidence: data[0].similarity || 0.7
-    };
-  } catch (error) {
-    console.error('Error in embedding search:', error);
-    return null;
-  }
-}
-
-// Search database using keywords
-async function searchWithKeywords(query: string, count = 5): Promise<RAGResponse | null> {
+async function getDistinctChannelNames(): Promise<string[]> {
   try {
     const { data, error } = await supabase
       .from('knowledge')
-      .select('video_title, link, "channel name", date, summary, transcript')
-      .or(`video_title.ilike.%${query}%,summary.ilike.%${query}%,transcript.ilike.%${query}%`)
-      .order('date', { ascending: false })
+      .select('channel_name');
+      
+    if (error) throw error;
+    if (!data) return [];
+
+    // Get unique names
+    const uniqueNames = [...new Set(data.map(item => item.channel_name).filter(Boolean))]; 
+    return uniqueNames;
+  } catch (error) {
+    console.error('Error fetching distinct channel names:', error);
+    return [];
+  }
+}
+
+async function getSpecificField(title: string, field: 'transcript' | 'summary'): Promise<string | null> {
+    console.log(`Attempting direct fetch for ${field} of video: ${title}`);
+    try {
+        const { data, error } = await supabase
+            .from('knowledge')
+            .select(field)
+            .ilike('video_title', `%${title}%`) // Use ilike for case-insensitive partial matching
+            .limit(1)
+            .single(); // Expect only one result
+
+        if (error) {
+            // 'PGRST116' is the code for 'single() did not return exactly one row'
+            if (error.code === 'PGRST116') {
+                console.log(`Direct fetch: No exact match found for title '${title}'`);
+            } else {
+                console.error(`Error fetching ${field} for '${title}':`, error);
+            }
+            return null;
+        }
+        return data ? data[field] : null;
+    } catch (error) {
+        console.error(`Unexpected error during direct fetch for ${field} of '${title}':`, error);
+        return null;
+    }
+}
+
+async function checkChannelExists(channelName: string): Promise<boolean> {
+  console.log(`Checking existence of channel: ${channelName}`);
+  try {
+    const { data, error, count } = await supabase
+      .from('knowledge')
+      .select('channel_name', { count: 'exact', head: true })
+      .ilike('channel_name', `%${channelName}%`); // Case-insensitive check
+      
+    if (error) throw error;
+    console.log(`Channel check count for '${channelName}': ${count}`);
+    return (count ?? 0) > 0;
+  } catch (error) {
+    console.error(`Error checking channel existence for '${channelName}':`, error);
+    return false;
+  }
+}
+
+async function getRecentInfo(type: 'channel' | 'video', name: string, count = 3): Promise<any[]> {
+  const filterField = type === 'channel' ? 'channel_name' : 'video_title';
+  console.log(`Fetching recent info for ${type}: ${name}`);
+  try {
+    const { data, error } = await supabase
+      .from('knowledge')
+      .select('video_title, summary, channel_name, link, created_at')
+      .ilike(filterField, `%${name}%`)
+      .order('created_at', { ascending: false })
       .limit(count);
 
-    if (error || !data || data.length === 0) {
-      console.error('Keyword search failed:', error);
-      return null;
-    }
-
-    const references = data.map(item => ({
-      title: item.video_title,
-      link: item.link,
-      date: new Date(item.date).toLocaleDateString(),
-      snippet: item.summary?.substring(0, 150) || ''
-    }));
-
-    return {
-      answer: `Here's what I found in the video content:\n\n${data[0].summary || data[0].transcript?.substring(0, 300) || 'No summary available.'}`,
-      references,
-      source: 'database',
-      confidence: 0.5
-    };
+    if (error) throw error;
+    console.log(`Found ${data?.length ?? 0} recent items for ${type} '${name}'`);
+    return data || [];
   } catch (error) {
-    console.error('Error in keyword search:', error);
-    return null;
+    console.error(`Error fetching recent info for ${type} '${name}':`, error);
+    return [];
   }
 }
 
-// Get list of videos
-async function getVideoList(query: string): Promise<RAGResponse | null> {
-  try {
-    const { data, error } = await supabase
-      .from('knowledge')
-      .select('video_title, link, "channel name", date')
-      .or(`video_title.ilike.%${query}%,summary.ilike.%${query}%`)
-      .order('date', { ascending: false })
-      .limit(10);
 
-    if (error || !data || data.length === 0) {
-      console.error('Video list search failed:', error);
-      return null;
-    }
-
-    const references = data.map(item => ({
-      title: item.video_title,
-      link: item.link,
-      date: new Date(item.date).toLocaleDateString()
-    }));
-
-    const answer = `## Found Videos\n\n${data.map((item, index) => 
-      `${index + 1}. **${item.video_title}**\n   Channel: ${item['channel name']}\n   Date: ${new Date(item.date).toLocaleDateString()}\n`
-    ).join('\n')}`;
-
-    return {
-      answer,
-      references,
-      source: 'database',
-      confidence: 0.8
-    };
-  } catch (error) {
-    console.error('Error getting video list:', error);
-    return null;
-  }
-}
-
-// Get list of channels
-async function getChannelList(): Promise<RAGResponse | null> {
-  try {
-    const { data, error } = await supabase
-      .from('knowledge')
-      .select('"channel name"')
-      .order('"channel name"');
-
-    if (error || !data || data.length === 0) {
-      console.error('Channel list search failed:', error);
-      return null;
-    }
-
-    const channels = Array.from(new Set(data.map(item => item['channel name'])))
-      .filter((channel): channel is string => !!channel)
-      .sort((a, b) => a.localeCompare(b));
-
-    const answer = `## Available Video Channels\n\n${channels.map((channel, index) => 
-      `${index + 1}. **${channel}**`
-    ).join('\n')}`;
-
-    return {
-      answer,
-      references: [],
-      source: 'database',
-      confidence: 0.9
-    };
-  } catch (error) {
-    console.error('Error getting channel list:', error);
-    return null;
-  }
-}
-
-// Main RAG function
+// --- Main RAG Processing Function ---
 export async function processQuery(query: string): Promise<RAGResponse> {
+  console.log(`Processing query: ${query}`);
   const queryType = classifyQuery(query);
-  console.log(`Processing ${queryType} query: "${query}"`);
+  console.log(`Classified as: ${queryType}`);
 
-  // Handle video-specific queries
-  switch (queryType) {
-    case 'video_summary':
-    case 'video_transcript':
-      // Try embeddings first for summary/transcript
-      const embeddingResult = await searchWithEmbeddings(query);
-      if (embeddingResult && embeddingResult.confidence > 0.6) {
-        return embeddingResult;
-      }
-      // Fall back to keyword search
-      const keywordResult = await searchWithKeywords(query);
-      if (keywordResult) {
-        return keywordResult;
-      }
-      break;
+  let answer = "I couldn't find specific information in the video database.";
+  let references: any[] = [];
+  let source: RAGResponse['source'] = 'none';
+  let confidence = 0.0;
+  let needsWebSearch = false;
 
-    case 'video_list':
-      // Get list of videos
-      const videoListResult = await getVideoList(query);
-      if (videoListResult) {
-        return videoListResult;
-      }
-      break;
+  try {
+    switch (queryType) {
+      case 'list_channels':
+        const channels = await getDistinctChannelNames();
+        if (channels.length > 0) {
+          answer = "Here are the unique channel names I have information about:\n" + 
+                   channels.map((name, index) => `${index + 1}. ${name}`).join('\n');
+          source = 'database';
+          confidence = 0.95;
+        } else {
+          answer = "I couldn't retrieve the list of channel names from the database.";
+          source = 'none';
+          confidence = 0.1;
+        }
+        break;
 
-    case 'channel_list':
-      // Get list of channels
-      const channelListResult = await getChannelList();
-      if (channelListResult) {
-        return channelListResult;
-      }
-      break;
+      case 'get_transcript':
+      case 'get_summary':
+        const fieldToGet = queryType === 'get_transcript' ? 'transcript' : 'summary';
+        const titleMatch = query.match(/['\"“](.+)['\"”]$/);
+        if (titleMatch && titleMatch[1]) {
+          const videoTitleFromQuery = titleMatch[1];
+          const fieldValue = await getSpecificField(videoTitleFromQuery, fieldToGet);
+          if (fieldValue) {
+            answer = `Here is the ${fieldToGet} for \"${videoTitleFromQuery}\":\n\n${fieldValue}`;
+            source = 'database';
+            confidence = 0.98;
+             const { data: refData } = await supabase
+                .from('knowledge')
+                .select('video_title, channel_name, link, created_at')
+                .ilike('video_title', `%${videoTitleFromQuery}%`)
+                .limit(1).single();
+             if (refData) {
+                 references = [{
+                     title: refData.video_title,
+                     channel_name: refData.channel_name,
+                     link: refData.link,
+                     created_at: refData.created_at
+                 }];
+             }
+          } else {
+            answer = `I found the video database, but I couldn't retrieve the specific ${fieldToGet} for \"${videoTitleFromQuery}\". It might be missing or the title needs to be more precise.`;
+            source = 'database';
+            confidence = 0.3;
+            needsWebSearch = true;
+          }
+        } else {
+          answer = `Please specify the video title clearly in quotes for me to fetch the ${fieldToGet}.`;
+          source = 'none';
+          confidence = 0.1;
+        }
+        break;
+
+      case 'check_channel':
+         const channelCheckMatch = query.match(/['\"“](.+)['\"”]$/);
+         if (channelCheckMatch && channelCheckMatch[1]) {
+            const channelName = channelCheckMatch[1];
+            const exists = await checkChannelExists(channelName);
+            if (exists) {
+                answer = `Yes, I have information about the channel "${channelName}" in my video database.`;
+                source = 'database';
+                confidence = 0.95;
+            } else {
+                answer = `No, I could not find information specifically about the channel "${channelName}" in my video database.`;
+                source = 'database'; // DB was checked
+                confidence = 0.9; // Confident it's not there
+                needsWebSearch = true; // User might want general web info
+            }
+         } else {
+             answer = "Please specify the channel name clearly in quotes for me to check.";
+             source = 'none';
+             confidence = 0.1;
+         }
+         break;
+
+      case 'recent_channel_info':
+      case 'recent_video_info':
+        const type = queryType === 'recent_channel_info' ? 'channel' : 'video';
+        const nameMatch = query.match(/['\"“](.+)['\"”]$/);
+        if (nameMatch && nameMatch[1]) {
+          const name = nameMatch[1];
+          const recentData = await getRecentInfo(type, name);
+          if (recentData.length > 0) {
+            answer = `Here's the most recent information I have regarding the ${type} \"${name}\":\n\n` +
+                     recentData.map(item =>
+                       `- Title: ${item.video_title}\n  Summary: ${item.summary || 'N/A'}\n  Published: ${
+                         item.created_at ? new Date(item.created_at).toLocaleDateString() : 'N/A'
+                       }`
+                     ).join('\n\n');
+            references = recentData.map(item => ({
+                title: item.video_title,
+                summary: item.summary,
+                channel_name: item.channel_name,
+                link: item.link,
+                created_at: item.created_at
+            }));
+            source = 'database';
+            confidence = 0.85;
+          } else {
+            answer = `I couldn't find recent specific information for the ${type} \"${name}\" in the video database.`;
+            source = 'database';
+            confidence = 0.4;
+            needsWebSearch = true;
+          }
+        } else {
+          answer = `Please specify the ${type} name clearly in quotes for me to find recent information.`;
+          source = 'none';
+          confidence = 0.1;
+        }
+        break;
+
+       case 'video_search': // General search using embeddings
+       case 'generic': // Attempt RAG first for generic queries
+       case 'definition': // Attempt RAG first for definitions
+         console.log('Performing embedding search for query:', query);
+         references = await searchWithEmbeddings(query, 5);
+         if (references.length > 0) {
+           answer = `Based on the video database, here's what I found related to your query:\n\n` +
+                    references.map(ref =>
+                      `- ${ref.title} (Channel: ${ref.channel_name}, Published: ${
+                        ref.created_at ? new Date(ref.created_at).toLocaleDateString() : 'N/A'
+                      })`
+                    ).join('\n');
+           source = 'database';
+           confidence = references.reduce((sum, ref) => sum + (ref.similarity || 0.75), 0) / references.length;
+           confidence = Math.min(confidence, 0.8);
+           console.log(`Embedding search confidence: ${confidence}`);
+           if (confidence < 0.5) {
+              console.log("Embedding search yielded low confidence results.");
+              needsWebSearch = true;
+           }
+         } else {
+           console.log('Embedding search found no relevant documents.');
+           answer = "I couldn't find relevant information in the video database for your query.";
+           source = 'database';
+           confidence = 0.1;
+           needsWebSearch = true;
+         }
+         break;
+
+      case 'current_info':
+      case 'investment':
+      case 'tabular': // These explicitly need web capabilities or complex generation
+        console.log('Query type requires web search or complex generation.');
+        needsWebSearch = true;
+        answer = "This query seems to require up-to-date information or complex formatting. I'll try searching the web.";
+        source = 'none'; // Indicate RAG didn't handle it
+        confidence = 0;
+        break;
+
+      default:
+        console.log('Unhandled query type, defaulting to web search attempt.');
+        needsWebSearch = true;
+        answer = "I'm not sure how to answer that from the video database. Let me try searching the web.";
+        source = 'none';
+        confidence = 0;
+    }
+
+  } catch (error) {
+      console.error('Error during RAG processing:', error);
+      answer = "An error occurred while processing your request with the video database.";
+      source = 'none';
+      confidence = 0;
+      needsWebSearch = true; // Fallback to web on error
   }
 
-  // For all other queries or if video-specific search failed
-  return {
-    answer: "This query should be handled by web search. Please use the web search functionality for non-video related queries.",
-    references: [],
-    source: 'web',
-    confidence: 0
-  };
+  // --- Fallback to Web Search --- 
+  if (needsWebSearch && confidence < 0.5) { // Only use web search if needed and RAG confidence is low
+      console.log('Falling back to web search...');
+      const webResult = await performWebSearch(query);
+      if (webResult && webResult.answer) {
+          console.log('Web search successful.');
+          // Combine or replace? Maybe prepend RAG attempt info?
+          // For now, prioritize web answer if RAG failed significantly
+          if (source === 'none' || confidence < 0.2) { 
+             answer = webResult.answer;
+             references = webResult.results || []; 
+             source = 'web'; 
+             confidence = 0.6; // Assign moderate confidence to web results
+          } else {
+              // RAG had *some* answer, maybe append web info?
+              answer += `\n\nAdditionally, a web search found:\n${webResult.answer}`;
+              references = [...references, ...(webResult.results || [])];
+              source = 'hybrid';
+              confidence = (confidence + 0.6) / 2; // Average confidence
+          }
+      } else {
+          console.log('Web search also failed or returned no answer.');
+          if (source === 'none' || source === 'database' && confidence < 0.2) { // Only if RAG also failed badly
+            answer = "I apologize, but I couldn't find relevant information for your query in the database or via web search. Please try rephrasing.";
+            references = [];
+            source = 'none';
+            confidence = 0;
+          }
+          // Otherwise, stick with the low-confidence RAG answer
+      }
+  }
+
+  console.log(`Final Response: Source=${source}, Confidence=${confidence.toFixed(2)}`);
+  return { answer, references, source, confidence };
 } 
