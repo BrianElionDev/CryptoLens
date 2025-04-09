@@ -22,11 +22,12 @@ interface WebSearchResultReference {
   date?: string; // Add date from other reference types
 }
 
-// Type for the result of helper functions
+// Update the QueryResult interface to match RAGResponse
 interface QueryResult {
   answer: string;
   references: WebSearchResultReference[];
-  isFromWeb?: boolean; // Optional flag for web results
+  source: 'database' | 'web' | 'hybrid';
+  confidence: number;
 }
 
 // Custom Markdown components for styling
@@ -149,7 +150,7 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
   };
 
   const sendMessage = async () => {
-    if (!input.trim()) return; // Don't send empty messages
+    if (!input.trim()) return;
 
     // Ensure currentChat is initialized
     let chatToUpdate = currentChat;
@@ -182,7 +183,7 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
       timestamp: Date.now()
     };
 
-    // Generate title if this is the first message in the chat
+    // Generate title if this is the first message
     const isNewChat = chatToUpdate.messages.length === 0;
     const chatTitle = isNewChat ? generateTitle(input) : chatToUpdate.title;
 
@@ -196,7 +197,7 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
     setInput('');
     setLoading(true);
 
-    // Update the list of chats locally as well
+    // Update chats list
     setChats(prevChats => {
       const chatIndex = prevChats.findIndex(c => c.id === updatedChat.id);
       let newChats;
@@ -204,15 +205,12 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
         newChats = [...prevChats];
         newChats[chatIndex] = updatedChat;
       } else {
-        // Add the new chat if it wasn't in the list (should be rare)
         newChats = [updatedChat, ...prevChats];
       }
-      // Ensure the list remains sorted by creation date
       return newChats.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     });
 
-
-    // Save user message to Supabase immediately (before processing response)
+    // Save user message to Supabase
     try {
       console.log('Saving user message to Supabase:', { id: updatedChat.id, title: chatTitle });
       const { error: upsertError } = await supabase
@@ -220,131 +218,89 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
         .upsert({
           id: updatedChat.id,
           title: chatTitle,
-          messages: updatedChat.messages, // Save messages up to user's input
+          messages: updatedChat.messages,
           created_at: updatedChat.created_at || new Date().toISOString()
         });
 
       if (upsertError) {
         console.error('Error saving user message:', upsertError);
-        // Optionally revert UI or show error, but continue processing for assistant response
       }
     } catch (saveError) {
        console.error('Exception saving user message:', saveError);
     }
 
-    // --- Process the query and get assistant response ---
+    // Process the query and get assistant response
     let queryResult: QueryResult | null = null;
     try {
-      // Check if the query matches any special patterns
-      if (/give me videos from this week/i.test(input)) {
-        queryResult = await getRecentVideos(10);
-      }
-      else if (/show (?:me )?(?:the )?latest (\d+)? ?videos/i.test(input)) {
-        const countMatch = input.match(/show (?:me )?(?:the )?latest (\d+)? ?videos/i);
-        const count = countMatch && countMatch[1] ? parseInt(countMatch[1]) : 10;
-        queryResult = await getRecentVideos(count);
-      }
-      else if (/give me (?:videos|video titles) from (.+?)(?:$|\s*channel)/i.test(input)) {
-        const channelMatch = input.match(/give me (?:videos|video titles) from (.+?)(?:$|\s*channel)/i);
-        const channelName = channelMatch ? channelMatch[1].trim() : '';
-        queryResult = await getVideosFromChannel(channelName, 10);
-      }
-      else if (/give me a summary about (.+)$/i.test(input)) {
-        const topicMatch = input.match(/give me a summary about (.+)$/i);
-        const topic = topicMatch ? topicMatch[1].trim() : '';
-        if (topic) {
-          console.log('Extracted topic for summary:', topic);
-          queryResult = await getTopicSummary(topic);
-        } else {
-          queryResult = { answer: "Please specify a topic after 'give me a summary about'.", references: [] };
-        }
-      }
-      else if (/find videos(?:.+?)about (.+)$/i.test(input)) {
-        const topicMatch = input.match(/find videos(?:.+?)about (.+)$/i);
-        const topic = topicMatch ? topicMatch[1].trim() : '';
-         if (topic) {
-           console.log('Extracted topic for video search:', topic);
-           queryResult = await getVideosByTopic(topic);
-         } else {
-           queryResult = { answer: "Please specify a topic after 'find videos about'.", references: [] };
-         }
-      }
-      else if (/give me videos (?:from|published) (?:on|after|before) (.+?)(?:$|\s*date)/i.test(input)) {
-        const dateMatch = input.match(/give me videos (?:from|published) (?:on|after|before) (.+?)(?:$|\s*date)/i);
-        const dateStr = dateMatch ? dateMatch[1].trim() : '';
-        const isAfter = /after/i.test(input);
-        const isBefore = /before/i.test(input);
-        queryResult = await getVideosByDate(dateStr, isAfter, isBefore);
-      }
-      else if (/give me (\d+)(?:\s*videos)? from (.+?)(?:$|\s*channel)/i.test(input)) {
-        const countChannelMatch = input.match(/give me (\d+)(?:\s*videos)? from (.+?)(?:$|\s*channel)/i);
-        const count = countChannelMatch ? parseInt(countChannelMatch[1]) : 10;
-        const channelName = countChannelMatch ? countChannelMatch[2].trim() : '';
-        queryResult = await getVideosFromChannel(channelName, count);
-      }
-      else if (/what video channels do you have(?:\s*information about)?/i.test(input)) {
-        queryResult = await getAvailableChannels();
-      }
-      else if (/what(?:\'s| is) the latest video(?:s)? (?:from|by) (.+?)(?:$|\s*channel)/i.test(input)) {
-        const channelMatch = input.match(/what(?:\'s| is) the latest video(?:s)? (?:from|by) (.+?)(?:$|\s*channel)/i);
-        const channelName = channelMatch ? channelMatch[1].trim() : '';
-        queryResult = await getLatestFromChannel(channelName);
-      }
-      else {
-        // Default: Process through regular API route for generic chat/search
-        console.log("Processing generic query via /api/chat");
+      // Process through the chat API
+      console.log("Processing query via /api/chat");
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             question: input,
-            chatId: chatToUpdate.id // Pass current chat ID
+          chatId: chatToUpdate.id
           })
         });
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({})); // Try parsing error
+        const errorData = await response.json().catch(() => ({}));
           console.error('API Error from /api/chat:', response.status, errorData);
-          queryResult = { answer: errorData.error || "Sorry, I couldn't process that request.", references: [] };
+        queryResult = {
+          answer: errorData.error || "Sorry, I couldn't process that request.",
+          references: [],
+          source: 'hybrid',
+          confidence: 0
+        };
         } else {
           const data = await response.json();
           queryResult = {
               answer: data.answer || "Sorry, I received an empty response.",
-              references: data.references || []
+          references: data.references || [],
+          source: data.source || 'hybrid',
+          confidence: data.confidence || 0
           };
-        }
       }
     } catch (processingError) {
        console.error("Error processing user query:", processingError);
-       queryResult = { answer: "Sorry, an internal error occurred while processing your request.", references: [] };
+      queryResult = {
+        answer: "Sorry, an internal error occurred while processing your request.",
+        references: [],
+        source: 'hybrid',
+        confidence: 0
+      };
     }
 
     // Ensure there's always a valid queryResult
     if (!queryResult) {
         console.error("Critical Error: queryResult was null after processing.");
-        queryResult = { answer: "An unexpected error occurred.", references: [] };
+      queryResult = {
+        answer: "An unexpected error occurred.",
+        references: [],
+        source: 'hybrid',
+        confidence: 0
+      };
     }
 
-    // --- Update state and save final chat with assistant response ---
+    // Create assistant message with source indicator
     const assistantMessage: Message = {
       id: uuidv4(),
       role: 'assistant',
       content: queryResult.answer,
       timestamp: Date.now(),
       references: queryResult.references,
-      // isFromWeb: queryResult.isFromWeb // Optionally include source flag if needed
+      source: queryResult.source,
+      confidence: queryResult.confidence
     };
 
-    // Create the final chat state including the assistant's response
+    // Create final chat state
     const finalChat: Chat = {
-      ...updatedChat, // Use the state that includes the user message
+      ...updatedChat,
       messages: [...updatedChat.messages, assistantMessage]
     };
 
-    // Update the UI optimistically with the final chat state
+    // Update UI
     setCurrentChat(finalChat);
-
-    // Update the list of chats again with the final state
      setChats(prevChats => {
       const chatIndex = prevChats.findIndex(c => c.id === finalChat.id);
       let newChats;
@@ -352,14 +308,12 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
         newChats = [...prevChats];
         newChats[chatIndex] = finalChat;
       } else {
-        // Should not happen if initial update worked
-        console.warn("Chat was not found in list during final update, adding it.");
         newChats = [finalChat, ...prevChats];
       }
       return newChats.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     });
 
-    // Save final chat state (with assistant message) to Supabase
+    // Save final chat state
     try {
       console.log('Saving final chat to Supabase:', { id: finalChat.id, title: finalChat.title });
       const { error: finalError } = await supabase
@@ -373,13 +327,11 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
 
       if (finalError) {
         console.error('Error saving final chat state:', finalError);
-        // Maybe notify user?
       }
     } catch(finalSaveError) {
         console.error('Exception saving final chat state:', finalSaveError);
     }
 
-    // Processing complete
     setLoading(false);
   };
 
@@ -437,7 +389,7 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
 
       if (error) throw error;
       if (!data || data.length === 0) {
-        return { answer: "I couldn't find any videos from the past week.", references: [] };
+        return { answer: "I couldn't find any videos from the past week.", references: [], source: 'hybrid', confidence: 0 };
       }
 
       let response = `## Recent Videos (Past Week)\n\n`;
@@ -447,17 +399,17 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
         response += `   - **Date**: ${new Date(video.date).toLocaleDateString()}\n\n`;
       });
       const references: WebSearchResultReference[] = data.map(video => ({ title: video.video_title, link: video.link, date: new Date(video.date).toLocaleDateString() }));
-      return { answer: response, references };
+      return { answer: response, references, source: 'hybrid', confidence: 0 };
     } catch (error) {
       console.error('Error fetching recent videos:', error);
-      return { answer: "I encountered an error while searching for recent videos.", references: [] };
+      return { answer: "I encountered an error while searching for recent videos.", references: [], source: 'hybrid', confidence: 0 };
     }
   };
 
   // Helper function to get videos from a specific channel
   const getVideosFromChannel = async (channelName: string, count = 10): Promise<QueryResult> => {
     try {
-      if (!channelName) return { answer: "Please specify a channel name.", references: [] };
+      if (!channelName) return { answer: "Please specify a channel name.", references: [], source: 'hybrid', confidence: 0 };
       const { data, error } = await supabase
         .from('knowledge')
         .select('video_title, link, "channel name", date')
@@ -467,7 +419,7 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
 
       if (error) throw error;
       if (!data || data.length === 0) {
-        return { answer: `I couldn't find any videos from channel "${channelName}".`, references: [] };
+        return { answer: `I couldn't find any videos from channel "${channelName}".`, references: [], source: 'hybrid', confidence: 0 };
       }
 
       let response = `## Videos from ${data[0]['channel name']}\n\n`;
@@ -476,17 +428,17 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
         response += `   - **Date**: ${new Date(video.date).toLocaleDateString()}\n\n`;
       });
       const references: WebSearchResultReference[] = data.map(video => ({ title: video.video_title, link: video.link, date: new Date(video.date).toLocaleDateString() }));
-      return { answer: response, references };
+      return { answer: response, references, source: 'hybrid', confidence: 0 };
     } catch (error) {
       console.error('Error fetching videos from channel:', error);
-      return { answer: `I encountered an error searching videos from "${channelName}".`, references: [] };
+      return { answer: `I encountered an error searching videos from "${channelName}".`, references: [], source: 'hybrid', confidence: 0 };
     }
   };
 
   // Helper function to get summary about a topic (Embeddings -> Web -> Keywords)
   const getTopicSummary = async (topic: string): Promise<QueryResult> => {
     try {
-      if (!topic) return { answer: "Please specify a topic to summarize.", references: [] };
+      if (!topic) return { answer: "Please specify a topic to summarize.", references: [], source: 'hybrid', confidence: 0 };
       console.log(`Summarizing topic: "${topic}" using embeddings...`);
       const queryEmbedding = await getQueryEmbedding(topic);
 
@@ -535,7 +487,7 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
             });
             const references: WebSearchResultReference[] = videoDetails.map(video => ({ title: video.video_title, link: video.link, date: new Date(video.date).toLocaleDateString() }));
             console.log('Summary generation from database complete.');
-            return { answer: response, references, isFromWeb: false };
+            return { answer: response, references, source: 'database', confidence: 1 };
           } else if (detailError) {
               console.error('Error fetching video details for summary:', detailError);
           }
@@ -548,7 +500,7 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
       console.log('Embeddings failed or no DB results. Falling back to web search for summary...');
       const webResult = await webSearchFallback(topic);
       // If web search fails, use keyword search as the *final* resort for summary
-      if (!webResult.isFromWeb) { // Check flag instead of answer text
+      if (!webResult.source.includes('hybrid')) { // Check flag instead of answer text
          console.log("Web search failed for summary. Falling back to keyword search...");
          return await getVideosByKeywords(topic, 5); // Limit results for summary context
       }
@@ -572,7 +524,7 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error(`Web search failed with status: ${response.status}`, errorData);
-        return { answer: `Web search failed for "${topic}".`, references: [], isFromWeb: false }; // Indicate failure
+        return { answer: `Web search failed for "${topic}".`, references: [], source: 'web', confidence: 0 }; // Indicate failure
       }
       const data = await response.json();
       let answer = `## Information about ${topic}\n\n${data.answer || `No details found for "${topic}".`}`;
@@ -583,17 +535,17 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
         });
       }
       answer += `\n\n*Note: Info from ${data.source === 'openai' ? 'knowledge base' : 'web'}.*`;
-      return { answer, references: data.references || [], isFromWeb: true };
+      return { answer, references: data.references || [], source: data.source || 'web', confidence: 1 };
     } catch (error) {
       console.error('Error in web search fallback:', error);
-      return { answer: `Error during web search for "${topic}".`, references: [], isFromWeb: false }; // Indicate failure
+      return { answer: `Error during web search for "${topic}".`, references: [], source: 'web', confidence: 0 }; // Indicate failure
     }
   };
 
   // Helper function to get videos by topic (Embeddings -> Web -> Keywords)
   const getVideosByTopic = async (topic: string, count = 10): Promise<QueryResult> => {
     try {
-      if (!topic) return { answer: "Please specify a topic.", references: [] };
+      if (!topic) return { answer: "Please specify a topic.", references: [], source: 'hybrid', confidence: 0 };
       console.log(`Searching videos about "${topic}" using embeddings...`);
       const queryEmbedding = await getQueryEmbedding(topic);
 
@@ -614,7 +566,7 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
              response += `   - Date: ${new Date(video.date).toLocaleDateString()}\n\n`;
            });
            const references: WebSearchResultReference[] = data.map((video: MatchedVideo) => ({ title: video.video_title, link: video.link, date: new Date(video.date).toLocaleDateString() }));
-           return { answer: response, references, isFromWeb: false };
+           return { answer: response, references, source: 'database', confidence: 1 };
         } else if (error) {
             console.error('RPC match_videos error for topic search:', error);
         }
@@ -624,7 +576,7 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
       console.log('Embeddings failed or no DB results. Falling back to web search for topic...');
       const webResult = await webSearchFallback(topic);
       // If web search fails, use keyword search as final resort
-      if (!webResult.isFromWeb) { // Check flag
+      if (!webResult.source.includes('hybrid')) { // Check flag
          console.log("Web search failed for topic. Falling back to keyword search...");
          return await getVideosByKeywords(topic, count);
       }
@@ -650,10 +602,10 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
 
       if (error) {
         console.error('Keyword search error:', error);
-         return { answer: `Error during keyword search for "${topic}".`, references: [], isFromWeb: false };
+         return { answer: `Error during keyword search for "${topic}".`, references: [], source: 'hybrid', confidence: 0 };
       }
       if (!data || data.length === 0) {
-        return { answer: `No videos found mentioning "${topic}" via keywords.`, references: [], isFromWeb: false };
+        return { answer: `No videos found mentioning "${topic}" via keywords.`, references: [], source: 'hybrid', confidence: 0 };
       }
 
       let response = `## Videos about ${topic} (Keyword Search)\n\nFound ${data.length} videos mentioning "${topic}":\n\n`;
@@ -663,21 +615,21 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
         response += `   - Date: ${new Date(video.date).toLocaleDateString()}\n\n`;
       });
       const references: WebSearchResultReference[] = data.map(video => ({ title: video.video_title, link: video.link, date: new Date(video.date).toLocaleDateString() }));
-      return { answer: response, references, isFromWeb: false };
+      return { answer: response, references, source: 'hybrid', confidence: 1 };
 
     } catch (error) {
       console.error('Unexpected error in keyword search fallback:', error);
-      return { answer: `Unexpected error during keyword search for "${topic}".`, references: [], isFromWeb: false };
+      return { answer: `Unexpected error during keyword search for "${topic}".`, references: [], source: 'hybrid', confidence: 0 };
     }
   };
 
   // Helper function to get videos by date
   const getVideosByDate = async (dateStr: string, isAfter = false, isBefore = false): Promise<QueryResult> => {
     try {
-      if (!dateStr) return { answer: "Please specify a date.", references: [] };
+      if (!dateStr) return { answer: "Please specify a date.", references: [], source: 'hybrid', confidence: 0 };
       const parsedDate = new Date(dateStr);
       if (isNaN(parsedDate.getTime())) {
-        return { answer: `Invalid date format: "${dateStr}".`, references: [] };
+        return { answer: `Invalid date format: "${dateStr}".`, references: [], source: 'hybrid', confidence: 0 };
       }
 
       let query = supabase.from('knowledge').select('video_title, link, "channel name", date').order('date', { ascending: false });
@@ -695,7 +647,7 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
       if (error) throw error;
       const timeDescription = isAfter ? "after" : isBefore ? "before" : "on";
       if (!data || data.length === 0) {
-        return { answer: `No videos found ${timeDescription} ${parsedDate.toLocaleDateString()}.`, references: [] };
+        return { answer: `No videos found ${timeDescription} ${parsedDate.toLocaleDateString()}.`, references: [], source: 'hybrid', confidence: 0 };
       }
 
       let response = `## Videos ${timeDescription} ${parsedDate.toLocaleDateString()}\n\n`;
@@ -703,10 +655,10 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
         response += `${index + 1}. **${video.video_title}**\n...`; // Abbreviated for brevity
       });
       const references: WebSearchResultReference[] = data.map(video => ({ title: video.video_title, link: video.link, date: new Date(video.date).toLocaleDateString() }));
-      return { answer: response, references };
+      return { answer: response, references, source: 'hybrid', confidence: 1 };
     } catch (error) {
       console.error('Error fetching videos by date:', error);
-      return { answer: `Error searching videos by date.`, references: [] };
+      return { answer: `Error searching videos by date.`, references: [], source: 'hybrid', confidence: 0 };
     }
   };
 
@@ -715,26 +667,26 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
     try {
       const { data, error } = await supabase.from('knowledge').select('"channel name"');
       if (error) throw error;
-      if (!data || data.length === 0) return { answer: "No channels found.", references: [] };
+      if (!data || data.length === 0) return { answer: "No channels found.", references: [], source: 'hybrid', confidence: 0 };
 
       const channels = Array.from(new Set(data.map(item => item['channel name'])))
         .filter((channel): channel is string => !!channel)
         .sort((a, b) => a.localeCompare(b));
-      if (channels.length === 0) return { answer: "No valid channel names found.", references: [] };
+      if (channels.length === 0) return { answer: "No valid channel names found.", references: [], source: 'hybrid', confidence: 0 };
 
       let response = `## Available Video Channels\n\nI have info from:\n\n`;
       channels.forEach((channel, index) => { response += `${index + 1}. **${channel}**\n`; });
-      return { answer: response, references: [] };
+      return { answer: response, references: [], source: 'hybrid', confidence: 1 };
     } catch (error) {
       console.error('Error fetching available channels:', error);
-      return { answer: "Error retrieving channel list.", references: [] };
+      return { answer: "Error retrieving channel list.", references: [], source: 'hybrid', confidence: 0 };
     }
   };
 
   // Helper function to get the latest video from a specific channel
   const getLatestFromChannel = async (channelName: string): Promise<QueryResult> => {
     try {
-      if (!channelName) return { answer: "Please specify a channel name.", references: [] };
+      if (!channelName) return { answer: "Please specify a channel name.", references: [], source: 'hybrid', confidence: 0 };
       const { data, error } = await supabase
         .from('knowledge')
         .select('video_title, link, "channel name", date')
@@ -743,15 +695,15 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
 
       if (error) throw error;
       if (!data || data.length === 0) {
-        return { answer: `No videos found for channel "${channelName}".`, references: [] };
+        return { answer: `No videos found for channel "${channelName}".`, references: [], source: 'hybrid', confidence: 0 };
       }
       const video = data[0];
       const response = `## Latest Video from ${video['channel name']}\n\n**${video.video_title}**\n...`; // Abbreviated
       const references: WebSearchResultReference[] = [{ title: video.video_title, link: video.link, date: new Date(video.date).toLocaleDateString() }];
-      return { answer: response, references };
+      return { answer: response, references, source: 'hybrid', confidence: 1 };
     } catch (error) {
       console.error('Error fetching latest video:', error);
-      return { answer: `Error getting latest video from "${channelName}".`, references: [] };
+      return { answer: `Error getting latest video from "${channelName}".`, references: [], source: 'hybrid', confidence: 0 };
     }
   };
 
@@ -801,12 +753,33 @@ const ChatWindow = ({ onClose }: { onClose: () => void }) => {
                      </ReactMarkdown>
                    )}
                  </div>
+                 {message.role === 'assistant' && (
+                   <div className="text-xs text-gray-400 mt-1 w-full max-w-[85%] pl-1">
+                     {message.source && (
+                       <span className="mr-2">
+                         Source: {message.source === 'database' ? 'Video Content' : message.source === 'web' ? 'Web Search' : 'Hybrid'}
+                       </span>
+                     )}
+                     {message.confidence !== undefined && (
+                       <span>
+                         Confidence: {Math.round(message.confidence * 100)}%
+                       </span>
+                     )}
+                   </div>
+                 )}
                  {message.references && message.references.length > 0 && (
-                   <div className="text-xs text-gray-400 mt-1 w-full max-w-[85%] pl-1 ${message.role === 'user' ? 'text-right' : 'text-left'}">
+                   <div className="text-xs text-gray-400 mt-1 w-full max-w-[85%] pl-1">
                       Sources:
                       <div className="flex flex-wrap gap-x-2 gap-y-1">
                          {message.references.map((ref, index) => (
-                           <a key={index} href={ref.link} target="_blank" rel="noopener noreferrer" className="block text-blue-400 hover:underline truncate" title={ref.link}>
+                           <a
+                             key={index}
+                             href={ref.link}
+                             target="_blank"
+                             rel="noopener noreferrer"
+                             className="block text-blue-400 hover:underline truncate"
+                             title={ref.link}
+                           >
                              [{index + 1}] {ref.title || 'Source'} {ref.date && `(${ref.date})`}
                            </a>
                          ))}

@@ -13,38 +13,114 @@ export interface WebSearchResult {
 }
 
 /**
- * Perform a web search using Perplexity API
+ * Perform a web search using DuckDuckGo API
  * 
  * @param query - The search query
  * @returns WebSearchResult object with search results and an AI-generated answer
  */
 export async function performWebSearch(query: string): Promise<WebSearchResult | null> {
   try {
-    const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY;
+    console.log(`Performing DuckDuckGo search for: "${query}"`);
     
-    if (!PERPLEXITY_API_KEY) {
-      console.error('PERPLEXITY_API_KEY is not set in environment variables');
+    // First, try to get search results from DuckDuckGo with timeout
+    const searchResults = await performDuckDuckGoSearchWithTimeout(query);
+    
+    // If DuckDuckGo fails, try a direct OpenAI search
+    if (!searchResults || searchResults.length === 0) {
+      console.log('DuckDuckGo search failed, falling back to direct OpenAI search...');
+      return await performDirectOpenAISearch(query);
+    }
+
+    // Then, use OpenAI to generate a comprehensive answer based on the search results
+    const answer = await generateAnswerFromResults(query, searchResults);
+    
+    return {
+      query,
+      results: searchResults,
+      answer: answer || "I couldn't generate a comprehensive answer from the search results."
+    };
+  } catch (error) {
+    console.error('Error performing web search:', error);
+    // If anything fails, try direct OpenAI search as a fallback
+    return await performDirectOpenAISearch(query);
+  }
+}
+
+/**
+ * Perform a search using DuckDuckGo's API with a timeout
+ */
+async function performDuckDuckGoSearchWithTimeout(query: string): Promise<{ title: string; link: string; snippet: string }[] | null> {
+  try {
+    // Create an AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+    
+    // DuckDuckGo API endpoint
+    const response = await fetch(
+      `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`,
+      { signal: controller.signal }
+    );
+    
+    // Clear the timeout
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      console.error(`DuckDuckGo API error: ${response.status}`);
       return null;
     }
     
-    console.log(`Performing web search for: "${query}"`);
+    const data = await response.json();
     
-    // Using the correct Perplexity chat completions endpoint
-    const response = await fetch('https://api.perplexity.ai/chat/completions', {
+    // Extract and format results
+    const results = data.RelatedTopics
+      .filter((topic: any) => topic.Text && topic.FirstURL)
+      .map((topic: any) => ({
+        title: topic.Text.split(' - ')[0] || 'Web Source',
+        link: topic.FirstURL,
+        snippet: topic.Text
+      }))
+      .slice(0, 5); // Limit to top 5 results
+    
+    return results;
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      console.error('DuckDuckGo search timed out');
+    } else {
+      console.error('Error in DuckDuckGo search:', error);
+    }
+    return null;
+  }
+}
+
+/**
+ * Perform a direct OpenAI search without using DuckDuckGo
+ */
+async function performDirectOpenAISearch(query: string): Promise<WebSearchResult | null> {
+  try {
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+    
+    if (!OPENAI_API_KEY) {
+      console.error('OPENAI_API_KEY is not set in environment variables');
+      return null;
+    }
+
+    console.log(`Performing direct OpenAI search for: "${query}"`);
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${PERPLEXITY_API_KEY}`
+        'Authorization': `Bearer ${OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        model: "sonar-online",
+        model: "gpt-3.5-turbo",
         messages: [
           {
-            role: "system", 
+            role: "system",
             content: "You are a helpful assistant that provides accurate information about cryptocurrency, blockchain, and related topics. Search the web for the most up-to-date information when needed. Include relevant links to sources in your answers."
           },
           {
-            role: "user", 
+            role: "user",
             content: `I want to learn about: ${query}. Please search the web for current information and provide a well-structured answer with links to your sources.`
           }
         ],
@@ -52,19 +128,16 @@ export async function performWebSearch(query: string): Promise<WebSearchResult |
         max_tokens: 1000
       })
     });
-    
+
     if (!response.ok) {
-      const errorData = await response.text();
-      console.error(`Perplexity API error: ${response.status} - ${errorData}`);
+      console.error(`OpenAI API error: ${response.status}`);
       return null;
     }
-    
+
     const data = await response.json();
-    
-    // Extract content from the Perplexity response
     const content = data.choices?.[0]?.message?.content || '';
     
-    // Parse sources from the markdown content
+    // Extract sources from the markdown content
     const sources = extractSourcesFromContent(content);
     
     return {
@@ -73,14 +146,66 @@ export async function performWebSearch(query: string): Promise<WebSearchResult |
       answer: content
     };
   } catch (error) {
-    console.error('Error performing web search:', error);
+    console.error('Error in direct OpenAI search:', error);
     return null;
   }
 }
 
 /**
- * Extract sources from Perplexity's markdown content
- * Perplexity typically includes sources in the format [number]: URL
+ * Generate a comprehensive answer using OpenAI based on search results
+ */
+async function generateAnswerFromResults(query: string, results: { title: string; link: string; snippet: string }[]): Promise<string | null> {
+  try {
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+    
+    if (!OPENAI_API_KEY) {
+      console.error('OPENAI_API_KEY is not set in environment variables');
+      return null;
+    }
+
+    // Prepare the context from search results
+    const context = results.map((result, index) => 
+      `[${index + 1}] ${result.title}\n${result.snippet}\nSource: ${result.link}\n`
+    ).join('\n');
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "gpt-3.5-turbo",
+        messages: [
+          {
+            role: "system",
+            content: "You are a helpful assistant that provides accurate information about cryptocurrency, blockchain, and related topics. Use the provided search results to create a comprehensive answer. Include relevant information from the sources and cite them appropriately."
+          },
+          {
+            role: "user",
+            content: `Query: ${query}\n\nSearch Results:\n${context}\n\nPlease provide a comprehensive answer based on these search results. Include relevant information and cite the sources using [number] notation.`
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 1000
+      })
+    });
+
+    if (!response.ok) {
+      console.error(`OpenAI API error: ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content || null;
+  } catch (error) {
+    console.error('Error generating answer from results:', error);
+    return null;
+  }
+}
+
+/**
+ * Extract sources from markdown content
  */
 function extractSourcesFromContent(content: string): { title: string; link: string; snippet: string }[] {
   // Look for URLs in the content
@@ -142,10 +267,7 @@ function extractContextAroundLink(content: string, linkIndex: number, charCount:
 }
 
 /**
- * Fallback to OpenAI for web search capability
- * 
- * @param query - The search query
- * @returns WebSearchResult object with an AI-generated answer based on its knowledge
+ * Fallback search using only OpenAI when DuckDuckGo fails
  */
 export async function performOpenAIFallbackSearch(query: string): Promise<WebSearchResult | null> {
   try {
@@ -155,9 +277,7 @@ export async function performOpenAIFallbackSearch(query: string): Promise<WebSea
       console.error('OPENAI_API_KEY is not set in environment variables');
       return null;
     }
-    
-    console.log(`Performing OpenAI fallback search for: "${query}"`);
-    
+
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -165,38 +285,37 @@ export async function performOpenAIFallbackSearch(query: string): Promise<WebSea
         'Authorization': `Bearer ${OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        model: 'gpt-4o',
+        model: "gpt-3.5-turbo",
         messages: [
           {
-            role: 'system',
-            content: 'You are an AI assistant with knowledge about cryptocurrencies, blockchain, and related topics. Your task is to provide current information based on your training data. Format your answer in markdown with headers and bullet points where appropriate.'
+            role: "system",
+            content: "You are a helpful assistant that provides accurate information about cryptocurrency, blockchain, and related topics. Provide information based on your knowledge, and if you're unsure, indicate that clearly."
           },
           {
-            role: 'user',
-            content: `Please provide information about: ${query}`
+            role: "user",
+            content: `I want to learn about: ${query}. Please provide a well-structured answer with your knowledge about this topic.`
           }
         ],
         temperature: 0.7,
         max_tokens: 1000
       })
     });
-    
+
     if (!response.ok) {
-      const errorData = await response.text();
-      console.error(`OpenAI API error: ${response.status} - ${errorData}`);
+      console.error(`OpenAI API error: ${response.status}`);
       return null;
     }
-    
+
     const data = await response.json();
-    const answer = data.choices?.[0]?.message?.content || '';
-    
+    const content = data.choices?.[0]?.message?.content || '';
+
     return {
       query,
-      results: [], // No web search results since this is just using OpenAI's knowledge
-      answer: answer
+      results: [],
+      answer: content
     };
   } catch (error) {
-    console.error('Error performing OpenAI fallback search:', error);
+    console.error('Error in OpenAI fallback search:', error);
     return null;
   }
 }
