@@ -79,11 +79,11 @@ async function performPerplexitySearch(query: string): Promise<WebSearchResult |
       console.warn('Perplexity response did not contain the expected answer structure.', data);
       return null;
     }
-  } catch (error: any) {
-    if (error.name === 'AbortError') {
-        console.error('Perplexity search request timed out.');
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'name' in error && error.name === 'AbortError') {
+      console.error('Perplexity search request timed out.');
     } else {
-        console.error('Error during Perplexity search request:', error);
+      console.error('Error during Perplexity search request:', error);
     }
     return null;
   }
@@ -91,7 +91,8 @@ async function performPerplexitySearch(query: string): Promise<WebSearchResult |
 
 
 // --- Direct OpenAI Search Function (Fallback) ---
-async function performDirectOpenAISearch(query: string): Promise<WebSearchResult | null> {
+// Export this function to match the import in route.ts
+export async function performOpenAIFallbackSearch(query: string): Promise<WebSearchResult | null> {
   console.log('Attempting direct OpenAI search as fallback...');
   try {
     const completion = await openai.chat.completions.create({
@@ -141,7 +142,7 @@ export async function performWebSearch(query: string): Promise<WebSearchResult |
 
   // 2. Fallback to direct OpenAI search
   console.log('Perplexity search failed or returned no result, falling back to direct OpenAI search.');
-  const openaiResult = await performDirectOpenAISearch(query);
+  const openaiResult = await performOpenAIFallbackSearch(query);
   if (openaiResult) {
     return openaiResult;
   }

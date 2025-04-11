@@ -15,9 +15,20 @@ const embeddings = new OpenAIEmbeddings({ openAIApiKey: process.env.OPENAI_API_K
 // RAG Response Interface
 interface RAGResponse {
   answer: string;
-  references: any[];
+  references: Reference[];
   source: 'database' | 'web' | 'hybrid' | 'none';
   confidence: number;
+}
+
+// Add a Reference interface to replace any types
+interface Reference {
+  video_title?: string;
+  channel_name?: string;
+  link?: string;
+  date?: string;
+  created_at?: string;
+  summary?: string;
+  similarity?: number;
 }
 
 // Query Classification Types
@@ -60,7 +71,7 @@ function classifyQuery(query: string): QueryType {
 
 // --- Helper: Database Search Functions ---
 
-async function searchWithEmbeddings(query: string, count = 3): Promise<any[]> {
+async function searchWithEmbeddings(query: string, count = 3): Promise<Reference[]> {
   try {
     const vectorStore = new SupabaseVectorStore(embeddings, {
       client: supabase,
@@ -79,13 +90,13 @@ async function searchWithEmbeddings(query: string, count = 3): Promise<any[]> {
        console.log("Processing doc.metadata:", JSON.stringify(doc.metadata, null, 2));
        // ---- END DEBUGGING ----
        return {
-         title: doc.metadata?.video_title, // Add optional chaining just in case
-         channel_name: doc.metadata?.["channel name"], // Add optional chaining
+         video_title: doc.metadata?.video_title,
+         channel_name: doc.metadata?.["channel name"],
          link: doc.metadata?.link,
          date: doc.metadata?.date,
          created_at: doc.metadata?.created_at,
          summary: doc.metadata?.summary,
-         similarity: (doc as any).similarity
+         similarity: doc.metadata?.similarity || 0
        };
     });
   } catch (error) {
@@ -98,13 +109,13 @@ async function getDistinctChannelNames(): Promise<string[]> {
   try {
     const { data, error } = await supabase
       .from('knowledge')
-      .select('channel_name');
+      .select('"channel name"');
       
     if (error) throw error;
     if (!data) return [];
 
     // Get unique names
-    const uniqueNames = [...new Set(data.map(item => item.channel_name).filter(Boolean))]; 
+    const uniqueNames = Array.from(new Set(data.map(item => item["channel name"]).filter(Boolean)));
     return uniqueNames;
   } catch (error) {
     console.error('Error fetching distinct channel names:', error);
@@ -118,12 +129,11 @@ async function getSpecificField(title: string, field: 'transcript' | 'summary'):
         const { data, error } = await supabase
             .from('knowledge')
             .select(field)
-            .ilike('video_title', `%${title}%`) // Use ilike for case-insensitive partial matching
+            .ilike('video_title', `%${title}%`)
             .limit(1)
-            .single(); // Expect only one result
+            .single();
 
         if (error) {
-            // 'PGRST116' is the code for 'single() did not return exactly one row'
             if (error.code === 'PGRST116') {
                 console.log(`Direct fetch: No exact match found for title '${title}'`);
             } else {
@@ -131,7 +141,8 @@ async function getSpecificField(title: string, field: 'transcript' | 'summary'):
             }
             return null;
         }
-        return data ? data[field] : null;
+        
+        return data ? data[field as keyof typeof data] : null;
     } catch (error) {
         console.error(`Unexpected error during direct fetch for ${field} of '${title}':`, error);
         return null;
@@ -141,10 +152,10 @@ async function getSpecificField(title: string, field: 'transcript' | 'summary'):
 async function checkChannelExists(channelName: string): Promise<boolean> {
   console.log(`Checking existence of channel: ${channelName}`);
   try {
-    const { data, error, count } = await supabase
+    const { error, count } = await supabase
       .from('knowledge')
-      .select('channel_name', { count: 'exact', head: true })
-      .ilike('channel_name', `%${channelName}%`); // Case-insensitive check
+      .select('"channel name"', { count: 'exact', head: true })
+      .ilike('"channel name"', `%${channelName}%`);
       
     if (error) throw error;
     console.log(`Channel check count for '${channelName}': ${count}`);
@@ -155,13 +166,13 @@ async function checkChannelExists(channelName: string): Promise<boolean> {
   }
 }
 
-async function getRecentInfo(type: 'channel' | 'video', name: string, count = 3): Promise<any[]> {
-  const filterField = type === 'channel' ? 'channel_name' : 'video_title';
+async function getRecentInfo(type: 'channel' | 'video', name: string, count = 3): Promise<Reference[]> {
+  const filterField = type === 'channel' ? '"channel name"' : 'video_title';
   console.log(`Fetching recent info for ${type}: ${name}`);
   try {
     const { data, error } = await supabase
       .from('knowledge')
-      .select('video_title, summary, channel_name, link, created_at')
+      .select('video_title, summary, "channel name", link, created_at')
       .ilike(filterField, `%${name}%`)
       .order('created_at', { ascending: false })
       .limit(count);
@@ -183,7 +194,7 @@ export async function processQuery(query: string): Promise<RAGResponse> {
   console.log(`Classified as: ${queryType}`);
 
   let answer = "I couldn't find specific information in the video database.";
-  let references: any[] = [];
+  let references: Reference[] = [];
   let source: RAGResponse['source'] = 'none';
   let confidence = 0.0;
   let needsWebSearch = false;
@@ -217,13 +228,14 @@ export async function processQuery(query: string): Promise<RAGResponse> {
             confidence = 0.98;
              const { data: refData } = await supabase
                 .from('knowledge')
-                .select('video_title, channel_name, link, created_at')
+                .select('video_title, "channel name", link, created_at')
                 .ilike('video_title', `%${videoTitleFromQuery}%`)
-                .limit(1).single();
+                .limit(1)
+                .single();
              if (refData) {
                  references = [{
-                     title: refData.video_title,
-                     channel_name: refData.channel_name,
+                     video_title: refData.video_title,
+                     channel_name: refData["channel name"],
                      link: refData.link,
                      created_at: refData.created_at
                  }];
@@ -278,7 +290,7 @@ export async function processQuery(query: string): Promise<RAGResponse> {
                        }`
                      ).join('\n\n');
             references = recentData.map(item => ({
-                title: item.video_title,
+                video_title: item.video_title,
                 summary: item.summary,
                 channel_name: item.channel_name,
                 link: item.link,
@@ -307,7 +319,7 @@ export async function processQuery(query: string): Promise<RAGResponse> {
          if (references.length > 0) {
            answer = `Based on the video database, here's what I found related to your query:\n\n` +
                     references.map(ref =>
-                      `- ${ref.title} (Channel: ${ref.channel_name}, Published: ${
+                      `- ${ref.video_title} (Channel: ${ref.channel_name}, Published: ${
                         ref.created_at ? new Date(ref.created_at).toLocaleDateString() : 'N/A'
                       })`
                     ).join('\n');

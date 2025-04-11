@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     
     // If DuckDuckGo fails, fall back to OpenAI
     if (!searchResult) {
-      console.log('DuckDuckGo search failed, falling back to OpenAI...');
+      console.log('Perplexity search failed, falling back to OpenAI...');
       searchResult = await performOpenAIFallbackSearch(query);
     }
 
