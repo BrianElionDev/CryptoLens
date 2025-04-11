@@ -70,13 +70,25 @@ export default function CoinChart({
   useEffect(() => {
     if (!chartContainerRef.current || !chartData) return;
 
-    const chart = createChart(chartContainerRef.current, {
+    // Clear any existing chart
+    if (chartRef.current) {
+      chartRef.current.remove();
+      chartRef.current = null;
+    }
+
+    const chartContainer = chartContainerRef.current;
+
+    // Set initial dimensions
+    const containerWidth = chartContainer.clientWidth;
+    const containerHeight = chartContainer.clientHeight;
+
+    const chart = createChart(chartContainer, {
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
         textColor: "#94a3b8",
       },
-      width: chartContainerRef.current.clientWidth,
-      height: chartContainerRef.current.clientHeight,
+      width: containerWidth,
+      height: containerHeight,
       timeScale: {
         timeVisible: true,
         secondsVisible: false,
@@ -137,25 +149,37 @@ export default function CoinChart({
     candlestickSeries.setData(candlestickData);
     chartRef.current = chart;
 
-    const resizeObserver = new ResizeObserver((entries) => {
-      if (entries.length === 0 || !chartRef.current) return;
-      const { width, height } = entries[0].contentRect;
-      chartRef.current.resize(width, height);
+    // Create resize handler
+    const handleResize = () => {
+      if (chartRef.current && chartContainer) {
+        const { width, height } = chartContainer.getBoundingClientRect();
+        chartRef.current.resize(width, height);
+        chartRef.current.timeScale().fitContent();
+      }
+    };
+
+    // Set up resize observer
+    const resizeObserver = new ResizeObserver(() => {
+      handleResize();
     });
 
-    resizeObserver.observe(chartContainerRef.current);
+    resizeObserver.observe(chartContainer);
 
+    // Handle immediate resize if needed
+    handleResize();
+
+    // Clean up
     return () => {
+      resizeObserver.disconnect();
       chart.remove();
       chartRef.current = null;
-      resizeObserver.disconnect();
     };
   }, [chartData]);
 
   if (data_source === "cmc") {
     return (
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
+      <div className="w-full h-full">
+        <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-gray-200">Price History</h3>
           <Tabs defaultValue={timeframe} onValueChange={handleTimeframeChange}>
             <TabsList className="bg-gray-900/60">
@@ -180,7 +204,7 @@ export default function CoinChart({
             </TabsList>
           </Tabs>
         </div>
-        <div className="h-[400px] w-full min-w-[400px] relative rounded-lg border border-gray-800 bg-gray-900/50 p-4 flex items-center justify-center">
+        <div className="h-[calc(100%-40px)] w-full relative rounded-lg border border-gray-800 bg-gray-900/50 p-4 flex items-center justify-center">
           <div className="text-center text-gray-400">
             <p>Historical data is not available in the free version of CMC</p>
             <p className="text-sm mt-2">
@@ -193,8 +217,8 @@ export default function CoinChart({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
+    <div className="w-full h-full">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4">
         <h3 className="text-lg font-semibold text-gray-200">Price History</h3>
         <Tabs defaultValue={timeframe} onValueChange={handleTimeframeChange}>
           <TabsList className="bg-gray-900/60">
@@ -210,14 +234,16 @@ export default function CoinChart({
           </TabsList>
         </Tabs>
       </div>
-      <div className="h-[400px] w-full min-w-[400px] relative rounded-lg border border-gray-800 bg-gray-900/50 p-4">
+      <div className="h-[calc(100%-56px)] w-full relative rounded-lg border border-blue-500/30 bg-black/50 p-2 sm:p-4">
         {isLoading ? (
           <div className="h-full w-full flex items-center justify-center">
             <div className="w-8 h-8 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
           </div>
         ) : error ? (
           <div className="h-full w-full flex items-center justify-center text-red-500">
-            {error.message}
+            {error instanceof Error
+              ? error.message
+              : "Error loading chart data"}
           </div>
         ) : (
           <div ref={chartContainerRef} className="w-full h-full" />

@@ -136,10 +136,26 @@ export function useCoinData(
 
   // Merge data from both queries
   const mergedData = {
-    data: [
-      ...Object.values(geckoQuery.data?.data || {}),
-      ...Object.values(cmcQuery.data?.data || {}),
-    ],
+    data: (() => {
+      // Create a Map to deduplicate by ID and symbol
+      const uniqueCoins = new Map<string, CoinData>();
+
+      // Process CoinGecko data first (preferred source)
+      Object.values(geckoQuery.data?.data || {}).forEach((coin) => {
+        const key = coin.id || coin.symbol.toLowerCase();
+        uniqueCoins.set(key, coin);
+      });
+
+      // Then add CMC data for coins not already in the map
+      Object.values(cmcQuery.data?.data || {}).forEach((coin) => {
+        const key = coin.id || coin.symbol.toLowerCase();
+        if (!uniqueCoins.has(key)) {
+          uniqueCoins.set(key, coin);
+        }
+      });
+
+      return Array.from(uniqueCoins.values());
+    })(),
     timestamp: Math.max(
       geckoQuery.data?.timestamp || 0,
       cmcQuery.data?.timestamp || 0
