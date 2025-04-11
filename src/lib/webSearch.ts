@@ -1,202 +1,155 @@
 // Remove unused import
 // import { NextRequest } from 'next/server';
 
-// Interface for the web search response
+import OpenAI from 'openai';
+
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+// Interface for web search results
 export interface WebSearchResult {
-  query: string;
-  results: {
-    title: string;
-    link: string;
-    snippet: string;
-  }[];
   answer: string;
+  // Ensure results structure matches what Perplexity/OpenAI might provide
+  // Perplexity might require parsing the answer string for sources
+  // OpenAI won't provide structured sources directly
+  results: { title: string; link: string; snippet?: string }[];
 }
 
-/**
- * Perform a web search using Perplexity API
- * 
- * @param query - The search query
- * @returns WebSearchResult object with search results and an AI-generated answer
- */
-export async function performWebSearch(query: string): Promise<WebSearchResult | null> {
+// --- Perplexity Search Function ---
+async function performPerplexitySearch(query: string): Promise<WebSearchResult | null> {
+  console.log('Attempting Perplexity search...');
+  const apiKey = process.env.PERPLEXITY_API_KEY;
+
+  if (!apiKey) {
+    console.error('Perplexity API key (PERPLEXITY_API_KEY) is not set.');
+    return null;
+  }
+
+  const options = {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      accept: 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'sonar', // Using an online model for web search capabilities
+      messages: [
+        { role: 'system', content: 'Be precise and concise. Answer the user query based on web search results.' },
+        { role: 'user', content: query },
+      ],
+      // Consider adding max_tokens, temperature etc. if needed
+    }),
+  };
+
   try {
-    const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY;
-    
-    if (!PERPLEXITY_API_KEY) {
-      console.error('PERPLEXITY_API_KEY is not set in environment variables');
-      return null;
-    }
-    
-    console.log(`Performing web search for: "${query}"`);
-    
-    // Using the correct Perplexity chat completions endpoint
+    // Added timeout handling for Perplexity API request
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8-second timeout
+
     const response = await fetch('https://api.perplexity.ai/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${PERPLEXITY_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: "sonar-online",
-        messages: [
-          {
-            role: "system", 
-            content: "You are a helpful assistant that provides accurate information about cryptocurrency, blockchain, and related topics. Search the web for the most up-to-date information when needed. Include relevant links to sources in your answers."
-          },
-          {
-            role: "user", 
-            content: `I want to learn about: ${query}. Please search the web for current information and provide a well-structured answer with links to your sources.`
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 1000
-      })
+        ...options,
+        signal: controller.signal // Pass the abort signal
     });
-    
+
+    clearTimeout(timeoutId); // Clear timeout if fetch completes
+
+
     if (!response.ok) {
-      const errorData = await response.text();
-      console.error(`Perplexity API error: ${response.status} - ${errorData}`);
+      const errorBody = await response.text();
+      console.error(`Perplexity API request failed with status ${response.status}: ${errorBody}`);
       return null;
     }
-    
+
     const data = await response.json();
-    
-    // Extract content from the Perplexity response
-    const content = data.choices?.[0]?.message?.content || '';
-    
-    // Parse sources from the markdown content
-    const sources = extractSourcesFromContent(content);
-    
-    return {
-      query,
-      results: sources,
-      answer: content
-    };
-  } catch (error) {
-    console.error('Error performing web search:', error);
+
+    if (data.choices && data.choices.length > 0 && data.choices[0].message && data.choices[0].message.content) {
+      const answer = data.choices[0].message.content;
+      console.log('Perplexity search successful.');
+
+      // Placeholder for results - adjust if Perplexity provides structured sources
+      // You might need to parse the 'answer' string for potential sources
+      return {
+        answer,
+        results: [],
+      };
+    } else {
+      console.warn('Perplexity response did not contain the expected answer structure.', data);
+      return null;
+    }
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'name' in error && error.name === 'AbortError') {
+      console.error('Perplexity search request timed out.');
+    } else {
+      console.error('Error during Perplexity search request:', error);
+    }
     return null;
   }
 }
 
-/**
- * Extract sources from Perplexity's markdown content
- * Perplexity typically includes sources in the format [number]: URL
- */
-function extractSourcesFromContent(content: string): { title: string; link: string; snippet: string }[] {
-  // Look for URLs in the content
-  const sources: { title: string; link: string; snippet: string }[] = [];
-  
-  // Match markdown links [title](url)
-  const markdownLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
-  let match;
-  
-  while ((match = markdownLinkRegex.exec(content)) !== null) {
-    const title = match[1];
-    const link = match[2];
-    
-    // Only add unique links
-    if (link && !sources.some(s => s.link === link)) {
-      sources.push({
-        title: title || 'Web Source',
-        link,
-        snippet: extractContextAroundLink(content, match.index, 150)
-      });
-    }
-  }
-  
-  // If no markdown links found, try to find reference-style links ([1]: https://...)
-  if (sources.length === 0) {
-    const referenceRegex = /\[(\d+)\]:\s*(https?:\/\/[^\s]+)/g;
-    
-    while ((match = referenceRegex.exec(content)) !== null) {
-      const linkNumber = match[1];
-      const link = match[2];
-      
-      if (link && !sources.some(s => s.link === link)) {
-        sources.push({
-          title: `Source ${linkNumber}`,
-          link,
-          snippet: extractContextAroundLink(content, match.index, 150)
-        });
-      }
-    }
-  }
-  
-  return sources;
-}
 
-/**
- * Extract context around a link to use as a snippet
- */
-function extractContextAroundLink(content: string, linkIndex: number, charCount: number): string {
-  const start = Math.max(0, linkIndex - charCount / 2);
-  const end = Math.min(content.length, linkIndex + charCount / 2);
-  
-  let snippet = content.substring(start, end).trim();
-  
-  // Add ellipsis if we're not at the beginning/end
-  if (start > 0) snippet = '...' + snippet;
-  if (end < content.length) snippet = snippet + '...';
-  
-  return snippet;
-}
-
-/**
- * Fallback to OpenAI for web search capability
- * 
- * @param query - The search query
- * @returns WebSearchResult object with an AI-generated answer based on its knowledge
- */
+// --- Direct OpenAI Search Function (Fallback) ---
+// Export this function to match the import in route.ts
 export async function performOpenAIFallbackSearch(query: string): Promise<WebSearchResult | null> {
+  console.log('Attempting direct OpenAI search as fallback...');
   try {
-    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-    
-    if (!OPENAI_API_KEY) {
-      console.error('OPENAI_API_KEY is not set in environment variables');
-      return null;
-    }
-    
-    console.log(`Performing OpenAI fallback search for: "${query}"`);
-    
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an AI assistant with knowledge about cryptocurrencies, blockchain, and related topics. Your task is to provide current information based on your training data. Format your answer in markdown with headers and bullet points where appropriate.'
-          },
-          {
-            role: 'user',
-            content: `Please provide information about: ${query}`
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 1000
-      })
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo", // Or another suitable model
+      messages: [
+        {
+          role: "system",
+          content: "You are a helpful assistant that answers questions based on your knowledge. Provide a concise answer."
+        },
+        {
+          role: "user",
+          content: `Answer the following question: ${query}`
+        }
+      ],
+      max_tokens: 300,
     });
-    
-    if (!response.ok) {
-      const errorData = await response.text();
-      console.error(`OpenAI API error: ${response.status} - ${errorData}`);
+
+    const answer = completion.choices[0]?.message?.content;
+    if (answer) {
+      console.log('Direct OpenAI search successful.');
+      return {
+        answer,
+        results: [] // OpenAI doesn't directly provide search result links
+      };
+    } else {
+      console.warn('Direct OpenAI search did not return an answer.');
       return null;
     }
-    
-    const data = await response.json();
-    const answer = data.choices?.[0]?.message?.content || '';
-    
-    return {
-      query,
-      results: [], // No web search results since this is just using OpenAI's knowledge
-      answer: answer
-    };
+
   } catch (error) {
-    console.error('Error performing OpenAI fallback search:', error);
+    console.error('Error during direct OpenAI search:', error);
     return null;
   }
 }
+
+
+// --- Main Web Search Function ---
+// Tries Perplexity first, then falls back to direct OpenAI
+// THIS IS THE ONLY EXPORTED performWebSearch FUNCTION
+export async function performWebSearch(query: string): Promise<WebSearchResult | null> {
+
+  // 1. Try Perplexity
+  const perplexityResult = await performPerplexitySearch(query);
+  if (perplexityResult) {
+    return perplexityResult;
+  }
+
+  // 2. Fallback to direct OpenAI search
+  console.log('Perplexity search failed or returned no result, falling back to direct OpenAI search.');
+  const openaiResult = await performOpenAIFallbackSearch(query);
+  if (openaiResult) {
+    return openaiResult;
+  }
+
+  // 3. If both fail
+  console.error('Both Perplexity and direct OpenAI search failed.');
+  return null;
+}
+
+// Ensure no other function named 'performWebSearch' exists below this line

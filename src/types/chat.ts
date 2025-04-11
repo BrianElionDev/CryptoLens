@@ -8,6 +8,8 @@ export interface Message {
     link: string;
     date?: string;
   }[];
+  source?: 'database' | 'web' | 'hybrid' | 'none';
+  confidence?: number;
 }
 
 export interface Chat {
