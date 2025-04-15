@@ -45,6 +45,7 @@ export async function GET() {
       id: item.id,
       date: item.date,
       transcript: item.transcript,
+      corrected_transcript: item.corrected_transcript,    
       video_title: item.video_title,
       "channel name": item["channel name"],
       link: item.link || "",

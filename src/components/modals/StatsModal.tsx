@@ -41,18 +41,19 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
   }, [topCoins, item.llm_answer.projects, isLoadingCoins, matchCoins]);
 
   const matches = useMemo(() => {
-    if (!item.transcript || !searchQuery) return [];
-    const lines = item.transcript.split("\n");
+    if (!item.corrected_transcript || !searchQuery) return [];
+    const lines = item.corrected_transcript.split("\n");
     const query = searchQuery.toLowerCase();
     return lines
       .map((line, index) => ({ line, index }))
       .filter(({ line }) => line.toLowerCase().includes(query));
-  }, [item.transcript, searchQuery]);
+  }, [item.corrected_transcript, searchQuery]);
 
   const filteredTranscript = useMemo(() => {
-    if (!item.transcript || !searchQuery) return item.transcript;
+    if (!item.corrected_transcript || !searchQuery)
+      return item.corrected_transcript;
     return matches.map(({ line }) => line).join("\n");
-  }, [item.transcript, searchQuery, matches]);
+  }, [item.corrected_transcript, searchQuery, matches]);
 
   const highlightText = (text: string, lineIndex: number) => {
     if (!searchQuery) return text;
@@ -587,7 +588,7 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
                   </div>
                 )}
               </div>
-              {item.transcript ? (
+              {item.corrected_transcript ? (
                 <div
                   ref={transcriptRef}
                   className="prose prose-invert max-w-none"
