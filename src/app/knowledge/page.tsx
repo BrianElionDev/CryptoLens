@@ -239,6 +239,7 @@ const KnowledgePageContent = memo(function KnowledgePageContent() {
                     setFilterChannel(e.target.value);
                     setCurrentPage(1);
                   }}
+                  aria-label="Filter by channel"
                   className="w-full appearance-none bg-gray-900/60 border border-gray-700/50 rounded-lg py-2 px-4 pr-8 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 hover:bg-gray-800/60 transition-colors"
                 >
                   <option value="all">All Channels</option>
@@ -275,6 +276,7 @@ const KnowledgePageContent = memo(function KnowledgePageContent() {
                       setSortBy(e.target.value as SortByType);
                       setCurrentPage(1);
                     }}
+                    aria-label="Sort by"
                     className="w-full appearance-none bg-gray-900/60 border border-gray-700/50 rounded-lg py-2 px-3 pr-8 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 hover:bg-gray-800/60 transition-colors"
                   >
                     <option value="title">Sort by Title</option>

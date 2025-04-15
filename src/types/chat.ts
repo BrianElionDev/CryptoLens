@@ -1,13 +1,19 @@
+export interface MessageReference {
+  title: string;
+  link: string;
+  snippet?: string;
+  date?: string;
+  [key: string]: string | undefined;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
-  references?: {
-    title: string;
-    link: string;
-    date?: string;
-  }[];
+  references?: MessageReference[];
+  source?: 'database' | 'tavily' | 'perplexity' | 'openai' | 'rag_fallback' | 'none' | 'error';
+  confidence?: number;
 }
 
 export interface Chat {
@@ -15,4 +21,4 @@ export interface Chat {
   title: string;
   messages: Message[];
   created_at: string;
-} 
+}
