@@ -13,7 +13,7 @@ const supabase = createClient(
 const embeddings = new OpenAIEmbeddings({ openAIApiKey: process.env.OPENAI_API_KEY });
 
 // RAG Response Interface
-interface RAGResponse {
+export interface RAGResponse {
   answer: string;
   references: Reference[];
   source: 'database' | 'web' | 'hybrid' | 'none';
