@@ -7,6 +7,7 @@ export interface KnowledgeItem {
   "channel name": string;
   link: string;
   summary?: string;
+  hasUpdatedTranscript?: boolean;
   llm_answer: LLMAnswer;
   video_type: "video" | "short";
 }
