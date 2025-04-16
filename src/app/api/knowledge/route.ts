@@ -51,6 +51,7 @@ export async function GET() {
       link: item.link || "",
       answer: item.answer || "",
       summary: item.summary || "",
+      hasUpdatedTranscript: item.hasUpdatedTranscript,
       llm_answer: item.llm_answer || { projects: [] },
       video_type: item.video_type || "video",
     }));
