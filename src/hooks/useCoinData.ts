@@ -71,6 +71,17 @@ export function useCoinData(
     };
   }, [symbolsKey, symbols]);
 
+  // Normalize symbol for matching
+  const normalizeSymbol = (symbol: string) => {
+    return symbol
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "") // Remove special characters
+      .replace(/\s+/g, "") // Remove spaces
+      .replace(/dao$/, "") // Remove 'dao' suffix
+      .replace(/token$/, "") // Remove 'token' suffix
+      .replace(/coin$/, ""); // Remove 'coin' suffix
+  };
+
   // CoinGecko Query
   const geckoQuery = useQuery<
     {
@@ -81,6 +92,7 @@ export function useCoinData(
   >({
     queryKey: ["coinGeckoData", symbolsKey, mode, refreshKey],
     queryFn: async () => {
+      console.log("Querying CoinGecko with symbols:", symbols);
       const response = await axios.post(
         "/api/coingecko",
         {
@@ -89,6 +101,12 @@ export function useCoinData(
         },
         { timeout: API_TIMEOUT }
       );
+      console.log("CoinGecko response format:", {
+        keys: Object.keys(response.data.data || {}),
+        firstItem: Object.values(response.data.data || {})[0],
+        mantraData:
+          response.data.data?.["mantra"] || response.data.data?.["MANTRA"],
+      });
       return response.data;
     },
     staleTime: 10000,
@@ -100,8 +118,13 @@ export function useCoinData(
   const foundInGecko = new Set(
     Object.keys(geckoQuery.data?.data || {}).map((s) => s.toLowerCase())
   );
+  console.log("Found in CoinGecko:", {
+    keys: Array.from(foundInGecko),
+    hasMantra: Array.from(foundInGecko).includes("mantra"),
+    rawKeys: Object.keys(geckoQuery.data?.data || {}),
+  });
   const missingSymbols = symbols.filter(
-    (s) => !foundInGecko.has(s.toLowerCase())
+    (s) => !foundInGecko.has(normalizeSymbol(s))
   );
 
   // CMC Query - only runs for missing symbols
@@ -117,6 +140,7 @@ export function useCoinData(
       if (missingSymbols.length === 0) {
         return { data: {}, timestamp: Date.now() };
       }
+      console.log("Querying CMC with symbols:", missingSymbols);
       const response = await axios.post(
         "/api/coinmarketcap",
         {
@@ -126,6 +150,12 @@ export function useCoinData(
         },
         { timeout: API_TIMEOUT }
       );
+      console.log("CMC response format:", {
+        keys: Object.keys(response.data.data || {}),
+        firstItem: Object.values(response.data.data || {})[0],
+        mantraData:
+          response.data.data?.["mantra"] || response.data.data?.["MANTRA"],
+      });
       return response.data;
     },
     enabled: missingSymbols.length > 0,
@@ -141,19 +171,20 @@ export function useCoinData(
       const uniqueCoins = new Map<string, CoinData>();
 
       // Process CoinGecko data first (preferred source)
-      Object.values(geckoQuery.data?.data || {}).forEach((coin) => {
-        const key = coin.id || coin.symbol.toLowerCase();
-        uniqueCoins.set(key, coin);
+      Object.entries(geckoQuery.data?.data || {}).forEach(([key, coin]) => {
+        console.log("Processing CoinGecko coin:", key, coin.symbol);
+        uniqueCoins.set(key.toLowerCase(), coin);
       });
 
       // Then add CMC data for coins not already in the map
-      Object.values(cmcQuery.data?.data || {}).forEach((coin) => {
-        const key = coin.id || coin.symbol.toLowerCase();
-        if (!uniqueCoins.has(key)) {
-          uniqueCoins.set(key, coin);
+      Object.entries(cmcQuery.data?.data || {}).forEach(([key, coin]) => {
+        console.log("Processing CMC coin:", key, coin.symbol);
+        if (!uniqueCoins.has(key.toLowerCase())) {
+          uniqueCoins.set(key.toLowerCase(), coin);
         }
       });
 
+      console.log("Final merged coins:", Array.from(uniqueCoins.keys()));
       return Array.from(uniqueCoins.values());
     })(),
     timestamp: Math.max(
@@ -244,5 +275,20 @@ export function useKnowledgeData() {
     refetchOnMount: true,
     refetchOnReconnect: true,
     retry: 2,
+  });
+}
+
+export function useCoinDataQuery() {
+  return useQuery({
+    queryKey: ["coins"],
+    queryFn: async () => {
+      const response = await axios.get<CoinData[]>("/api/coins/markets");
+      return response.data;
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 }

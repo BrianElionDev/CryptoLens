@@ -44,6 +44,7 @@ export async function prefetchKnowledgeData() {
       summary: item.summary || "",
       llm_answer: item.llm_answer || { projects: [] }, // Ensure projects array exists
       video_type: item.video_type || "video", // Default to "video" if not specified
+      usage: item.usage || 0, // Add usage field with default value of 0
     }));
 
     return transformedData;

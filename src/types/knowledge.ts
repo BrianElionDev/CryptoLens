@@ -2,11 +2,14 @@ export interface KnowledgeItem {
   id: string;
   date: string;
   transcript?: string;
+  corrected_transcript?: string;
   video_title: string;
   "channel name": string;
   link: string;
   summary?: string;
+  hasUpdatedTranscript?: boolean;
   llm_answer: LLMAnswer;
+  usage: number;
   video_type: "video" | "short";
 }
 
