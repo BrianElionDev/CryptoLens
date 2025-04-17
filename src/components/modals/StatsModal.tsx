@@ -23,6 +23,7 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
   >("stats");
   const [searchQuery, setSearchQuery] = useState("");
   const [currentMatchIndex, setCurrentMatchIndex] = useState(-1);
+  const [currentLineIndex, setCurrentLineIndex] = useState(-1);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const { topCoins, isLoading: isLoadingCoins, matchCoins } = useCoinGecko();
 
@@ -44,26 +45,71 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
     if (!item.corrected_transcript || !searchQuery) return [];
     const lines = item.corrected_transcript.split("\n");
     const query = searchQuery.toLowerCase();
+    let matchCount = 0;
     return lines
-      .map((line, index) => ({ line, index }))
-      .filter(({ line }) => line.toLowerCase().includes(query));
+      .map((line, index) => {
+        const matchesInLine = (
+          line.toLowerCase().match(new RegExp(`\\b${query}\\b`, "g")) || []
+        ).length;
+        const lineMatches =
+          matchesInLine > 0
+            ? { line, index, count: matchesInLine, startIndex: matchCount }
+            : null;
+        matchCount += matchesInLine;
+        return lineMatches;
+      })
+      .filter(Boolean);
   }, [item.corrected_transcript, searchQuery]);
 
   const filteredTranscript = useMemo(() => {
     if (!item.corrected_transcript || !searchQuery)
       return item.corrected_transcript;
-    return matches.map(({ line }) => line).join("\n");
+    return matches.map((match) => match?.line || "").join("\n");
   }, [item.corrected_transcript, searchQuery, matches]);
+
+  const totalMatches = useMemo(() => {
+    return matches.reduce((sum, match) => sum + (match?.count || 0), 0);
+  }, [matches]);
+
+  const navigateMatches = (direction: "next" | "prev") => {
+    if (totalMatches === 0) return;
+    setCurrentMatchIndex((prev) => {
+      const newIndex =
+        direction === "next"
+          ? (prev + 1) % totalMatches
+          : prev <= 0
+          ? totalMatches - 1
+          : prev - 1;
+
+      // Find which line contains this match
+      let cumulativeCount = 0;
+      for (const match of matches) {
+        if (match) {
+          cumulativeCount += match.count;
+          if (newIndex < cumulativeCount) {
+            setCurrentLineIndex(match.index);
+            break;
+          }
+        }
+      }
+
+      return newIndex;
+    });
+  };
 
   const highlightText = (text: string, lineIndex: number) => {
     if (!searchQuery) return text;
-    const parts = text.split(new RegExp(`(${searchQuery})`, "gi"));
+    const parts = text.split(new RegExp(`(\\b${searchQuery}\\b)`, "gi"));
+    let matchCount = 0;
     return parts.map((part, i) => {
       if (part.toLowerCase() === searchQuery.toLowerCase()) {
-        const isCurrentMatch = matches[currentMatchIndex]?.index === lineIndex;
+        const isCurrentMatch =
+          lineIndex === currentLineIndex && matchCount === currentMatchIndex;
+        matchCount++;
         return (
           <span
             key={i}
+            data-highlight="true"
             ref={
               isCurrentMatch
                 ? (el) => {
@@ -76,9 +122,11 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
                   }
                 : undefined
             }
-            className={`bg-blue-500/20 text-blue-200 px-1 rounded ${
-              isCurrentMatch ? "ring-2 ring-blue-400" : ""
-            }`}
+            className={`${
+              isCurrentMatch
+                ? "bg-emerald-500/20 text-emerald-200 ring-2 ring-emerald-400"
+                : "bg-blue-500/20 text-blue-200"
+            } px-1 rounded`}
           >
             {part}
           </span>
@@ -88,22 +136,24 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
     });
   };
 
-  const navigateMatches = (direction: "next" | "prev") => {
-    if (matches.length === 0) return;
-    setCurrentMatchIndex((prev) => {
-      const newIndex =
-        direction === "next"
-          ? (prev + 1) % matches.length
-          : prev <= 0
-          ? matches.length - 1
-          : prev - 1;
-      return newIndex;
-    });
-  };
-
   useEffect(() => {
     setCurrentMatchIndex(-1);
+    setCurrentLineIndex(-1);
   }, [searchQuery]);
+
+  useEffect(() => {
+    if (currentMatchIndex >= 0 && transcriptRef.current) {
+      const highlightedElements = transcriptRef.current.querySelectorAll(
+        '[data-highlight="true"]'
+      );
+      if (highlightedElements[currentMatchIndex]) {
+        highlightedElements[currentMatchIndex].scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }
+    }
+  }, [currentMatchIndex]);
 
   // Handle navigation to category page
   const handleCategoryClick = (category: string, e: React.MouseEvent) => {
@@ -298,15 +348,24 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
           <h2 className="text-xl font-medium text-cyan-200">
             {item.video_title}
           </h2>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onClose();
-            }}
-            className="p-2 hover:bg-gray-800/50 rounded-lg transition-colors"
-          >
-            <X className="w-5 h-5 text-gray-400" />
-          </button>
+          <div className="flex items-center gap-3">
+            {typeof item.usage === "number" && (
+              <div className="px-3 py-1 bg-emerald-900/30 border border-emerald-500/30 rounded-md">
+                <span className="text-sm font-medium text-emerald-300">
+                  ${item.usage.toFixed(8)}
+                </span>
+              </div>
+            )}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
+              className="p-2 hover:bg-gray-800/50 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5 text-gray-400" />
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -552,80 +611,95 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
               </div>
             </div>
           ) : (
-            <div className="p-6 rounded-xl bg-gray-900/40 border border-gray-700/50">
-              <div className="relative mb-6">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  type="text"
-                  placeholder="Search transcript..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-gray-800/50 border-gray-700/50 focus:border-blue-500/50"
-                />
-                {searchQuery && matches.length > 0 && (
-                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
-                    <span className="text-sm text-gray-400">
-                      {currentMatchIndex + 1}/{matches.length}
-                    </span>
-                    <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => navigateMatches("prev")}
-                      >
-                        <ChevronUp className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => navigateMatches("next")}
-                      >
-                        <ChevronDown className="h-4 w-4" />
-                      </Button>
+            <div className="p-6 rounded-xl bg-gray-900/40 border border-gray-700/50 flex flex-col h-full">
+              <div className="sticky top-0 z-10 bg-gray-900/40 backdrop-blur-sm pb-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <Input
+                    type="text"
+                    placeholder="Search transcript..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 bg-gray-800/50 border-gray-700/50 focus:border-blue-500/50"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-700/50 rounded-full transition-colors"
+                    >
+                      <X className="w-4 h-4 text-gray-400" />
+                    </button>
+                  )}
+                  {searchQuery && matches.length > 0 && (
+                    <div className="absolute right-12 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
+                      <span className="text-sm text-gray-400">
+                        <span className="text-emerald-400">
+                          {currentMatchIndex + 1}
+                        </span>
+                        /{totalMatches} matches
+                      </span>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => navigateMatches("prev")}
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => navigateMatches("next")}
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {item.corrected_transcript ? (
+                  <div
+                    ref={transcriptRef}
+                    className="prose prose-invert max-w-none"
+                  >
+                    {filteredTranscript ? (
+                      filteredTranscript.split("\n").map((line, index) => (
+                        <p key={index} className="text-gray-200 mb-2">
+                          {highlightText(line, index)}
+                        </p>
+                      ))
+                    ) : (
+                      <p className="text-gray-400 text-center">
+                        No matches found
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-12 text-center">
+                    <div className="w-16 h-16 mb-4 text-gray-500">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      >
+                        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-400 mb-2">
+                      No Transcript Available
+                    </h3>
+                    <p className="text-gray-500 max-w-sm">
+                      The transcript for this video hasn&apos;t been generated
+                      yet. Check back later for updates.
+                    </p>
                   </div>
                 )}
               </div>
-              {item.corrected_transcript ? (
-                <div
-                  ref={transcriptRef}
-                  className="prose prose-invert max-w-none"
-                >
-                  {filteredTranscript ? (
-                    filteredTranscript.split("\n").map((line, index) => (
-                      <p key={index} className="text-gray-200 mb-2">
-                        {highlightText(line, index)}
-                      </p>
-                    ))
-                  ) : (
-                    <p className="text-gray-400 text-center">
-                      No matches found
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center p-12 text-center">
-                  <div className="w-16 h-16 mb-4 text-gray-500">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                    >
-                      <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-medium text-gray-400 mb-2">
-                    No Transcript Available
-                  </h3>
-                  <p className="text-gray-500 max-w-sm">
-                    The transcript for this video hasn&apos;t been generated
-                    yet. Check back later for updates.
-                  </p>
-                </div>
-              )}
             </div>
           )}
         </div>

@@ -45,12 +45,13 @@ export async function GET() {
       id: item.id,
       date: item.date,
       transcript: item.transcript,
-      corrected_transcript: item.corrected_transcript,    
+      corrected_transcript: item.corrected_transcript,
       video_title: item.video_title,
       "channel name": item["channel name"],
       link: item.link || "",
       answer: item.answer || "",
       summary: item.summary || "",
+      usage: item.usage || 0,
       hasUpdatedTranscript: item.hasUpdatedTranscript,
       llm_answer: item.llm_answer || { projects: [] },
       video_type: item.video_type || "video",
@@ -199,6 +200,7 @@ export async function POST(request: Request) {
             ? item.video_type
             : "video",
           created_at: new Date().toISOString(),
+          usage: item.usage || 0,
         };
       } catch (error) {
         console.error(`Error transforming item ${index}:`, error);
