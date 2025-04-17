@@ -5,14 +5,96 @@ import { useSearchParams, useRouter } from "next/navigation";
 import KnowledgeBase from "@/components/KnowledgeBase";
 import { useKnowledgeStore } from "@/stores/knowledgeStore";
 import { useKnowledgeData } from "@/hooks/useCoinData";
+import { useCoinDataQuery } from "@/hooks/useCoinData";
 
 type DateFilterType = "all" | "today" | "week" | "month" | "year";
 type SortByType = "date" | "title" | "channel";
 
+const PageSkeleton = () => (
+  <div className="min-h-screen pt-24 bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900 relative overflow-hidden">
+    {/* Background Animation */}
+    <div className="fixed inset-0 overflow-hidden pointer-events-none">
+      <div className="absolute -inset-[10px] opacity-50">
+        <div className="absolute top-1/4 -left-20 w-[500px] h-[500px] bg-purple-500/30 rounded-full mix-blend-multiply filter blur-xl" />
+        <div className="absolute top-1/3 -right-20 w-[600px] h-[600px] bg-cyan-500/30 rounded-full mix-blend-multiply filter blur-xl" />
+        <div className="absolute -bottom-32 left-1/3 w-[600px] h-[600px] bg-pink-500/30 rounded-full mix-blend-multiply filter blur-xl" />
+      </div>
+      <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 via-gray-900/50 to-transparent" />
+      <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
+    </div>
+
+    {/* Sticky Header Skeleton */}
+    <header className="sticky top-0 z-40 bg-gray-900/80 backdrop-blur-xl border-b border-gray-800/60">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div className="flex flex-col space-y-4">
+          {/* Top Bar Skeleton */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="h-8 w-48 bg-gray-700/50 rounded animate-pulse" />
+              <div className="h-8 w-24 bg-gray-700/50 rounded animate-pulse" />
+            </div>
+          </div>
+
+          {/* Controls Bar Skeleton */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-10 bg-gray-700/50 rounded animate-pulse" />
+            <div className="w-48 h-10 bg-gray-700/50 rounded animate-pulse" />
+            <div className="w-32 h-10 bg-gray-700/50 rounded animate-pulse" />
+            <div className="w-20 h-10 bg-gray-700/50 rounded animate-pulse" />
+          </div>
+        </div>
+      </div>
+    </header>
+
+    {/* Main Content Skeleton */}
+    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="space-y-6">
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <div
+              key={index}
+              className="group relative overflow-hidden rounded-xl bg-gradient-to-r from-blue-900/20 via-purple-900/20 to-pink-900/20 border border-blue-500/20 backdrop-blur-sm p-4"
+            >
+              <div className="space-y-3">
+                <div className="h-4 w-24 bg-gray-700/50 rounded animate-pulse" />
+                <div className="space-y-2">
+                  <div className="h-4 w-full bg-gray-700/50 rounded animate-pulse" />
+                  <div className="h-4 w-3/4 bg-gray-700/50 rounded animate-pulse" />
+                </div>
+                <div className="flex flex-wrap items-center gap-2 justify-between">
+                  <div className="h-4 w-20 bg-gray-700/50 rounded animate-pulse" />
+                  <div className="h-8 w-20 bg-gray-700/50 rounded animate-pulse" />
+                  <div className="h-6 w-16 bg-gray-700/50 rounded animate-pulse" />
+                  <div className="h-6 w-16 bg-gray-700/50 rounded animate-pulse" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </main>
+  </div>
+);
+
 const KnowledgePageContent = memo(function KnowledgePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { data: knowledge, isLoading, error } = useKnowledgeData();
+  const {
+    data: knowledge,
+    isLoading: isKnowledgeLoading,
+    error: knowledgeError,
+  } = useKnowledgeData();
+  const { isLoading: isCoinsLoading, isError: coinsError } = useCoinDataQuery();
+
+  useEffect(() => {
+    if (isKnowledgeLoading) {
+      console.log("Fetching knowledge data...");
+    }
+    if (isCoinsLoading) {
+      console.log("Fetching coin data...");
+    }
+  }, [isKnowledgeLoading, isCoinsLoading]);
+
   const itemsPerPage = 99;
 
   const {
@@ -85,7 +167,10 @@ const KnowledgePageContent = memo(function KnowledgePageContent() {
       params.toString() ? `?${params.toString()}` : ""
     }`;
 
-    router.replace(newUrl, { scroll: false });
+    // Only update URL if it's different from current
+    if (newUrl !== window.location.href) {
+      router.replace(newUrl, { scroll: false });
+    }
   }, [searchTerm, filterChannel, dateFilter, sortBy, currentPage, searchParams, router]);
 
   // Get unique channels from the channel name field
@@ -156,16 +241,20 @@ const KnowledgePageContent = memo(function KnowledgePageContent() {
       )
     );
 
+  const isLoading = isKnowledgeLoading || isCoinsLoading;
+  const error =
+    typeof knowledgeError === "string"
+      ? knowledgeError
+      : coinsError
+      ? "Failed to fetch coin data"
+      : null;
+
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   if (error) {
-    return <div className="text-red-500 text-center py-8">{error.message}</div>;
+    return <div className="text-red-500 text-center py-8">{error}</div>;
   }
 
   return (
@@ -380,6 +469,7 @@ const KnowledgePageContent = memo(function KnowledgePageContent() {
             (currentPage - 1) * itemsPerPage,
             currentPage * itemsPerPage
           )}
+          isMatching={isLoading}
         />
 
         {/* Pagination */}
@@ -456,13 +546,7 @@ const KnowledgePageContent = memo(function KnowledgePageContent() {
 
 export default function KnowledgePage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-        </div>
-      }
-    >
+    <Suspense fallback={<PageSkeleton />}>
       <KnowledgePageContent />
     </Suspense>
   );

@@ -7,7 +7,6 @@ import React, {
   useState,
   useRef,
   useCallback,
-  useMemo,
 } from "react";
 import axios from "axios";
 import { toast } from "react-hot-toast";
@@ -55,146 +54,83 @@ export function CoinGeckoProvider({ children }: { children: React.ReactNode }) {
     Map<string, { matched: boolean; data?: CoinGeckoData }>
   >(new Map());
 
-  // Move arrays into useMemo
-  const excludeTerms = useMemo(
-    () => [
-      "bull",
-      "bear",
-      "best",
-      "wallet",
-      "market",
-      "trading",
-      "exchange",
-      "crypto",
-      "token",
-      "nft",
-      "defi",
-      "blockchain",
-      "mining",
-      "staking",
-      "price",
-      "news",
-      "update",
-      "analysis",
-      "prediction",
-      "buy",
-      "sell",
-      "trade",
-      "chart",
-      "technical",
-      "fundamental",
-      "strategy",
-      "guide",
-      "tutorial",
-      "review",
-      "vs",
-      "versus",
-      "compared",
-      "comparison",
-    ],
-    []
-  );
-
-  const cleanTerms = useMemo(
-    () => [
-      "coin",
-      "protocol",
-      "network",
-      "chain",
-      "finance",
-      "ecosystem",
-      "platform",
-      "project",
-      "token",
-      "crypto",
-    ],
-    []
-  );
-
   const matchCoins = useCallback(
     (projects: Project[]) => {
-      if (!topCoins.length) return projects;
-
+      const excludeTerms = ["token", "coin", "protocol", "network"];
       return projects.map((project) => {
         const projectName = project.coin_or_project?.toLowerCase().trim() || "";
         if (!projectName) return { ...project, coingecko_matched: false };
 
         // Check cache first
-        const cached = matchCache.current.get(projectName);
-        if (cached) {
-          return {
-            ...project,
-            coingecko_matched: cached.matched,
-            coingecko_data: cached.data,
-          };
+        const cachedMatch = matchCache.current.get(projectName);
+        if (cachedMatch) {
+          return cachedMatch.matched
+            ? {
+                ...project,
+                coingecko_matched: true,
+                coingecko_data: cachedMatch.data,
+              }
+            : { ...project, coingecko_matched: false };
         }
 
-        // Skip if the project name contains excluded terms
-        if (excludeTerms.some((term) => projectName.includes(term))) {
-          matchCache.current.set(projectName, { matched: false });
-          return { ...project, coingecko_matched: false };
-        }
-
-        // Extract potential ticker if it exists ($XXX)
-        const tickerMatch = projectName.match(/\$([a-zA-Z0-9]+)/);
-        const ticker = tickerMatch ? tickerMatch[1].toLowerCase() : "";
-
-        // Remove ticker symbols and clean name
-        let cleanedName = project.coin_or_project
-          .replace(/\s*\(\$[^)]+\)/g, "")
-          .replace(/\$[a-zA-Z0-9]+/, "")
-          .toLowerCase()
-          .trim();
-
-        // Remove common prefixes/suffixes
-        cleanTerms.forEach((term) => {
-          cleanedName = cleanedName
-            .replace(new RegExp(`^${term}\\s+`, "i"), "")
-            .replace(new RegExp(`\\s+${term}$`, "i"), "")
-            .trim();
-        });
-
-        // Skip if cleaned name is too short or contains numbers
-        if (cleanedName.length < 2 || /\d/.test(cleanedName)) {
-          matchCache.current.set(projectName, { matched: false });
-          return { ...project, coingecko_matched: false };
-        }
-
-        // Try to find matching coin
-        const matchedCoin = topCoins.find((coin) => {
-          const symbol = coin.symbol.toLowerCase().trim();
-          const name = coin.name.toLowerCase().trim();
-
-          // First try exact matches
-          if (ticker && symbol === ticker) return true;
-          if (name === cleanedName) return true;
-          if (symbol === cleanedName) return true;
-
-          // Then try partial matches, but be very strict
-          return (
-            (name.includes(cleanedName) && cleanedName.length > 3) ||
-            (cleanedName.includes(name) && name.length > 3)
-          );
-        });
-
-        // Cache and return result
-        if (matchedCoin) {
-          matchCache.current.set(projectName, {
-            matched: true,
-            data: matchedCoin,
-          });
+        // Try direct match first
+        const directMatch = topCoins.find(
+          (coin) => coin.symbol.toLowerCase() === projectName
+        );
+        if (directMatch) {
+          const match = { matched: true, data: directMatch };
+          matchCache.current.set(projectName, match);
           return {
             ...project,
             coingecko_matched: true,
-            coingecko_data: matchedCoin,
+            coingecko_data: directMatch,
           };
         }
 
+        // Try name match
+        const nameMatch = topCoins.find(
+          (coin) => coin.name.toLowerCase() === projectName
+        );
+        if (nameMatch) {
+          const match = { matched: true, data: nameMatch };
+          matchCache.current.set(projectName, match);
+          return {
+            ...project,
+            coingecko_matched: true,
+            coingecko_data: nameMatch,
+          };
+        }
+
+        // Try partial match
+        let cleanedName = projectName;
+        excludeTerms.forEach((term) => {
+          cleanedName = cleanedName
+            .replace(new RegExp(`^${term}\\s+`, "i"), "")
+            .replace(new RegExp(`\\s+${term}$`, "i"), "");
+        });
+
+        const partialMatch = topCoins.find(
+          (coin) =>
+            coin.symbol.toLowerCase().includes(cleanedName) ||
+            coin.name.toLowerCase().includes(cleanedName)
+        );
+
+        if (partialMatch) {
+          const match = { matched: true, data: partialMatch };
+          matchCache.current.set(projectName, match);
+          return {
+            ...project,
+            coingecko_matched: true,
+            coingecko_data: partialMatch,
+          };
+        }
+
+        // No match found
         matchCache.current.set(projectName, { matched: false });
         return { ...project, coingecko_matched: false };
       });
     },
-    [topCoins, excludeTerms, cleanTerms]
+    [topCoins]
   );
 
   const fetchTopCoins = useCallback(async () => {
@@ -213,7 +149,7 @@ export function CoinGeckoProvider({ children }: { children: React.ReactNode }) {
 
       console.debug("Fetching fresh coin data from CoinGecko...");
 
-      // Fetch all coins in one request
+      // Fetch all coins
       const response = await axios.get(`/api/coins/markets`, {
         headers: {
           "Cache-Control": "max-age=300", // Cache for 5 minutes
@@ -229,6 +165,7 @@ export function CoinGeckoProvider({ children }: { children: React.ReactNode }) {
         symbol: coin.symbol,
         name: coin.name,
         image: coin.image,
+        market_cap_rank: coin.market_cap_rank,
       }));
 
       // Merge with CMC data if available

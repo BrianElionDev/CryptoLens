@@ -9,6 +9,7 @@ export interface KnowledgeItem {
   summary?: string;
   hasUpdatedTranscript?: boolean;
   llm_answer: LLMAnswer;
+  usage: number;
   video_type: "video" | "short";
 }
 

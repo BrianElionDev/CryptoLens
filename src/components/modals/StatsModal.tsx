@@ -348,15 +348,24 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
           <h2 className="text-xl font-medium text-cyan-200">
             {item.video_title}
           </h2>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onClose();
-            }}
-            className="p-2 hover:bg-gray-800/50 rounded-lg transition-colors"
-          >
-            <X className="w-5 h-5 text-gray-400" />
-          </button>
+          <div className="flex items-center gap-3">
+            {typeof item.usage === "number" && (
+              <div className="px-3 py-1 bg-emerald-900/30 border border-emerald-500/30 rounded-md">
+                <span className="text-sm font-medium text-emerald-300">
+                  ${item.usage.toFixed(8)}
+                </span>
+              </div>
+            )}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
+              className="p-2 hover:bg-gray-800/50 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5 text-gray-400" />
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}
