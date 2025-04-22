@@ -20,6 +20,8 @@ const tavilyClient = tavily({ // Renamed variable to avoid conflict
 export interface WebSearchResultItem {
     title: string;
     link: string; // Changed from url to link for consistency
+    url?: string; 
+    content?: string;
     snippet?: string;
     score?: number; // Tavily provides score
     raw_content?: string; // Tavily provides raw_content
@@ -31,10 +33,71 @@ export interface WebSearchResult {
   source: 'tavily' | 'perplexity' | 'openai'; // Indicate which service succeeded
 }
 
+// Add this interface at the top of your file (after the existing interfaces)
+interface TavilySearchResult {
+  title?: string;
+  url?: string;
+  content?: string;
+  score?: number;
+  // Add any other properties that might be in the Tavily response
+}
+
+// Add this function to enhance Tavily answers with GPT-4o
+async function enhanceWithGPT4o(query: string, tavilyAnswer: string, searchResults: WebSearchResultItem[]): Promise<string> {
+  try {
+    // Format search results as context
+    const formattedResults = searchResults.map((result, index) => {
+      return `[${index + 1}] ${result.title}\nURL: ${result.url || result.link}\nSnippet: ${result.content || result.snippet || 'No snippet available'}\n`;
+    }).join('\n');
+
+    // Create the prompt for GPT-4o
+    const prompt = `
+You are an AI assistant tasked with providing detailed, informative responses based on web search results.
+
+Original user query: "${query}"
+
+Tavily's concise answer: "${tavilyAnswer}"
+
+Search results:
+${formattedResults}
+
+Instructions:
+1. Create a more detailed, comprehensive answer based on the search results above.
+2. Maintain factual accuracy and use ONLY information present in the search results.
+3. Structure your response clearly with paragraphs for readability.
+4. Include specific details, examples, and explanations where relevant.
+5. If the search results contain contradicting information, acknowledge different perspectives.
+6. Your response should be 2-3 paragraphs minimum, but as detailed as the information allows.
+7. Do not mention that this is based on search results or Tavily in your answer.
+
+Provide your enhanced response:`;
+
+    // Call OpenAI API
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: "You are a helpful assistant that provides detailed, informative responses based on web search results." },
+        { role: "user", content: prompt }
+      ],
+      max_tokens: 1000,
+      temperature: 0.7,
+    });
+
+    // Return the enhanced answer
+    return completion.choices[0]?.message?.content || tavilyAnswer;
+  } catch (error) {
+    console.error('Error enhancing answer with GPT-4o:', error);
+    // Fall back to the original Tavily answer if enhancement fails
+    return tavilyAnswer;
+  }
+}
+
 // --- Tavily Search Function ---
 async function performTavilySearch(query: string): Promise<WebSearchResult | null> {
     console.log('Attempting Tavily search...');
-    if (!process.env.TAVILY_API_KEY) {
+    const tavilyApiKey = process.env.TAVILY_API_KEY;
+
+    if (!tavilyApiKey) {
         console.error('Tavily API key (TAVILY_API_KEY) is not set.');
         return null;
     }
@@ -50,35 +113,32 @@ async function performTavilySearch(query: string): Promise<WebSearchResult | nul
 
         console.log('Tavily search successful:', searchResponse);
 
-        // Use type guards to safely access properties
-        const results: WebSearchResultItem[] = (searchResponse?.results && Array.isArray(searchResponse.results)) 
-          ? searchResponse.results.map((item: unknown) => {
-              // Check if item is a valid object first
-              if (!item || typeof item !== 'object') {
-                return {
-                  title: 'Untitled',
-                  link: '#',
-                  snippet: '',
-                };
-              }
-              
-              // Now TypeScript knows item is an object, but we need to check individual properties
-              const obj = item as Record<string, unknown>;
-              
-              return {
-                title: typeof obj.title === 'string' ? obj.title : 'Untitled',
-                link: typeof obj.url === 'string' ? obj.url : '#',
-                snippet: typeof obj.content === 'string' ? obj.content : '',
-                score: typeof obj.score === 'number' ? obj.score : undefined,
-              };
-            })
-          : [];
-
-        return {
-            answer: searchResponse?.answer || "Tavily search completed, but no direct answer was generated.", // Use Tavily's summarized answer if available
+        if (searchResponse?.answer && searchResponse?.results) {
+          console.log('Tavily search successful.');
+          
+          // Format results (keep your existing code for this)
+          const results = (searchResponse.results && Array.isArray(searchResponse.results)) 
+            ? searchResponse.results.map((item: TavilySearchResult) => ({
+                title: item.title || 'Untitled',
+                link: item.url || '#',
+                snippet: item.content || '',
+                score: item.score
+              }))
+            : [];
+          
+          // Enhance the answer with GPT-4o
+          const enhancedAnswer = await enhanceWithGPT4o(query, searchResponse.answer, results);
+          
+          // Return the enhanced answer but keep the original Tavily results
+          return {
+            answer: enhancedAnswer,
             results: results,
-            source: 'tavily'
-        };
+            source: 'tavily' // Optional: indicate this was enhanced
+          };
+        } else {
+          console.warn('Tavily response did not contain the expected answer structure.', searchResponse);
+          return null;
+        }
 
     } catch (error) {
         console.error('Error during Tavily search request:', error);
@@ -148,9 +208,9 @@ async function performPerplexitySearch(query: string): Promise<WebSearchResult |
     }
   } catch (error: unknown) {
     if (error && typeof error === 'object' && 'name' in error && error.name === 'AbortError') {
-      console.error('Perplexity search request timed out.');
+        console.error('Perplexity search request timed out.');
     } else {
-      console.error('Error during Perplexity search request:', error);
+        console.error('Error during Perplexity search request:', error);
     }
     return null;
   }
