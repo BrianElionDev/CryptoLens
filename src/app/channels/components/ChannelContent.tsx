@@ -101,6 +101,7 @@ export const ChannelContent = () => {
           const coin = project.coin_or_project;
           const rpoints = project.rpoints || 0;
           const categories = project.category || [];
+          const mentions = project.total_count || 1;
 
           if (!data.has(coin)) {
             data.set(coin, {
@@ -113,7 +114,7 @@ export const ChannelContent = () => {
           const coinData = data.get(coin)!;
           coinData.rpoints += rpoints;
           categories.forEach((cat) => coinData.categories.add(cat));
-          coinData.mentions += 1;
+          coinData.mentions += mentions;
         });
       }
     });

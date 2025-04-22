@@ -17,7 +17,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useRouter } from "next/navigation";
-import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 
 type ExtendedCoinData = CoinData & {
   rpoints: number;
@@ -208,6 +214,36 @@ export function CombinedMarketTable({
         return;
       }
 
+      // Skip if outside date range
+      if (dateRange.from || dateRange.to) {
+        const coinDate = new Date(coin.date);
+        // Set to start of day for the coin date for consistent comparison
+        coinDate.setHours(0, 0, 0, 0);
+
+        // Create date objects for from and to with time set to start/end of day
+        let fromDate, toDate;
+
+        if (dateRange.from) {
+          fromDate = new Date(dateRange.from);
+          fromDate.setHours(0, 0, 0, 0);
+        }
+
+        if (dateRange.to) {
+          toDate = new Date(dateRange.to);
+          toDate.setHours(23, 59, 59, 999); // End of day
+        }
+
+        // Check "from" date if it exists
+        if (fromDate && coinDate < fromDate) {
+          return;
+        }
+
+        // Check "to" date if it exists
+        if (toDate && coinDate > toDate) {
+          return;
+        }
+      }
+
       const symbolMatch = coin.coin.match(/\(\$([^)]+)\)/);
       const symbol = symbolMatch ? symbolMatch[1].toLowerCase() : "";
       const cleanName = coin.coin
@@ -246,6 +282,7 @@ export function CombinedMarketTable({
     processedData.channels,
     selectedChannels,
     showMostRecent,
+    dateRange,
   ]);
 
   // Fetch coin data
@@ -298,10 +335,32 @@ export function CombinedMarketTable({
         return;
       }
 
-      // Skip if outside date range
-      if (dateRange.from && dateRange.to) {
+      // Skip if outside date range (add this check for symbols)
+      if (dateRange.from || dateRange.to) {
         const coinDate = new Date(coin.date);
-        if (coinDate < dateRange.from || coinDate > dateRange.to) {
+        // Set to start of day for the coin date for consistent comparison
+        coinDate.setHours(0, 0, 0, 0);
+
+        // Create date objects for from and to with time set to start/end of day
+        let fromDate, toDate;
+
+        if (dateRange.from) {
+          fromDate = new Date(dateRange.from);
+          fromDate.setHours(0, 0, 0, 0);
+        }
+
+        if (dateRange.to) {
+          toDate = new Date(dateRange.to);
+          toDate.setHours(23, 59, 59, 999); // End of day
+        }
+
+        // Check "from" date if it exists
+        if (fromDate && coinDate < fromDate) {
+          return;
+        }
+
+        // Check "to" date if it exists
+        if (toDate && coinDate > toDate) {
           return;
         }
       }
@@ -449,7 +508,7 @@ export function CombinedMarketTable({
           } else if (price < 100) {
             formattedPrice = price.toFixed(2).replace(/\.?0+$/, "");
           } else {
-            formattedPrice = formatCurrency(price);
+            formattedPrice = formatCurrency(price).replace("$", "");
           }
 
           return (
@@ -569,119 +628,80 @@ export function CombinedMarketTable({
           {datePreset === "custom" && (
             <div className="flex items-center gap-2">
               <div className="relative">
-                <Input
-                  type="text"
-                  placeholder="MM/DD/YYYY"
-                  value={
-                    dateRange.from ? format(dateRange.from, "MM/dd/yyyy") : ""
-                  }
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    try {
-                      const date = value ? new Date(value) : undefined;
-                      if (
-                        date &&
-                        !isNaN(date.getTime()) &&
-                        date.getFullYear() >= 1900 &&
-                        date.getFullYear() <= 2100 &&
-                        dateRangeInfo &&
-                        date >= dateRangeInfo.earliest &&
-                        date <= dateRangeInfo.latest
-                      ) {
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-[140px] bg-gray-900/60 border-gray-700/50 text-gray-200 h-9 px-3 justify-between"
+                    >
+                      {dateRange.from ? (
+                        format(dateRange.from, "MM/dd/yyyy")
+                      ) : (
+                        <span className="text-gray-400">Start date</span>
+                      )}
+                      <CalendarIcon className="h-4 w-4 opacity-70" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-auto p-0 bg-gray-800 border-gray-700"
+                    align="start"
+                  >
+                    <Calendar
+                      mode="single"
+                      selected={dateRange.from}
+                      onSelect={(date) => {
                         setDateRange((prev) => ({ ...prev, from: date }));
+                      }}
+                      disabled={(date) =>
+                        dateRangeInfo
+                          ? date < dateRangeInfo.earliest ||
+                            date > dateRangeInfo.latest
+                          : false
                       }
-                    } catch (e) {
-                      console.log(e);
-                      // Invalid date format
-                    }
-                  }}
-                  className="w-[140px] bg-gray-900/60 border-gray-700/50 text-gray-200 h-9 px-3 pr-10 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/50 transition-colors [&::-webkit-calendar-picker-indicator]:hidden"
-                  onFocus={(e) => {
-                    e.target.type = "date";
-                    if (dateRangeInfo) {
-                      e.target.min = format(
-                        dateRangeInfo.earliest,
-                        "yyyy-MM-dd"
-                      );
-                      e.target.max = format(dateRangeInfo.latest, "yyyy-MM-dd");
-                    }
-                  }}
-                  onBlur={(e) => {
-                    e.target.type = "text";
-                    if (!e.target.value) {
-                      e.target.placeholder = "MM/DD/YYYY";
-                    }
-                  }}
-                />
-                <button
-                  onClick={(e) => {
-                    const input = e.currentTarget
-                      .previousElementSibling as HTMLInputElement;
-                    input.type = "date";
-                    input.showPicker();
-                  }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:text-blue-400 transition-colors"
-                >
-                  <CalendarIcon className="h-4 w-4" />
-                </button>
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
 
               <span className="text-gray-400">to</span>
 
               <div className="relative">
-                <Input
-                  type="text"
-                  placeholder="MM/DD/YYYY"
-                  value={dateRange.to ? format(dateRange.to, "MM/dd/yyyy") : ""}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    try {
-                      const date = value ? new Date(value) : undefined;
-                      if (
-                        date &&
-                        !isNaN(date.getTime()) &&
-                        date.getFullYear() >= 1900 &&
-                        date.getFullYear() <= 2100 &&
-                        dateRangeInfo &&
-                        date >= dateRangeInfo.earliest &&
-                        date <= dateRangeInfo.latest
-                      ) {
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-[140px] bg-gray-900/60 border-gray-700/50 text-gray-200 h-9 px-3 justify-between"
+                    >
+                      {dateRange.to ? (
+                        format(dateRange.to, "MM/dd/yyyy")
+                      ) : (
+                        <span className="text-gray-400">End date</span>
+                      )}
+                      <CalendarIcon className="h-4 w-4 opacity-70" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-auto p-0 bg-gray-800 border-gray-700"
+                    align="start"
+                  >
+                    <Calendar
+                      mode="single"
+                      selected={dateRange.to}
+                      onSelect={(date) => {
                         setDateRange((prev) => ({ ...prev, to: date }));
+                      }}
+                      disabled={(date) =>
+                        dateRangeInfo
+                          ? date < dateRangeInfo.earliest ||
+                            date > dateRangeInfo.latest ||
+                            (dateRange.from ? date < dateRange.from : false)
+                          : false
                       }
-                    } catch (e) {
-                      console.log(e);
-                      // Invalid date format
-                    }
-                  }}
-                  className="w-[140px] bg-gray-900/60 border-gray-700/50 text-gray-200 h-9 px-3 pr-10 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/50 transition-colors [&::-webkit-calendar-picker-indicator]:hidden"
-                  onFocus={(e) => {
-                    e.target.type = "date";
-                    if (dateRangeInfo) {
-                      e.target.min = format(
-                        dateRangeInfo.earliest,
-                        "yyyy-MM-dd"
-                      );
-                      e.target.max = format(dateRangeInfo.latest, "yyyy-MM-dd");
-                    }
-                  }}
-                  onBlur={(e) => {
-                    e.target.type = "text";
-                    if (!e.target.value) {
-                      e.target.placeholder = "MM/DD/YYYY";
-                    }
-                  }}
-                />
-                <button
-                  onClick={(e) => {
-                    const input = e.currentTarget
-                      .previousElementSibling as HTMLInputElement;
-                    input.type = "date";
-                    input.showPicker();
-                  }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:text-blue-400 transition-colors"
-                >
-                  <CalendarIcon className="h-4 w-4" />
-                </button>
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
           )}

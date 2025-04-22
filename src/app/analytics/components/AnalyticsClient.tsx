@@ -17,6 +17,7 @@ interface RawProjectData {
   Rpoints?: number;
   rpoints?: number;
   category?: string[];
+  total_count?: number;
 }
 
 interface AnalyticsClientProps {
@@ -56,7 +57,10 @@ export function AnalyticsClient({ initialData }: AnalyticsClientProps) {
     const projectMap = new Map<string, number>();
     const categoryMap = new Map<string, number>();
     const channelSet = new Set<string>();
-    const coinDates = new Map<string, { date: string; channel: string }[]>();
+    const coinDates = new Map<
+      string,
+      { date: string; channel: string; count: number }[]
+    >();
 
     knowledge.forEach((item: KnowledgeItem) => {
       const projects = item.llm_answer.projects;
@@ -73,11 +77,15 @@ export function AnalyticsClient({ initialData }: AnalyticsClientProps) {
 
         data.uniqueCoins.add(projectName);
 
-        // Track dates and channels for each coin
+        // Track dates, channels, and mention counts for each coin
         if (!coinDates.has(projectName)) {
           coinDates.set(projectName, []);
         }
-        coinDates.get(projectName)!.push({ date, channel });
+        coinDates.get(projectName)!.push({
+          date,
+          channel,
+          count: project.total_count || 1,
+        });
 
         // Update project trends
         if (!data.projectTrends.has(projectName)) {
@@ -124,17 +132,17 @@ export function AnalyticsClient({ initialData }: AnalyticsClientProps) {
       }))
       .sort((a, b) => b.value - a.value);
 
-    // Convert coin categories map to array with dates
+    // Convert coin categories map to array with dates and counts
     data.coinCategories = Array.from(coinCategoryMap.entries())
       .flatMap(([coin, categories]) => {
-        const dates = coinDates.get(coin) || [];
-        return dates.map((dateInfo) => ({
+        const dateEntries = coinDates.get(coin) || [];
+        return dateEntries.map((dateInfo) => ({
           coin,
           categories: Array.from(categories),
           channel: dateInfo.channel,
           date: dateInfo.date,
           rpoints: projectMap.get(coin) || 0,
-          total_count: dates.length,
+          total_count: dateInfo.count,
         }));
       })
       .sort((a, b) => b.rpoints - a.rpoints);
