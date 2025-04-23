@@ -189,13 +189,13 @@ export default function ChannelMentionsTable({ coinId }: { coinId: string }) {
             };
 
             // Map project names to standardized IDs
-            const projectCoinId = 
-              directMappings[cleanName] || 
-              directMappings[extractedSymbol] || 
+            const projectCoinId =
+              directMappings[cleanName] ||
+              directMappings[extractedSymbol] ||
               cleanName.replace(/\s+/g, "-");
 
             // Try exact matches
-            const isExactMatch = 
+            const isExactMatch =
               cleanName === currentCoinId ||
               extractedSymbol === currentCoinId ||
               projectCoinId === currentCoinId ||
@@ -203,10 +203,12 @@ export default function ChannelMentionsTable({ coinId }: { coinId: string }) {
               currentCoinId.replace(/-/g, " ") === cleanName;
 
             // Special case for Bitcoin
-            const isBitcoin = 
-              (currentCoinId === "bitcoin" || currentCoinId === "btc") && 
-              (cleanName === "bitcoin" || cleanName === "btc" || extractedSymbol === "btc");
-              
+            const isBitcoin =
+              (currentCoinId === "bitcoin" || currentCoinId === "btc") &&
+              (cleanName === "bitcoin" ||
+                cleanName === "btc" ||
+                extractedSymbol === "btc");
+
             if (isExactMatch || isBitcoin) {
               const channel = item["channel name"];
               if (channel) {
@@ -254,6 +256,16 @@ export default function ChannelMentionsTable({ coinId }: { coinId: string }) {
         <CardTitle className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
           Channel Mentions
         </CardTitle>
+        {channelMentions.length > 0 && (
+          <div className="text-sm text-gray-400">
+            Total mentions:{" "}
+            <span className="text-blue-300 font-medium">
+              {channelMentions
+                .reduce((sum, item) => sum + item.total_count, 0)
+                .toLocaleString()}
+            </span>
+          </div>
+        )}
       </CardHeader>
       <CardContent>
         {channelMentions.length > 0 ? (

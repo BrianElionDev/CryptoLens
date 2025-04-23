@@ -256,11 +256,11 @@ export default function CategoryDetailPage() {
               const coin = coinData.get(project.coin_or_project)!;
               const rpoints = Number(project.rpoints) || 0;
               coin.rpoints += isNaN(rpoints) ? 0 : rpoints;
-              coin.mentions += 1;
+              coin.mentions += project.total_count || 1;
 
               // Update totals
               totalRpoints += isNaN(rpoints) ? 0 : rpoints;
-              totalMentions += 1;
+              totalMentions += project.total_count || 1;
 
               if (isRecent) recentActivity += 1;
 
@@ -638,44 +638,6 @@ export default function CategoryDetailPage() {
                       </thead>
                       <tbody>
                         {categoryAnalytics.coinBreakdown.map((coin) => {
-                          // Calculate total mentions across all videos
-                          const totalMentions = knowledge.reduce(
-                            (total, item) => {
-                              if (item.llm_answer?.projects) {
-                                const projects = Array.isArray(
-                                  item.llm_answer.projects
-                                )
-                                  ? item.llm_answer.projects
-                                  : [item.llm_answer.projects];
-
-                                return (
-                                  total +
-                                  projects.reduce((sum, project) => {
-                                    const symbolMatch =
-                                      project.coin_or_project?.match(
-                                        /\(\$([^)]+)\)/
-                                      );
-                                    const symbol = symbolMatch
-                                      ? symbolMatch[1].toLowerCase()
-                                      : "";
-                                    const cleanName = project.coin_or_project
-                                      .replace(/\s*\(\$[^)]+\)/g, "")
-                                      .toLowerCase()
-                                      .trim();
-                                    const key = symbol || cleanName;
-
-                                    if (key === coin.name.toLowerCase()) {
-                                      return sum + (project.total_count || 1);
-                                    }
-                                    return sum;
-                                  }, 0)
-                                );
-                              }
-                              return total;
-                            },
-                            0
-                          );
-
                           return (
                             <tr
                               key={coin.name}
@@ -697,7 +659,7 @@ export default function CategoryDetailPage() {
                                 {coin.rpoints}
                               </td>
                               <td className="py-3 px-4 text-right text-purple-300">
-                                {totalMentions.toLocaleString()}
+                                {coin.mentions.toLocaleString()}
                               </td>
                               <td className="py-3 px-4 text-right">
                                 <Link
@@ -991,38 +953,6 @@ export default function CategoryDetailPage() {
                   </thead>
                   <tbody>
                     {categoryAnalytics.coinBreakdown.map((coin) => {
-                      const totalMentions = knowledge.reduce((total, item) => {
-                        if (item.llm_answer?.projects) {
-                          const projects = Array.isArray(
-                            item.llm_answer.projects
-                          )
-                            ? item.llm_answer.projects
-                            : [item.llm_answer.projects];
-
-                          return (
-                            total +
-                            projects.reduce((sum, project) => {
-                              const symbolMatch =
-                                project.coin_or_project?.match(/\(\$([^)]+)\)/);
-                              const symbol = symbolMatch
-                                ? symbolMatch[1].toLowerCase()
-                                : "";
-                              const cleanName = project.coin_or_project
-                                .replace(/\s*\(\$[^)]+\)/g, "")
-                                .toLowerCase()
-                                .trim();
-                              const key = symbol || cleanName;
-
-                              if (key === coin.name.toLowerCase()) {
-                                return sum + (project.total_count || 1);
-                              }
-                              return sum;
-                            }, 0)
-                          );
-                        }
-                        return total;
-                      }, 0);
-
                       return (
                         <tr
                           key={coin.name}
@@ -1042,7 +972,7 @@ export default function CategoryDetailPage() {
                             {coin.rpoints}
                           </td>
                           <td className="py-3 px-4 text-right text-emerald-300">
-                            {totalMentions.toLocaleString()}
+                            {coin.mentions.toLocaleString()}
                           </td>
                           <td className="py-3 px-4 text-right">
                             <Link
