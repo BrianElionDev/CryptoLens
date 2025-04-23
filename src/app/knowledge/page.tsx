@@ -50,7 +50,7 @@ const PageSkeleton = () => (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="space-y-6">
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, index) => (
+          {Array.from({ length: 9 }).map((_, index) => (
             <div
               key={index}
               className="group relative overflow-hidden rounded-xl bg-gradient-to-r from-blue-900/20 via-purple-900/20 to-pink-900/20 border border-blue-500/20 backdrop-blur-sm p-4"
@@ -174,62 +174,58 @@ const KnowledgePageContent = memo(function KnowledgePageContent() {
   }, [searchTerm, filterChannel, dateFilter, sortBy, currentPage, searchParams, router]);
 
   // Get unique channels from the channel name field
-  const channels = Array.from(
-    new Set((knowledge || []).map((item) => item["channel name"] || "Unknown"))
-  ).sort();
+  const filteredItems = (knowledge || []).filter((item) => {
+    const matchesSearch = item.video_title
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
+    const matchesChannel =
+      filterChannel === "all" || item["channel name"] === filterChannel;
+
+    // Date filtering
+    const itemDate = new Date(item.date);
+    let matchesDate = true;
+
+    if (dateFilter !== "all") {
+      const now = new Date();
+      const startOfToday = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate()
+      );
+
+      if (dateFilter === "today") {
+        matchesDate = itemDate >= startOfToday;
+      } else if (dateFilter === "week") {
+        const weekAgo = new Date(startOfToday);
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        matchesDate = itemDate >= weekAgo;
+      } else if (dateFilter === "month") {
+        const monthAgo = new Date(startOfToday);
+        monthAgo.setMonth(monthAgo.getMonth() - 1);
+        matchesDate = itemDate >= monthAgo;
+      } else if (dateFilter === "year") {
+        const yearAgo = new Date(startOfToday);
+        yearAgo.setFullYear(yearAgo.getFullYear() - 1);
+        matchesDate = itemDate >= yearAgo;
+      }
+    }
+
+    return matchesSearch && matchesChannel && matchesDate;
+  });
 
   // Filter and sort items
-  const filteredAndSortedItems = (knowledge || [])
-    .filter((item) => {
-      const matchesSearch = item.video_title
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase());
-      const matchesChannel =
-        filterChannel === "all" || item["channel name"] === filterChannel;
-
-      // Date filtering
-      const itemDate = new Date(item.date);
-      let matchesDate = true;
-
-      if (dateFilter !== "all") {
-        const now = new Date();
-        const startOfToday = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          now.getDate()
-        );
-
-        if (dateFilter === "today") {
-          matchesDate = itemDate >= startOfToday;
-        } else if (dateFilter === "week") {
-          const weekAgo = new Date(startOfToday);
-          weekAgo.setDate(weekAgo.getDate() - 7);
-          matchesDate = itemDate >= weekAgo;
-        } else if (dateFilter === "month") {
-          const monthAgo = new Date(startOfToday);
-          monthAgo.setMonth(monthAgo.getMonth() - 1);
-          matchesDate = itemDate >= monthAgo;
-        } else if (dateFilter === "year") {
-          const yearAgo = new Date(startOfToday);
-          yearAgo.setFullYear(yearAgo.getFullYear() - 1);
-          matchesDate = itemDate >= yearAgo;
-        }
-      }
-
-      return matchesSearch && matchesChannel && matchesDate;
-    })
-    .sort((a, b) => {
-      if (sortBy === "date") {
-        return new Date(b.date).getTime() - new Date(a.date).getTime();
-      }
-      if (sortBy === "title") {
-        return a.video_title.localeCompare(b.video_title);
-      }
-      if (sortBy === "channel") {
-        return (a["channel name"] || "").localeCompare(b["channel name"] || "");
-      }
-      return 0;
-    });
+  const filteredAndSortedItems = filteredItems.sort((a, b) => {
+    if (sortBy === "date") {
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+    }
+    if (sortBy === "title") {
+      return a.video_title.localeCompare(b.video_title);
+    }
+    if (sortBy === "channel") {
+      return (a["channel name"] || "").localeCompare(b["channel name"] || "");
+    }
+    return 0;
+  });
 
   // Fix the pagination button handlers
   const handlePrevPage = () => setCurrentPage(Math.max(1, currentPage - 1));
@@ -249,13 +245,150 @@ const KnowledgePageContent = memo(function KnowledgePageContent() {
       ? "Failed to fetch coin data"
       : null;
 
-  if (isLoading) {
-    return <PageSkeleton />;
-  }
-
   if (error) {
     return <div className="text-red-500 text-center py-8">{error}</div>;
   }
+
+  return (
+    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <KnowledgeBase
+        items={filteredAndSortedItems.slice(
+          (currentPage - 1) * itemsPerPage,
+          currentPage * itemsPerPage
+        )}
+        isMatching={isLoading}
+      />
+
+      {/* Pagination */}
+      {filteredAndSortedItems.length > itemsPerPage && (
+        <div className="mt-8 flex flex-wrap justify-center items-center gap-4">
+          <button
+            onClick={handlePrevPage}
+            disabled={currentPage === 1}
+            className="px-6 py-3 rounded-xl bg-gray-900/80 backdrop-blur-sm text-gray-200 hover:text-white transition-all duration-200 border border-blue-500/30 hover:border-blue-400/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 group"
+          >
+            <svg
+              className="w-5 h-5 text-blue-400 group-hover:text-blue-300 transition-colors"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+            <span>Previous</span>
+          </button>
+
+          <div className="flex items-center space-x-2">
+            {Array.from({
+              length: Math.ceil(filteredAndSortedItems.length / itemsPerPage),
+            }).map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setCurrentPage(i + 1)}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 ${
+                  currentPage === i + 1
+                    ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg shadow-blue-500/20"
+                    : "bg-gray-900/80 backdrop-blur-sm text-gray-300 hover:text-white border border-blue-500/30 hover:border-blue-400/50"
+                }`}
+              >
+                {i + 1}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={handleNextPage}
+            disabled={
+              currentPage ===
+              Math.ceil(filteredAndSortedItems.length / itemsPerPage)
+            }
+            className="px-6 py-3 rounded-xl bg-gray-900/80 backdrop-blur-sm text-gray-200 hover:text-white transition-all duration-200 border border-blue-500/30 hover:border-blue-400/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 group"
+          >
+            <span>Next</span>
+            <svg
+              className="w-5 h-5 text-blue-400 group-hover:text-blue-300 transition-colors"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+          </button>
+        </div>
+      )}
+    </main>
+  );
+});
+
+export default function KnowledgePage() {
+  const {
+    searchTerm,
+    filterChannel,
+    dateFilter,
+    sortBy,
+    setSearchTerm,
+    setFilterChannel,
+    setDateFilter,
+    setSortBy,
+    setCurrentPage,
+  } = useKnowledgeStore();
+
+  const { data: knowledge } = useKnowledgeData();
+
+  // Count filtered items for the header
+  const filteredCount = (knowledge || []).filter((item) => {
+    const matchesSearch = item.video_title
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
+    const matchesChannel =
+      filterChannel === "all" || item["channel name"] === filterChannel;
+
+    // Date filtering
+    const itemDate = new Date(item.date);
+    let matchesDate = true;
+
+    if (dateFilter !== "all") {
+      const now = new Date();
+      const startOfToday = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate()
+      );
+
+      if (dateFilter === "today") {
+        matchesDate = itemDate >= startOfToday;
+      } else if (dateFilter === "week") {
+        const weekAgo = new Date(startOfToday);
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        matchesDate = itemDate >= weekAgo;
+      } else if (dateFilter === "month") {
+        const monthAgo = new Date(startOfToday);
+        monthAgo.setMonth(monthAgo.getMonth() - 1);
+        matchesDate = itemDate >= monthAgo;
+      } else if (dateFilter === "year") {
+        const yearAgo = new Date(startOfToday);
+        yearAgo.setFullYear(yearAgo.getFullYear() - 1);
+        matchesDate = itemDate >= yearAgo;
+      }
+    }
+
+    return matchesSearch && matchesChannel && matchesDate;
+  }).length;
+
+  // Get unique channels for filter dropdown
+  const channels = Array.from(
+    new Set((knowledge || []).map((item) => item["channel name"] || "Unknown"))
+  ).sort();
 
   return (
     <div className="min-h-screen pt-24 bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900 relative overflow-hidden">
@@ -282,7 +415,7 @@ const KnowledgePageContent = memo(function KnowledgePageContent() {
                 </h1>
                 <div className="px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50 backdrop-blur-sm">
                   <span className="text-sm text-gray-400">
-                    {filteredAndSortedItems.length} items
+                    {knowledge ? filteredCount : "Loading..."} items
                   </span>
                 </div>
               </div>
@@ -462,92 +595,9 @@ const KnowledgePageContent = memo(function KnowledgePageContent() {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <KnowledgeBase
-          items={filteredAndSortedItems.slice(
-            (currentPage - 1) * itemsPerPage,
-            currentPage * itemsPerPage
-          )}
-          isMatching={isLoading}
-        />
-
-        {/* Pagination */}
-        {filteredAndSortedItems.length > itemsPerPage && (
-          <div className="mt-8 flex flex-wrap justify-center items-center gap-4">
-            <button
-              onClick={handlePrevPage}
-              disabled={currentPage === 1}
-              className="px-6 py-3 rounded-xl bg-gray-900/80 backdrop-blur-sm text-gray-200 hover:text-white transition-all duration-200 border border-blue-500/30 hover:border-blue-400/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 group"
-            >
-              <svg
-                className="w-5 h-5 text-blue-400 group-hover:text-blue-300 transition-colors"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 19l-7-7 7-7"
-                />
-              </svg>
-              <span>Previous</span>
-            </button>
-
-            <div className="flex items-center space-x-2">
-              {Array.from({
-                length: Math.ceil(filteredAndSortedItems.length / itemsPerPage),
-              }).map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setCurrentPage(i + 1)}
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 ${
-                    currentPage === i + 1
-                      ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg shadow-blue-500/20"
-                      : "bg-gray-900/80 backdrop-blur-sm text-gray-300 hover:text-white border border-blue-500/30 hover:border-blue-400/50"
-                  }`}
-                >
-                  {i + 1}
-                </button>
-              ))}
-            </div>
-
-            <button
-              onClick={handleNextPage}
-              disabled={
-                currentPage ===
-                Math.ceil(filteredAndSortedItems.length / itemsPerPage)
-              }
-              className="px-6 py-3 rounded-xl bg-gray-900/80 backdrop-blur-sm text-gray-200 hover:text-white transition-all duration-200 border border-blue-500/30 hover:border-blue-400/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 group"
-            >
-              <span>Next</span>
-              <svg
-                className="w-5 h-5 text-blue-400 group-hover:text-blue-300 transition-colors"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
-            </button>
-          </div>
-        )}
-      </main>
+      <Suspense fallback={<PageSkeleton />}>
+        <KnowledgePageContent />
+      </Suspense>
     </div>
-  );
-});
-
-export default function KnowledgePage() {
-  return (
-    <Suspense fallback={<PageSkeleton />}>
-      <KnowledgePageContent />
-    </Suspense>
   );
 }

@@ -74,6 +74,8 @@ export function CombinedMarketTable({
     to: undefined,
   });
   const [datePreset, setDatePreset] = useState<string>("");
+  const [dateFilterActive, setDateFilterActive] = useState(false);
+  const [matchingCoinsCount, setMatchingCoinsCount] = useState(0);
   const refreshKeyRef = useRef(0);
   const prevDataRef = useRef<ExtendedCoinData[]>([]);
 
@@ -107,31 +109,42 @@ export function CombinedMarketTable({
     if (value === "today") {
       const today = startOfDay(now);
       setDateRange({ from: today, to: endOfDay(now) });
+      setDateFilterActive(true);
     } else if (value === "yesterday") {
       const yesterday = startOfDay(subDays(now, 1));
       setDateRange({ from: yesterday, to: endOfDay(yesterday) });
+      setDateFilterActive(true);
     } else if (value === "last7days") {
       const lastWeek = startOfDay(subDays(now, 7));
       setDateRange({ from: lastWeek, to: endOfDay(now) });
+      setDateFilterActive(true);
     } else if (value === "last30days") {
       const lastMonth = startOfDay(subDays(now, 30));
       setDateRange({ from: lastMonth, to: endOfDay(now) });
+      setDateFilterActive(true);
     } else if (value === "last90days") {
       const last3Months = startOfDay(subDays(now, 90));
       setDateRange({ from: last3Months, to: endOfDay(now) });
+      setDateFilterActive(true);
     } else if (value === "last180days") {
       const last6Months = startOfDay(subDays(now, 180));
       setDateRange({ from: last6Months, to: endOfDay(now) });
+      setDateFilterActive(true);
     } else if (value === "last365days") {
       const lastYear = startOfDay(subDays(now, 365));
       setDateRange({ from: lastYear, to: endOfDay(now) });
+      setDateFilterActive(true);
     } else if (value === "custom") {
       // Don't reset the date range when switching to custom
       if (!dateRange.from && !dateRange.to) {
         setDateRange({ from: undefined, to: undefined });
+        setDateFilterActive(false);
+      } else {
+        setDateFilterActive(true);
       }
     } else {
       setDateRange({ from: undefined, to: undefined });
+      setDateFilterActive(false);
     }
   };
 
@@ -205,6 +218,8 @@ export function CombinedMarketTable({
       }
     });
 
+    let count = 0;
+
     // First pass: collect all symbols and their points
     processedData.coinCategories.forEach((coin) => {
       if (!channelSet.has(coin.channel)) return;
@@ -244,6 +259,8 @@ export function CombinedMarketTable({
         }
       }
 
+      count++;
+
       const symbolMatch = coin.coin.match(/\(\$([^)]+)\)/);
       const symbol = symbolMatch ? symbolMatch[1].toLowerCase() : "";
       const cleanName = coin.coin
@@ -271,6 +288,9 @@ export function CombinedMarketTable({
         });
       }
     });
+
+    // Update the matching coins count
+    setMatchingCoinsCount(count);
 
     const result = Array.from(coinMap.values())
       .sort((a, b) => b.points - a.points)
@@ -594,7 +614,9 @@ export function CombinedMarketTable({
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <div className="text-sm text-gray-400">
-          {sortedCoinData.length} coins
+          {dateFilterActive && matchingCoinsCount === 0
+            ? "No coins found for this date range"
+            : `${sortedCoinData.length} coins`}
           {isFetching && (
             <span className="ml-2 text-blue-400 inline-flex">
               <span className="w-2 text-center animate-[dots_1.4s_infinite]">
@@ -709,10 +731,22 @@ export function CombinedMarketTable({
           <button
             onClick={() => {
               setShowMostRecent((prev) => !prev);
-              setDateRange({ from: undefined, to: undefined });
-              setDatePreset("custom");
+              if (!showMostRecent) {
+                // Enabling most recent filter
+                setDateFilterActive(true);
+              } else {
+                // Disabling most recent filter
+                if (datePreset === "" || datePreset === "custom") {
+                  setDateRange({ from: undefined, to: undefined });
+                  setDateFilterActive(false);
+                }
+              }
             }}
-            className="px-4 py-2 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 hover:text-blue-300 transition-colors border border-blue-500/30 flex items-center gap-2"
+            className={`px-4 py-2 rounded-lg ${
+              showMostRecent
+                ? "bg-blue-500/40 text-blue-300"
+                : "bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 hover:text-blue-300"
+            } transition-colors border border-blue-500/30 flex items-center gap-2`}
           >
             <Filter className="h-4 w-4" />
             <span>{showMostRecent ? "Show All" : "Show Most Recent"}</span>
@@ -723,13 +757,25 @@ export function CombinedMarketTable({
         </div>
       </div>
       <div className="bg-gradient-to-r from-blue-900/10 via-purple-900/10 to-pink-900/10 backdrop-blur-sm rounded-xl border border-gray-800/20">
-        <DataTable
-          columns={memoizedColumns}
-          data={sortedCoinData}
-          onRowClick={onRowClick}
-          virtualizeRows={true}
-          isLoading={isFetching}
-        />
+        {dateFilterActive && matchingCoinsCount === 0 ? (
+          <div className="py-16 flex flex-col items-center justify-center text-gray-500">
+            <Filter className="h-12 w-12 mb-4 opacity-30" />
+            <p className="text-lg font-medium">
+              No coins found for the selected date range
+            </p>
+            <p className="text-sm mt-2">
+              Try selecting a different time period
+            </p>
+          </div>
+        ) : (
+          <DataTable
+            columns={memoizedColumns}
+            data={sortedCoinData}
+            onRowClick={onRowClick}
+            virtualizeRows={true}
+            isLoading={isFetching}
+          />
+        )}
       </div>
     </div>
   );
