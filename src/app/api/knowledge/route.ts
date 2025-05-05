@@ -22,12 +22,28 @@ interface RawProject {
   category?: string[];
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const { data: knowledgeData, error } = await supabase
+    // Parse the URL to get search params
+    const { searchParams } = new URL(request.url);
+    const limit = searchParams.get("limit");
+
+    // Start building the query
+    let query = supabase
       .from("knowledge")
       .select("*")
       .order("date", { ascending: false });
+
+    // Apply limit if specified and it's not "all"
+    if (limit && limit !== "all") {
+      const limitNum = parseInt(limit);
+      if (!isNaN(limitNum) && limitNum > 0) {
+        query = query.limit(limitNum);
+      }
+    }
+
+    // Execute the query
+    const { data: knowledgeData, error } = await query;
 
     if (error) {
       console.error("Knowledge fetch error:", error);

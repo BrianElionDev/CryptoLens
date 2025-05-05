@@ -11,9 +11,9 @@ export default function Navbar() {
   const isActive = (path: string) => pathname === path;
 
   const navLinks = [
+    { href: "/analytics", label: "Analytics" },
     { href: "/knowledge", label: "Knowledge" },
     { href: "/channels", label: "Channels" },
-    { href: "/analytics", label: "Analytics" },
     { href: "/categories", label: "Categories" },
     { href: "/autofetch", label: "Autofetch" },
     { href: "/faq", label: "FAQ" },

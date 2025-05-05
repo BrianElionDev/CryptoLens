@@ -30,6 +30,15 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import React from "react";
 import Image from "next/image";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { Home } from "lucide-react";
 
 interface CategoryDetailData {
   id: string;
@@ -708,16 +717,38 @@ export default function CategoryDetailPage() {
       </div>
 
       <div className="container mx-auto px-4 md:px-6 lg:px-20 py-8 relative z-10">
+        {/* Breadcrumb Navigation */}
+        <div className="flex items-center justify-between mb-8">
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink href="/" className="flex items-center gap-2">
+                  <Home className="w-4 h-4" />
+                  Home
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbLink href="/categories">Categories</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>{displayName}</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 border-teal-500/30 text-teal-400 hover:bg-teal-500/10"
+            onClick={() => router.push(backButtonInfo.href)}
+          >
+            <ArrowLeft className="w-4 h-4" />
+            {backButtonInfo.text}
+          </Button>
+        </div>
+
         <div className="mb-8">
-          <Link href={backButtonInfo.href}>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="mb-4 text-gray-300 hover:text-green-300 hover:bg-green-500/10"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" /> {backButtonInfo.text}
-            </Button>
-          </Link>
           <h1 className="text-3xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-green-400 via-emerald-500 to-teal-500">
             {displayName}
           </h1>
