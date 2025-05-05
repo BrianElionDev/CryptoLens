@@ -6,6 +6,7 @@ import KnowledgeBase from "@/components/KnowledgeBase";
 import { useKnowledgeStore } from "@/stores/knowledgeStore";
 import { useKnowledgeData } from "@/hooks/useCoinData";
 import { useCoinDataQuery } from "@/hooks/useCoinData";
+import { KnowledgeItem } from "@/types/knowledge";
 
 type DateFilterType = "all" | "today" | "week" | "month" | "year";
 type SortByType = "date" | "title" | "channel";
@@ -75,6 +76,101 @@ const PageSkeleton = () => (
     </main>
   </div>
 );
+
+const KnowledgeBaseWithPagination = ({
+  items,
+  currentPage,
+  itemsPerPage,
+  isLoading,
+  onPrevPage,
+  onNextPage,
+  onPageSelect,
+}: {
+  items: KnowledgeItem[];
+  currentPage: number;
+  itemsPerPage: number;
+  isLoading: boolean;
+  onPrevPage: () => void;
+  onNextPage: () => void;
+  onPageSelect: (page: number) => void;
+}) => {
+  return (
+    <>
+      <KnowledgeBase
+        items={items.slice(
+          (currentPage - 1) * itemsPerPage,
+          currentPage * itemsPerPage
+        )}
+        isMatching={isLoading}
+      />
+
+      {/* Pagination */}
+      {items.length > itemsPerPage && (
+        <div className="mt-8 flex flex-wrap justify-center items-center gap-4">
+          <button
+            onClick={onPrevPage}
+            disabled={currentPage === 1}
+            className="px-6 py-3 rounded-xl bg-gray-900/80 backdrop-blur-sm text-gray-200 hover:text-white transition-all duration-200 border border-blue-500/30 hover:border-blue-400/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 group"
+          >
+            <svg
+              className="w-5 h-5 text-blue-400 group-hover:text-blue-300 transition-colors"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+            <span>Previous</span>
+          </button>
+
+          <div className="flex items-center space-x-2">
+            {Array.from({
+              length: Math.ceil(items.length / itemsPerPage),
+            }).map((_, i) => (
+              <button
+                key={i}
+                onClick={() => onPageSelect(i + 1)}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 ${
+                  currentPage === i + 1
+                    ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg shadow-blue-500/20"
+                    : "bg-gray-900/80 backdrop-blur-sm text-gray-300 hover:text-white border border-blue-500/30 hover:border-blue-400/50"
+                }`}
+              >
+                {i + 1}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={onNextPage}
+            disabled={currentPage === Math.ceil(items.length / itemsPerPage)}
+            className="px-6 py-3 rounded-xl bg-gray-900/80 backdrop-blur-sm text-gray-200 hover:text-white transition-all duration-200 border border-blue-500/30 hover:border-blue-400/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 group"
+          >
+            <span>Next</span>
+            <svg
+              className="w-5 h-5 text-blue-400 group-hover:text-blue-300 transition-colors"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+          </button>
+        </div>
+      )}
+    </>
+  );
+};
 
 const KnowledgePageContent = memo(function KnowledgePageContent() {
   const router = useRouter();
@@ -251,81 +347,15 @@ const KnowledgePageContent = memo(function KnowledgePageContent() {
 
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <KnowledgeBase
-        items={filteredAndSortedItems.slice(
-          (currentPage - 1) * itemsPerPage,
-          currentPage * itemsPerPage
-        )}
-        isMatching={isLoading}
+      <KnowledgeBaseWithPagination
+        items={filteredAndSortedItems}
+        currentPage={currentPage}
+        itemsPerPage={itemsPerPage}
+        isLoading={isLoading}
+        onPrevPage={handlePrevPage}
+        onNextPage={handleNextPage}
+        onPageSelect={setCurrentPage}
       />
-
-      {/* Pagination */}
-      {filteredAndSortedItems.length > itemsPerPage && (
-        <div className="mt-8 flex flex-wrap justify-center items-center gap-4">
-          <button
-            onClick={handlePrevPage}
-            disabled={currentPage === 1}
-            className="px-6 py-3 rounded-xl bg-gray-900/80 backdrop-blur-sm text-gray-200 hover:text-white transition-all duration-200 border border-blue-500/30 hover:border-blue-400/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 group"
-          >
-            <svg
-              className="w-5 h-5 text-blue-400 group-hover:text-blue-300 transition-colors"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-            <span>Previous</span>
-          </button>
-
-          <div className="flex items-center space-x-2">
-            {Array.from({
-              length: Math.ceil(filteredAndSortedItems.length / itemsPerPage),
-            }).map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setCurrentPage(i + 1)}
-                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 ${
-                  currentPage === i + 1
-                    ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg shadow-blue-500/20"
-                    : "bg-gray-900/80 backdrop-blur-sm text-gray-300 hover:text-white border border-blue-500/30 hover:border-blue-400/50"
-                }`}
-              >
-                {i + 1}
-              </button>
-            ))}
-          </div>
-
-          <button
-            onClick={handleNextPage}
-            disabled={
-              currentPage ===
-              Math.ceil(filteredAndSortedItems.length / itemsPerPage)
-            }
-            className="px-6 py-3 rounded-xl bg-gray-900/80 backdrop-blur-sm text-gray-200 hover:text-white transition-all duration-200 border border-blue-500/30 hover:border-blue-400/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 group"
-          >
-            <span>Next</span>
-            <svg
-              className="w-5 h-5 text-blue-400 group-hover:text-blue-300 transition-colors"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 5l7 7-7 7"
-              />
-            </svg>
-          </button>
-        </div>
-      )}
     </main>
   );
 });

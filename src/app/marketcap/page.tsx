@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { CombinedMarketTable } from "@/components/tables/CombinedMarketTable";
 import { BarChart3, TrendingUp, Zap } from "lucide-react";
 
-export default function MarketCapPage() {
+// Create a separate client component that uses useSearchParams
+const MarketCapContent = () => {
   // Generate more mock data for pagination
   const generateMockCoinData = (count: number) => {
     const coins = [
@@ -168,5 +169,17 @@ export default function MarketCapPage() {
         />
       </div>
     </div>
+  );
+};
+
+export default function MarketCapPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="pt-24 px-4 text-center">Loading market data...</div>
+      }
+    >
+      <MarketCapContent />
+    </Suspense>
   );
 }
