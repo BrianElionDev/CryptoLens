@@ -9,6 +9,9 @@ import { useRef, useEffect } from "react";
 const marketDataRef: { current: Record<string, CoinData> } = { current: {} };
 const loadedSymbolsRef: { current: Set<string> } = { current: new Set() };
 
+// Debug flag to control logging
+const DEBUG_LOGS = false;
+
 export interface CoinData {
   id: string;
   symbol: string;
@@ -92,7 +95,8 @@ export function useCoinData(
   >({
     queryKey: ["coinGeckoData", symbolsKey, mode, refreshKey],
     queryFn: async () => {
-      console.log("Querying CoinGecko with symbols:", symbols);
+      if (DEBUG_LOGS)
+        console.log(`Querying CoinGecko for ${symbols.length} symbols...`);
       const response = await axios.post(
         "/api/coingecko",
         {
@@ -101,12 +105,9 @@ export function useCoinData(
         },
         { timeout: API_TIMEOUT }
       );
-      console.log("CoinGecko response format:", {
-        keys: Object.keys(response.data.data || {}),
-        firstItem: Object.values(response.data.data || {})[0],
-        mantraData:
-          response.data.data?.["mantra"] || response.data.data?.["MANTRA"],
-      });
+
+      const coinCount = Object.keys(response.data.data || {}).length;
+      if (DEBUG_LOGS) console.log(`CoinGecko response: ${coinCount} coins`);
       return response.data;
     },
     staleTime: 10000,
@@ -118,11 +119,7 @@ export function useCoinData(
   const foundInGecko = new Set(
     Object.keys(geckoQuery.data?.data || {}).map((s) => s.toLowerCase())
   );
-  console.log("Found in CoinGecko:", {
-    keys: Array.from(foundInGecko),
-    hasMantra: Array.from(foundInGecko).includes("mantra"),
-    rawKeys: Object.keys(geckoQuery.data?.data || {}),
-  });
+
   const missingSymbols = symbols.filter(
     (s) => !foundInGecko.has(normalizeSymbol(s))
   );
@@ -140,7 +137,11 @@ export function useCoinData(
       if (missingSymbols.length === 0) {
         return { data: {}, timestamp: Date.now() };
       }
-      console.log("Querying CMC with symbols:", missingSymbols);
+
+      if (DEBUG_LOGS)
+        console.log(
+          `Querying CMC for ${missingSymbols.length} missing symbols...`
+        );
       const response = await axios.post(
         "/api/coinmarketcap",
         {
@@ -150,12 +151,9 @@ export function useCoinData(
         },
         { timeout: API_TIMEOUT }
       );
-      console.log("CMC response format:", {
-        keys: Object.keys(response.data.data || {}),
-        firstItem: Object.values(response.data.data || {})[0],
-        mantraData:
-          response.data.data?.["mantra"] || response.data.data?.["MANTRA"],
-      });
+
+      const coinCount = Object.keys(response.data.data || {}).length;
+      if (DEBUG_LOGS) console.log(`CMC response: ${coinCount} coins`);
       return response.data;
     },
     enabled: missingSymbols.length > 0,
@@ -169,22 +167,34 @@ export function useCoinData(
     data: (() => {
       // Create a Map to deduplicate by ID and symbol
       const uniqueCoins = new Map<string, CoinData>();
+      let geckoCount = 0;
+      let cmcCount = 0;
 
       // Process CoinGecko data first (preferred source)
-      Object.entries(geckoQuery.data?.data || {}).forEach(([key, coin]) => {
-        console.log("Processing CoinGecko coin:", key, coin.symbol);
-        uniqueCoins.set(key.toLowerCase(), coin);
-      });
+      if (geckoQuery.data?.data) {
+        geckoCount = Object.keys(geckoQuery.data.data).length;
+        Object.entries(geckoQuery.data.data).forEach(([key, coin]) => {
+          uniqueCoins.set(key.toLowerCase(), coin);
+        });
+      }
 
       // Then add CMC data for coins not already in the map
-      Object.entries(cmcQuery.data?.data || {}).forEach(([key, coin]) => {
-        console.log("Processing CMC coin:", key, coin.symbol);
-        if (!uniqueCoins.has(key.toLowerCase())) {
-          uniqueCoins.set(key.toLowerCase(), coin);
-        }
-      });
+      if (cmcQuery.data?.data) {
+        cmcCount = Object.keys(cmcQuery.data.data).length;
+        Object.entries(cmcQuery.data.data).forEach(([key, coin]) => {
+          if (!uniqueCoins.has(key.toLowerCase())) {
+            uniqueCoins.set(key.toLowerCase(), coin);
+          }
+        });
+      }
 
-      console.log("Final merged coins:", Array.from(uniqueCoins.keys()));
+      // Only log this once at the end - more concise summary
+      if (missingSymbols.length > 0 && cmcCount > 0) {
+        console.log(
+          `Data: CoinGecko: ${geckoCount}, CMC: ${cmcCount}, Total: ${uniqueCoins.size} coins`
+        );
+      }
+
       return Array.from(uniqueCoins.values());
     })(),
     timestamp: Math.max(
@@ -245,36 +255,98 @@ export function useCoinHistory(symbol: string, timeframe: string = "1") {
 
 export function useKnowledgeData() {
   const prevDataLength = useRef<number>(0);
+  const queryClient = useQueryClient();
+  const hasAttemptedFullLoad = useRef(false);
 
   return useQuery<KnowledgeItem[], AxiosError>({
     queryKey: ["knowledge"],
     queryFn: async (): Promise<KnowledgeItem[]> => {
+      // Check if we need a full data load
+      const needsFullLoad =
+        !hasAttemptedFullLoad.current || // First attempt
+        sessionStorage.getItem("navigatingBackToCryptoMarkets") === "true" || // Coming back to the page
+        sessionStorage.getItem("needsDataRefresh") === "true"; // Data was previously incomplete
+
+      // Check if we already have complete data
+      const hasCompleteData =
+        sessionStorage.getItem("completeDataLoaded") === "true";
+
+      // Log the fetch attempt context
+      console.log(
+        `Fetching knowledge data... (needs full load: ${needsFullLoad}, has complete data: ${hasCompleteData})`
+      );
+
+      // If we need a full load or don't have complete data, force a fresh request
+      const forceFresh = needsFullLoad && !hasCompleteData;
+
+      // Mark that we've attempted a full load
+      hasAttemptedFullLoad.current = true;
+
+      // Make the API request with appropriate caching settings
       const response = await axios.get<{ knowledge: KnowledgeItem[] }>(
         "/api/knowledge",
         {
           headers: {
-            "Cache-Control": "no-cache",
+            // Force no cache when we need fresh data
+            "Cache-Control": forceFresh ? "no-cache, no-store" : "max-age=0",
+            Pragma: forceFresh ? "no-cache" : undefined,
             tags: "knowledge",
+          },
+          params: {
+            // Always request all data
+            limit: "all",
+            // Add cache-busting timestamp when forcing fresh data
+            _t: forceFresh ? Date.now() : undefined,
           },
         }
       );
-      const data = response.data.knowledge;
 
-      // Check if we have new data
+      const data = response.data.knowledge;
+      console.log(`Received ${data.length} knowledge items from API`);
+
+      // Count channels to verify data completeness
+      const channels = new Set<string>();
+      data.forEach((item) => {
+        if (item["channel name"]) {
+          channels.add(item["channel name"]);
+        }
+      });
+      console.log(`Found ${channels.size} unique channels in API response`);
+
+      // Mark data as complete if it meets our criteria
+      const isComplete = channels.size >= 7 && data.length >= 200;
+      if (isComplete) {
+        sessionStorage.setItem("completeDataLoaded", "true");
+        console.log("Data completeness verified ✓");
+      } else {
+        console.warn("Data may be incomplete! Consider refetching.");
+      }
+
+      // Clear navigation flags
+      sessionStorage.removeItem("navigatingBackToCryptoMarkets");
+      sessionStorage.removeItem("needsDataRefresh");
+      sessionStorage.removeItem("navigatingFromAnalytics");
+
+      // Check if we have new data compared to previous load
       if (prevDataLength.current > 0 && data.length > prevDataLength.current) {
         const newItemsCount = data.length - prevDataLength.current;
         toast.success(`${newItemsCount} new items added to the database!`);
       }
 
-      prevDataLength.current = data.length;
+      // Store the full data in cache for better navigation experience
+      if (data.length > prevDataLength.current) {
+        queryClient.setQueryData(["knowledge"], data);
+        prevDataLength.current = data.length;
+      }
+
       return data;
     },
     staleTime: 1000 * 60, // 1 minute stale time
-    gcTime: 1000 * 60 * 5, // 5 minutes cache time
+    gcTime: 1000 * 60 * 10, // 10 minutes cache time
     refetchOnWindowFocus: true,
     refetchOnMount: true,
     refetchOnReconnect: true,
-    retry: 2,
+    retry: 3, // Increased retry attempts
   });
 }
 

@@ -12,17 +12,12 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 export async function prefetchKnowledgeData() {
   try {
-    // Only fetch last 30 days of data initially
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const isoDate = thirtyDaysAgo.toISOString();
-
+    // Fetch all data without date restrictions
     const { data: knowledgeData, error } = await supabase
       .from("knowledge")
       .select("*")
-      .gte("date", isoDate)
-      .order("date", { ascending: false })
-      .limit(100); // Limit initial load
+      .order("date", { ascending: false });
+    // No limit to ensure we get all data
 
     if (error) {
       console.error("Knowledge fetch error:", error);
@@ -32,6 +27,19 @@ export async function prefetchKnowledgeData() {
     if (!knowledgeData || knowledgeData.length === 0) {
       return [];
     }
+
+    console.log(`Server prefetched ${knowledgeData.length} knowledge items`);
+
+    // Count unique channels in prefetched data
+    const channels = new Set();
+    knowledgeData.forEach((item) => {
+      if (item["channel name"]) {
+        channels.add(item["channel name"]);
+      }
+    });
+    console.log(
+      `Server found ${channels.size} unique channels in prefetched data`
+    );
 
     const transformedData: KnowledgeItem[] = knowledgeData.map((item) => ({
       id: item.id,

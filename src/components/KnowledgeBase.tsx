@@ -15,6 +15,7 @@ interface KnowledgeBaseProps {
   isMatching?: boolean;
 }
 
+// We're separating the base component from the one with pagination capabilities
 export default function KnowledgeBase({
   items,
   isMatching = false,
@@ -171,7 +172,6 @@ export default function KnowledgeBase({
               className="group relative overflow-hidden rounded-xl bg-gradient-to-r from-blue-900/20 via-purple-900/20 to-pink-900/20 border border-blue-500/20 backdrop-blur-sm p-4 hover:border-blue-500/40 transition-colors cursor-pointer"
               onClick={() => setSelectedItem(item)}
             >
-              
               <div className="space-y-3">
                 {/* Channel Name */}
                 <div className="text-sm font-medium text-blue-400">
