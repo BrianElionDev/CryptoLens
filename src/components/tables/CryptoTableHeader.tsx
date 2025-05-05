@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Filter, Search, X } from "lucide-react";
 import { useKnowledgeData } from "@/hooks/useCoinData";
+import styles from "./cryptoTable.module.css";
 
 export type TabType = "all" | "categories" | string;
 
@@ -319,7 +320,9 @@ export function CryptoTableHeader({
   return (
     <div className="space-y-4">
       {/* Category tabs */}
-      <div className="flex items-center overflow-x-auto pb-2 scrollbar-hide">
+      <div
+        className={`flex items-center overflow-x-auto pb-2 ${styles.scrollbarHide}`}
+      >
         <div className="flex space-x-1 min-w-max">
           {categories.map((category) => (
             <Button

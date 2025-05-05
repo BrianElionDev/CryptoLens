@@ -131,11 +131,12 @@
 }
 
 /* Make sure the global class also works for any element */
-:global(.scrollbar-hide::-webkit-scrollbar) {
+/* Replace the problematic global selectors */
+.scrollbarHideGlobal::-webkit-scrollbar {
   display: none;
 }
 
-:global(.scrollbar-hide) {
+.scrollbarHideGlobal {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
