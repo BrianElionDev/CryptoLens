@@ -58,7 +58,20 @@ interface Project {
 }
 
 export function CryptoMarketsPage({ initialData }: AnalyticsClientProps) {
-  const { data: knowledge = initialData } = useKnowledgeData();
+  // Try to use the hook, but handle potential errors gracefully
+  let knowledgeData;
+  try {
+    const result = useKnowledgeData();
+    knowledgeData = result?.data;
+  } catch (error) {
+    console.error("Error using useKnowledgeData:", error);
+    // Fall back to initialData
+    knowledgeData = initialData;
+  }
+
+  // Make sure we always have valid data
+  const knowledge = knowledgeData || initialData;
+
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   const [trendingCoins, setTrendingCoins] = useState<TrendingCoin[]>([]);
   const [fearGreedIndex, setFearGreedIndex] = useState<{

@@ -9,6 +9,8 @@ import {
   useReactTable,
   Cell,
   getPaginationRowModel,
+  OnChangeFn,
+  PaginationState,
 } from "@tanstack/react-table";
 import {
   Table,
@@ -100,33 +102,68 @@ export function DataTable<TData, TValue>({
   const currentPageRef = useRef(0);
   const lastValidPageIndexRef = useRef<number>(0);
 
+  // Prevents unnecessary onPageChange calls
+  const prevCurrentPageRef = useRef<number | undefined>(currentPage);
+
   // Determine if pagination is controlled externally
   const isControlled = currentPage !== undefined && onPageChange !== undefined;
 
-  // Calculate the actual pagination state to use
-  const pagination = isControlled
-    ? { pageIndex: (currentPage || 1) - 1, pageSize }
-    : internalPagination;
+  // Calculate the actual pagination state to use based on props and internal state
+  const pagination = useMemo(() => {
+    // For controlled pagination, use the currentPage prop
+    if (isControlled && currentPage !== undefined) {
+      return {
+        pageIndex: currentPage - 1,
+        pageSize,
+      };
+    }
+    // For uncontrolled pagination, use internal state
+    return internalPagination;
+  }, [isControlled, currentPage, pageSize, internalPagination]);
+
+  // Update internal state when initialPage prop changes
+  useEffect(() => {
+    if (!isControlled && initialPage > 0) {
+      const validPageIndex = Math.max(0, initialPage - 1);
+      setInternalPagination((prev) => {
+        if (prev.pageIndex !== validPageIndex) {
+          return { ...prev, pageIndex: validPageIndex };
+        }
+        return prev;
+      });
+    }
+  }, [initialPage, isControlled]);
 
   // Pagination change handler that respects controlled/uncontrolled mode
-  const handlePaginationChange = (newPagination: typeof pagination) => {
-    const newPage = newPagination.pageIndex + 1;
+  const handlePaginationChange = useCallback(
+    (newPagination: typeof pagination) => {
+      const newPageIndex = newPagination.pageIndex;
+      const newPage = newPageIndex + 1;
 
-    if (isControlled) {
-      // For controlled pagination, call the parent's callback
-      // Avoid unnecessary calls if page hasn't changed
-      if (currentPage !== newPage) {
-        onPageChange!(newPage);
+      if (isControlled) {
+        // For controlled pagination, call the parent's callback only when page actually changes
+        if (prevCurrentPageRef.current !== newPage && onPageChange) {
+          onPageChange(newPage);
+          prevCurrentPageRef.current = newPage;
+        }
+      } else {
+        // For uncontrolled, update internal state
+        setInternalPagination(newPagination);
       }
-    } else {
-      // For uncontrolled, update internal state
-      setInternalPagination(newPagination);
-    }
 
-    // Always update the currentPageRef for internal tracking
-    currentPageRef.current = newPagination.pageIndex;
-    lastValidPageIndexRef.current = newPagination.pageIndex;
-  };
+      // Always update tracking refs
+      currentPageRef.current = newPageIndex;
+      lastValidPageIndexRef.current = newPageIndex;
+    },
+    [isControlled, onPageChange]
+  );
+
+  // Track when controlled currentPage prop changes
+  useEffect(() => {
+    if (isControlled) {
+      prevCurrentPageRef.current = currentPage;
+    }
+  }, [currentPage, isControlled]);
 
   // All useMemo hooks
   const displayData = useMemo(() => {
@@ -147,7 +184,7 @@ export function DataTable<TData, TValue>({
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     onSortingChange: setSorting,
-    onPaginationChange: handlePaginationChange,
+    onPaginationChange: handlePaginationChange as OnChangeFn<PaginationState>,
     state: {
       sorting,
       pagination,
@@ -158,43 +195,40 @@ export function DataTable<TData, TValue>({
 
   // Update page size when it changes from props
   useEffect(() => {
-    setInternalPagination((prev) => ({
-      ...prev,
-      pageSize,
-    }));
-  }, [pageSize]);
+    if (!isControlled) {
+      setInternalPagination((prev) => ({
+        ...prev,
+        pageSize,
+      }));
+    }
+  }, [pageSize, isControlled]);
 
   // Modify the useEffect for data changes to always preserve pagination position
   useEffect(() => {
     if (data.length > 0) {
       const pageCount = Math.ceil(data.length / pageSize);
 
-      // Maintain the selected page index whenever possible
-      if (lastValidPageIndexRef.current >= pageCount) {
-        // Page is out of bounds after data change, go to last valid page
-        const newPageIndex = Math.max(0, pageCount - 1);
+      // Only handle page corrections for uncontrolled mode
+      if (!isControlled) {
+        // Maintain the selected page index whenever possible
+        if (lastValidPageIndexRef.current >= pageCount) {
+          // Page is out of bounds after data change, go to last valid page
+          const newPageIndex = Math.max(0, pageCount - 1);
 
-        // Don't call setPagination directly to avoid a full reset
-        // Instead, just update the page on the table
-        setTimeout(() => {
-          if (table.getPageCount() > 0) {
-            table.setPageIndex(newPageIndex);
-            lastValidPageIndexRef.current = newPageIndex;
-          }
-        }, 0);
-      } else {
-        // Keep current page but update size - note we use lastValidPageIndexRef directly
-        setInternalPagination(() => ({
-          pageIndex: lastValidPageIndexRef.current,
-          pageSize,
-        }));
+          setInternalPagination((prev) => ({
+            ...prev,
+            pageIndex: newPageIndex,
+          }));
+
+          lastValidPageIndexRef.current = newPageIndex;
+        }
       }
 
       // Update refs
       prevDataRef.current = data;
       prevDataLengthRef.current = data.length;
     }
-  }, [data, pageSize, table]);
+  }, [data, pageSize, isControlled]);
 
   // Move virtualizer setup before its usage
   const rowVirtualizer = useVirtualizer({
@@ -244,63 +278,59 @@ export function DataTable<TData, TValue>({
     }
   }, [data]);
 
-  // Only update pageSize, never reset pageIndex when just the data changes
+  // For controlled pagination, ensure the page is valid after data changes
   useEffect(() => {
-    if (!isControlled) {
-      setInternalPagination((prev) => {
-        // Check if current page is still valid
-        const pageCount = Math.ceil(data.length / pageSize);
-        const validPageIndex =
-          prev.pageIndex >= pageCount
-            ? Math.max(0, pageCount - 1)
-            : prev.pageIndex;
-
-        return {
-          pageIndex: validPageIndex,
-          pageSize,
-        };
-      });
-    }
-  }, [data.length, pageSize, isControlled]);
-
-  // If using controlled pagination, ensure the page is valid after data changes
-  useEffect(() => {
-    if (isControlled && data.length > 0) {
+    if (isControlled && data.length > 0 && onPageChange) {
       const pageCount = Math.ceil(data.length / pageSize);
       const currentPageIndex = (currentPage || 1) - 1;
 
       // If current page is invalid, notify parent
-      if (currentPageIndex >= pageCount && onPageChange) {
+      if (currentPageIndex >= pageCount) {
         // Go to last valid page
         const validPage = Math.max(1, pageCount);
-        onPageChange(validPage);
+        if (validPage !== currentPage) {
+          onPageChange(validPage);
+          prevCurrentPageRef.current = validPage;
+        }
       }
     }
   }, [data.length, isControlled, currentPage, pageSize, onPageChange]);
 
-  // For controlled pagination, override the current page calculation
-  const effectiveCurrentPage =
-    isControlled && currentPage
+  // Calculate the effective current page to display
+  const effectiveCurrentPage = useMemo(() => {
+    return isControlled && currentPage
       ? currentPage
       : table.getState().pagination.pageIndex + 1;
+  }, [isControlled, currentPage, table]);
 
   // Define setPage outside the PaginationControls component to avoid conditional hooks error
   const setPage = useCallback(
     (pageNumber: number) => {
       if (pageNumber < 1) pageNumber = 1;
-      if (pageNumber > table.getPageCount()) pageNumber = table.getPageCount();
-      if (onPageChange) onPageChange(pageNumber);
+      const maxPage = table.getPageCount() || 1;
+      if (pageNumber > maxPage) pageNumber = maxPage;
+
+      if (isControlled && onPageChange) {
+        if (pageNumber !== prevCurrentPageRef.current) {
+          onPageChange(pageNumber);
+          prevCurrentPageRef.current = pageNumber;
+        }
+      } else {
+        setInternalPagination((prev) => ({
+          ...prev,
+          pageIndex: pageNumber - 1,
+        }));
+      }
     },
-    [table, onPageChange]
+    [table, onPageChange, isControlled]
   );
 
   // Pagination controls
   const PaginationControls = () => {
     if (!showPagination) return null;
 
-    const pageCount = table.getPageCount();
-    const currentPageIndex = table.getState().pagination.pageIndex;
-    const currentPageNumber = currentPageIndex + 1;
+    const pageCount = table.getPageCount() || 1;
+    const currentPageNumber = effectiveCurrentPage;
 
     // Generate page numbers to display
     const getPageNumbers = () => {
@@ -360,7 +390,7 @@ export function DataTable<TData, TValue>({
       <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800">
         <div className="flex items-center text-sm text-gray-400">
           <span>
-            Page {effectiveCurrentPage} of {pageCount || 1}
+            Page {currentPageNumber} of {pageCount}
           </span>
         </div>
 
@@ -368,7 +398,7 @@ export function DataTable<TData, TValue>({
           <button
             className="p-2 rounded-md border border-gray-700 bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => setPage(1)}
-            disabled={!table.getCanPreviousPage()}
+            disabled={currentPageNumber === 1}
             aria-label="First page"
             type="button"
           >
@@ -376,8 +406,8 @@ export function DataTable<TData, TValue>({
           </button>
           <button
             className="p-2 rounded-md border border-gray-700 bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={() => setPage(Math.max(1, effectiveCurrentPage - 1))}
-            disabled={!table.getCanPreviousPage()}
+            onClick={() => setPage(Math.max(1, currentPageNumber - 1))}
+            disabled={currentPageNumber === 1}
             aria-label="Previous page"
             type="button"
           >
@@ -401,11 +431,11 @@ export function DataTable<TData, TValue>({
                 type="button"
                 onClick={() => setPage(pageNumber)}
                 className={`pagination-button px-3 py-1 rounded-md border ${
-                  effectiveCurrentPage === pageNumber
+                  currentPageNumber === pageNumber
                     ? "bg-blue-600 text-white border-blue-700"
                     : "border-gray-700 bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-gray-200"
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
-                disabled={effectiveCurrentPage === pageNumber}
+                disabled={currentPageNumber === pageNumber}
               >
                 {page}
               </button>
@@ -414,10 +444,8 @@ export function DataTable<TData, TValue>({
 
           <button
             className="p-2 rounded-md border border-gray-700 bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={() =>
-              setPage(Math.min(pageCount, effectiveCurrentPage + 1))
-            }
-            disabled={!table.getCanNextPage()}
+            onClick={() => setPage(Math.min(pageCount, currentPageNumber + 1))}
+            disabled={currentPageNumber === pageCount}
             aria-label="Next page"
             type="button"
           >
@@ -426,7 +454,7 @@ export function DataTable<TData, TValue>({
           <button
             className="p-2 rounded-md border border-gray-700 bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => setPage(pageCount)}
-            disabled={!table.getCanNextPage()}
+            disabled={currentPageNumber === pageCount}
             aria-label="Last page"
             type="button"
           >
@@ -443,43 +471,6 @@ export function DataTable<TData, TValue>({
       </div>
     );
   };
-
-  // When initialPage changes, update pagination if it doesn't match current page
-  useEffect(() => {
-    if (initialPage && initialPage !== currentPage) {
-      const pageIndex = initialPage - 1;
-      const maxPageIndex = Math.ceil(data.length / pageSize) - 1;
-      const validPageIndex = Math.min(
-        Math.max(0, pageIndex),
-        Math.max(0, maxPageIndex)
-      );
-
-      if (
-        isControlled &&
-        onPageChange &&
-        validPageIndex !== pagination.pageIndex
-      ) {
-        onPageChange(validPageIndex + 1);
-      } else if (!isControlled) {
-        setInternalPagination(({ pageSize }) => ({
-          pageIndex: validPageIndex,
-          pageSize,
-        }));
-      }
-
-      // Update refs
-      currentPageRef.current = validPageIndex;
-      lastValidPageIndexRef.current = validPageIndex;
-    }
-  }, [
-    initialPage,
-    data.length,
-    pageSize,
-    isControlled,
-    onPageChange,
-    currentPage,
-    pagination.pageIndex,
-  ]);
 
   // Only show loading state if we have no data at all
   if (displayData.length === 0 && isLoading) {
