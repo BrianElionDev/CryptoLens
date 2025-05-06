@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Filter, Search, X } from "lucide-react";
+import { Filter, Search, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { useKnowledgeData } from "@/hooks/useCoinData";
 import styles from "./cryptoTable.module.css";
 
@@ -29,6 +29,10 @@ export function CryptoTableHeader({
   const [activeTab, setActiveTab] = useState<TabType>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [showNoResults, setShowNoResults] = useState(false);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const tabsContainerRef = useRef<HTMLDivElement>(null);
 
   // Fetch knowledge data
   const { data: knowledgeData } = useKnowledgeData();
@@ -246,7 +250,7 @@ export function CryptoTableHeader({
       // Sort categories by frequency and get top 8 (plus All and Categories tabs)
       const topCategories = Array.from(allCategories.entries())
         .sort((a, b) => b[1].count - a[1].count)
-        .slice(0, 10)
+        .slice(0, 15)
         .map(([id, { displayName, count }]) => ({
           id,
           label: displayName,
@@ -261,6 +265,51 @@ export function CryptoTableHeader({
       ]);
     }
   }, [knowledgeData]);
+
+  // Function to check scroll capability
+  const checkScrollability = () => {
+    if (tabsContainerRef.current) {
+      const container = tabsContainerRef.current;
+      setCanScrollLeft(container.scrollLeft > 0);
+      setCanScrollRight(
+        container.scrollLeft < container.scrollWidth - container.clientWidth - 5 // 5px tolerance
+      );
+    }
+  };
+
+  // Initialize scroll check and add resize listener
+  useEffect(() => {
+    checkScrollability();
+
+    const handleResize = () => {
+      checkScrollability();
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [categories]);
+
+  // Add scroll event listener
+  useEffect(() => {
+    const container = tabsContainerRef.current;
+    if (container) {
+      container.addEventListener("scroll", checkScrollability);
+      return () => container.removeEventListener("scroll", checkScrollability);
+    }
+  }, []);
+
+  // Handle scrolling
+  const scrollTabs = (direction: "left" | "right") => {
+    const container = tabsContainerRef.current;
+    if (container) {
+      const scrollAmount = container.clientWidth * 0.8;
+      if (direction === "left") {
+        container.scrollBy({ left: -scrollAmount, behavior: "smooth" });
+      } else {
+        container.scrollBy({ left: scrollAmount, behavior: "smooth" });
+      }
+    }
+  };
 
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
@@ -319,28 +368,58 @@ export function CryptoTableHeader({
 
   return (
     <div className="space-y-4">
-      {/* Category tabs */}
-      <div
-        className={`flex items-center overflow-x-auto pb-2 ${styles.scrollbarHide}`}
-      >
-        <div className="flex space-x-1 min-w-max">
-          {categories.map((category) => (
-            <Button
-              key={category.id}
-              variant="ghost"
-              className={cn(
-                "px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-1.5",
-                activeTab === category.id
-                  ? "bg-blue-500/10 text-blue-500 border-b-2 border-blue-500"
-                  : "text-gray-400 hover:text-white hover:bg-gray-800/40"
-              )}
-              onClick={() => handleTabChange(category.id)}
+      {/* Category tabs with scroll indicators */}
+      <div className="relative">
+        {canScrollLeft && (
+          <div className="absolute left-0 top-0 bottom-0 w-12 flex items-center z-10 pointer-events-none">
+            <div className="w-full h-full bg-gradient-to-r from-gray-900 to-transparent opacity-80"></div>
+            <button
+              onClick={() => scrollTabs("left")}
+              className="absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-gray-800/80 hover:bg-gray-700 text-gray-200 rounded-full p-1 shadow-md pointer-events-auto"
+              aria-label="Scroll left"
             >
-              {category.icon && category.icon}
-              {category.label}
-            </Button>
-          ))}
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+          </div>
+        )}
+
+        <div
+          ref={tabsContainerRef}
+          className={`flex items-center overflow-x-auto pb-2 ${styles.scrollbarHide}`}
+          onScroll={checkScrollability}
+        >
+          <div className="flex space-x-1 min-w-max">
+            {categories.map((category) => (
+              <Button
+                key={category.id}
+                variant="ghost"
+                className={cn(
+                  "px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-1.5",
+                  activeTab === category.id
+                    ? "bg-blue-500/10 text-blue-500 border-b-2 border-blue-500"
+                    : "text-gray-400 hover:text-white hover:bg-gray-800/40"
+                )}
+                onClick={() => handleTabChange(category.id)}
+              >
+                {category.icon && category.icon}
+                {category.label}
+              </Button>
+            ))}
+          </div>
         </div>
+
+        {canScrollRight && (
+          <div className="absolute right-0 top-0 bottom-0 w-12 flex items-center justify-end z-10 pointer-events-none">
+            <div className="w-full h-full bg-gradient-to-l from-gray-900 to-transparent opacity-80"></div>
+            <button
+              onClick={() => scrollTabs("right")}
+              className="absolute right-0 top-1/2 -translate-y-1/2 z-20 bg-gray-800/80 hover:bg-gray-700 text-gray-200 rounded-full p-1 shadow-md pointer-events-auto"
+              aria-label="Scroll right"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Toolbar */}
