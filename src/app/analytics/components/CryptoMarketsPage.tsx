@@ -97,7 +97,24 @@ export function CryptoMarketsPage({ initialData }: AnalyticsClientProps) {
     marketCapChange24h: 0,
     isLoading: true,
   });
-  const globalMarketIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const fetchGlobalMarketData = useCallback(async () => {
+    setGlobalMarketData((prev) => ({ ...prev, isLoading: true }));
+    try {
+      const res = await fetch("/api/globalmarket");
+      if (!res.ok) throw new Error("Failed to fetch global market data");
+      const data = await res.json();
+      setGlobalMarketData({
+        marketCap: data.data.total_market_cap.usd,
+        volume24h: data.data.total_volume.usd,
+        marketCapChange24h: data.data.market_cap_change_percentage_24h_usd,
+        isLoading: false,
+      });
+    } catch (e) {
+      console.error("Error fetching global market data:", e);
+      setGlobalMarketData((prev) => ({ ...prev, isLoading: false }));
+    }
+  }, []);
 
   // Process data for market table
   const processedData = useState(() => {
@@ -235,9 +252,7 @@ export function CryptoMarketsPage({ initialData }: AnalyticsClientProps) {
   const fetchTrendingCoins = async () => {
     try {
       setIsLoadingTrending(true);
-      const response = await fetch(
-        "https://api.coingecko.com/api/v3/search/trending"
-      );
+      const response = await fetch("/api/trending");
       if (!response.ok) {
         throw new Error("Failed to fetch trending coins");
       }
@@ -254,7 +269,7 @@ export function CryptoMarketsPage({ initialData }: AnalyticsClientProps) {
   const fetchFearGreedIndex = async () => {
     try {
       setIsLoadingFearGreed(true);
-      const response = await fetch("https://api.alternative.me/fng/?limit=1");
+      const response = await fetch("/api/feargreed");
       if (!response.ok) {
         throw new Error("Failed to fetch fear & greed index");
       }
@@ -287,27 +302,34 @@ export function CryptoMarketsPage({ initialData }: AnalyticsClientProps) {
     // Initial data load
     fetchTrendingCoins();
     fetchFearGreedIndex();
+    fetchGlobalMarketData();
 
-    // Set up refresh interval (every 15 seconds)
-    refreshIntervalRef.current = setInterval(() => {
+    // Set up refresh interval (every 30 seconds)
+    const refreshInterval = setInterval(() => {
       refreshData();
-    }, 15000);
+    }, 30000);
+    refreshIntervalRef.current = refreshInterval;
 
-    // Set up countdown timer
-    refreshCountdownRef.current = setInterval(() => {
-      // Countdown logic removed to fix lint error
-    }, 1000);
+    // Set up global market data refresh at 5-minute intervals
+    const globalMarketRefresh = setInterval(() => {
+      fetchGlobalMarketData();
+    }, 120000); // 2 minutes
+
+    // Save ref to countdown timer
+    const countdownTimer = refreshCountdownRef.current;
 
     // Cleanup on unmount
     return () => {
-      if (refreshIntervalRef.current) {
-        clearInterval(refreshIntervalRef.current);
-      }
-      if (refreshCountdownRef.current) {
-        clearInterval(refreshCountdownRef.current);
+      // Clear the intervals using the local variables
+      clearInterval(refreshInterval);
+      clearInterval(globalMarketRefresh);
+
+      // Clear countdown timer if it exists
+      if (countdownTimer) {
+        clearInterval(countdownTimer);
       }
     };
-  }, [refreshData]); // Include refreshData as dependency
+  }, [refreshData, fetchGlobalMarketData]);
 
   // Get color for fear & greed index
   const getFearGreedColor = (classification: string) => {
@@ -347,37 +369,6 @@ export function CryptoMarketsPage({ initialData }: AnalyticsClientProps) {
     router.push(`/coin/${coinId}`);
   };
 
-  const fetchGlobalMarketData = useCallback(async () => {
-    setGlobalMarketData((prev) => ({ ...prev, isLoading: true }));
-    try {
-      const res = await fetch("https://api.coingecko.com/api/v3/global");
-      if (!res.ok) throw new Error("Failed to fetch global market data");
-      const data = await res.json();
-      setGlobalMarketData({
-        marketCap: data.data.total_market_cap.usd,
-        volume24h: data.data.total_volume.usd,
-        marketCapChange24h: data.data.market_cap_change_percentage_24h_usd,
-        isLoading: false,
-      });
-    } catch (e) {
-      console.error("Error fetching global market data:", e);
-      setGlobalMarketData((prev) => ({ ...prev, isLoading: false }));
-      // Optionally log error
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchGlobalMarketData();
-    globalMarketIntervalRef.current = setInterval(
-      fetchGlobalMarketData,
-      60000
-    ); // 1 min
-    return () => {
-      if (globalMarketIntervalRef.current)
-        clearInterval(globalMarketIntervalRef.current);
-    };
-  }, [fetchGlobalMarketData]);
-
   return (
     <div className="min-h-screen pt-24 bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900">
       <div className="container mx-auto px-4 2xl:px-0 max-w-[1400px] space-y-6">
@@ -400,7 +391,9 @@ export function CryptoMarketsPage({ initialData }: AnalyticsClientProps) {
                     if (cap >= 1e12)
                       return `$${(cap / 1e12).toFixed(1)} Trillion`;
                     if (cap >= 1e9) return `$${(cap / 1e9).toFixed(1)} Billion`;
-                    return `$${cap.toLocaleString()}`;
+                    return `$${cap.toLocaleString(undefined, {
+                      maximumFractionDigits: 0,
+                    })}`;
                   })()}
                 </span>
                 ,
@@ -582,7 +575,10 @@ export function CryptoMarketsPage({ initialData }: AnalyticsClientProps) {
                     </div>
                     <div className="flex-1">
                       <div className="text-white font-bold text-xl">
-                        ${globalMarketData.marketCap.toLocaleString()}
+                        $
+                        {globalMarketData.marketCap.toLocaleString(undefined, {
+                          maximumFractionDigits: 0,
+                        })}
                       </div>
                       <div className="text-xs text-blue-300 mt-0.5">
                         Market Cap
@@ -618,7 +614,10 @@ export function CryptoMarketsPage({ initialData }: AnalyticsClientProps) {
                     </div>
                     <div className="flex-1">
                       <div className="text-white font-bold text-xl">
-                        ${globalMarketData.volume24h.toLocaleString()}
+                        $
+                        {globalMarketData.volume24h.toLocaleString(undefined, {
+                          maximumFractionDigits: 0,
+                        })}
                       </div>
                       <div className="text-xs text-green-300 mt-0.5">
                         24h Volume
