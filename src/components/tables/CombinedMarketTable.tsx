@@ -1623,7 +1623,9 @@ export function CombinedMarketTable({
 
           // Format price based on its value
           let formattedPrice;
-          if (price < 0.00001) {
+          if (price < 0.0000001) {
+            formattedPrice = price.toFixed(10).replace(/\.?0+$/, "");
+          } else if (price < 0.00001) {
             formattedPrice = price.toFixed(8).replace(/\.?0+$/, "");
           } else if (price < 0.01) {
             formattedPrice = price.toFixed(6).replace(/\.?0+$/, "");
@@ -1637,7 +1639,7 @@ export function CombinedMarketTable({
 
           return (
             <div
-              className={`font-medium transition-colors duration-300 text-right text-[12px] md:text-[15px] ${
+              className={`font-medium transition-colors duration-300 text-left text-[12px] md:text-[15px] ${
                 priceChange > 0
                   ? "text-green-400"
                   : priceChange < 0
