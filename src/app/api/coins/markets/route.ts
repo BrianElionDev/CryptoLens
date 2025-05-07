@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import axios from "axios";
 
 // Cache for 5 minutes
 export const revalidate = 300;
@@ -24,73 +23,51 @@ interface CoinGeckoData {
 }
 
 // In-memory cache with timestamp
-let cachedData: { data: CoinGeckoData[]; timestamp: number } | null = null;
+let cache: CoinGeckoData[] | null = null;
+let cacheTime = 0;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 export async function GET() {
+  const now = Date.now();
+  if (cache && now - cacheTime < CACHE_DURATION) {
+    return NextResponse.json(cache, { status: 200 });
+  }
+
   try {
-    const now = Date.now();
+    // Batch the requests in smaller chunks to avoid rate limits
+    const BATCH_SIZE = 50;
+    const symbols: string[] = [
+      /* your symbols array */
+    ];
+    const batches = [];
 
-    // Return cached data if it's less than 5 minutes old
-    if (cachedData && now - cachedData.timestamp < 5 * 60 * 1000) {
-      return NextResponse.json(cachedData.data, {
-        headers: {
-          "Cache-Control": "public, max-age=300",
-          ETag: `"${cachedData.timestamp}"`,
-        },
-      });
+    for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
+      batches.push(symbols.slice(i, i + BATCH_SIZE));
     }
 
-    console.log("Fetching coin market data...");
-    // Fetch all pages in parallel
-    const perPage = 250;
-    const totalPages = 3;
-    const pagePromises = Array.from({ length: totalPages }, (_, i) =>
-      axios.get("https://api.coingecko.com/api/v3/coins/markets", {
-        params: {
-          vs_currency: "usd",
-          order: "market_cap_desc",
-          per_page: perPage,
-          page: i + 1,
-          sparkline: false,
-        },
-        timeout: 10000,
-      })
-    );
+    const allCoins = [];
+    for (const batch of batches) {
+      const pagePromises = batch.map((symbol) =>
+        fetch(
+          `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${symbol}&order=market_cap_desc&per_page=1&page=1&sparkline=false`
+        )
+      );
 
-    const responses = await Promise.all(pagePromises);
-    const allCoins = responses.flatMap((response) => response.data);
+      const responses = await Promise.all(pagePromises);
+      const batchCoins = await Promise.all(responses.map((r) => r.json()));
+      allCoins.push(...batchCoins.flat());
 
-    // Update cache
-    cachedData = { data: allCoins, timestamp: now };
-
-    return NextResponse.json(allCoins, {
-      headers: {
-        "Cache-Control": "public, max-age=300",
-        ETag: `"${now}"`,
-      },
-    });
-  } catch (error) {
-    console.error("Error fetching coins:", error);
-
-    // Return cached data if available, even if stale
-    if (cachedData) {
-      return NextResponse.json(cachedData.data, {
-        headers: {
-          "Cache-Control": "public, max-age=300",
-          ETag: `"${cachedData.timestamp}"`,
-        },
-      });
+      // Add a small delay between batches to avoid rate limits
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 
-    if (axios.isAxiosError(error)) {
-      const status = error.response?.status || 500;
-      const message =
-        error.response?.data?.error || "Failed to fetch coin data";
-      return NextResponse.json({ error: message }, { status });
-    }
-
+    cache = allCoins;
+    cacheTime = now;
+    return NextResponse.json(allCoins, { status: 200 });
+  } catch (err) {
+    console.error("Error fetching coins:", err);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Failed to fetch coin data" },
       { status: 500 }
     );
   }

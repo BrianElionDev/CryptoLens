@@ -99,103 +99,32 @@ export function CombinedMarketTable({
     console.groupEnd();
   };
 
-  // Debug utility for filter state
-  // Disabled to fix lint error: 'filterStateDebug' is assigned a value but never used
-  /*
-  const filterStateDebug = (enable = false) => {
-    if (!enable) return;
 
-    console.log("=== FILTER STATE DEBUG ===");
-    console.log("Current filter settings:", filterSettings);
-    console.log("Date Preset:", datePreset);
-    console.log("Show Most Recent:", showMostRecent);
-    console.log("Date Range:", dateRange);
-    console.log("Date Filter Active:", dateFilterActive);
-    console.log("========================");
-  };
-  */
 
-  // Test the filter logic directly
-  // Disabled to fix lint error: 'testFilterLogic' is assigned a value but never used
-  /*
-  const testFilterLogic = (
-    enable = false,
-    testQueries: Array<{ query: string; expectedMatches: string[] }> = []
-  ) => {
-    if (!enable) return;
-    
-    console.log("\n=== TESTING FILTER LOGIC ===");
-    
-    // If no test queries provided, create some defaults
-    if (testQueries.length === 0) {
-      testQueries = [
-        {
-          query: "bitcoin",
-          expectedMatches: ["Bitcoin", "Bitcoin Cash"],
-        },
-        {
-          query: "eth",
-          expectedMatches: ["Ethereum", "Ethereum Classic"],
-        },
-      ];
-    }
-    
-    testQueries.forEach(({ query, expectedMatches }) => {
-      console.log(`\nTesting search for "${query}":`);
-      const results = coinData.filter((coin) =>
-        coin.name.toLowerCase().includes(query.toLowerCase()) ||
-        coin.symbol.toLowerCase().includes(query.toLowerCase())
-      );
-      
-      console.log(`Found ${results.length} matches:`);
-      results.slice(0, 5).forEach((coin) => {
-        console.log(`- ${coin.name} (${coin.symbol})`);
-      });
-      
-      // Check expected matches
-      const foundNames = results.map(c => c.name);
-      const missingExpected = expectedMatches.filter(name => !foundNames.includes(name));
-      if (missingExpected.length > 0) {
-        console.log("❌ Did not find expected matches:", missingExpected);
-      } else {
-        console.log("✅ Found all expected matches");
-      }
-    });
-  };
-  */
+  const defaultChannels = processedData.channels;
 
-  // Create internal channel state with an initial value based on the props or session storage
-  const initializeChannels = () => {
+  const initializeChannels = (): string[] => {
     // First try to get from session storage
     try {
-      const storedChannels = sessionStorage.getItem("cryptoSelectedChannels");
-      if (storedChannels) {
-        const parsedChannels = JSON.parse(storedChannels);
-        if (Array.isArray(parsedChannels) && parsedChannels.length > 0) {
-          console.log(
-            "Restoring channels from session storage:",
-            parsedChannels.length
-          );
-          return parsedChannels;
+      if (typeof window !== "undefined") {
+        const storedChannels = sessionStorage.getItem("cryptoSelectedChannels");
+        if (storedChannels) {
+          const parsedChannels = JSON.parse(storedChannels);
+          if (Array.isArray(parsedChannels) && parsedChannels.length > 0) {
+            return parsedChannels;
+          }
         }
       }
-    } catch (e) {
-      console.error("Error restoring channels from session storage:", e);
+    } catch (error) {
+      console.error("Error restoring channels from session storage:", error);
     }
-
-    // If props have channels, use those
-    if (selectedChannels.length > 0) {
-      return selectedChannels;
-    }
-
-    // Default to all channels if nothing else is available
-    return processedData.channels;
+    // Fallback to default channels
+    return defaultChannels;
   };
 
   // Internal channel state
-  const [internalSelectedChannels, setInternalSelectedChannels] = useState<
-    string[]
-  >(() => initializeChannels());
+  const [internalSelectedChannels, setInternalSelectedChannels] =
+    useState<string[]>(initializeChannels);
 
   // Handle channel changes
   const handleChannelsChange = (channels: string[]) => {
