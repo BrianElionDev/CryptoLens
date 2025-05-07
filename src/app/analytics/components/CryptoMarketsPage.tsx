@@ -86,6 +86,18 @@ export function CryptoMarketsPage({ initialData }: AnalyticsClientProps) {
   const [isLoadingFearGreed, setIsLoadingFearGreed] = useState(true);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const refreshCountdownRef = useRef<NodeJS.Timeout | null>(null);
+  const [globalMarketData, setGlobalMarketData] = useState<{
+    marketCap: number;
+    volume24h: number;
+    marketCapChange24h: number;
+    isLoading: boolean;
+  }>({
+    marketCap: 0,
+    volume24h: 0,
+    marketCapChange24h: 0,
+    isLoading: true,
+  });
+  const globalMarketIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Process data for market table
   const processedData = useState(() => {
@@ -335,6 +347,37 @@ export function CryptoMarketsPage({ initialData }: AnalyticsClientProps) {
     router.push(`/coin/${coinId}`);
   };
 
+  const fetchGlobalMarketData = useCallback(async () => {
+    setGlobalMarketData((prev) => ({ ...prev, isLoading: true }));
+    try {
+      const res = await fetch("https://api.coingecko.com/api/v3/global");
+      if (!res.ok) throw new Error("Failed to fetch global market data");
+      const data = await res.json();
+      setGlobalMarketData({
+        marketCap: data.data.total_market_cap.usd,
+        volume24h: data.data.total_volume.usd,
+        marketCapChange24h: data.data.market_cap_change_percentage_24h_usd,
+        isLoading: false,
+      });
+    } catch (e) {
+      console.error("Error fetching global market data:", e);
+      setGlobalMarketData((prev) => ({ ...prev, isLoading: false }));
+      // Optionally log error
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchGlobalMarketData();
+    globalMarketIntervalRef.current = setInterval(
+      fetchGlobalMarketData,
+      60000
+    ); // 1 min
+    return () => {
+      if (globalMarketIntervalRef.current)
+        clearInterval(globalMarketIntervalRef.current);
+    };
+  }, [fetchGlobalMarketData]);
+
   return (
     <div className="min-h-screen pt-24 bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900">
       <div className="container mx-auto px-4 2xl:px-0 max-w-[1400px] space-y-6">
@@ -344,6 +387,49 @@ export function CryptoMarketsPage({ initialData }: AnalyticsClientProps) {
             <h1 className="text-2xl font-bold text-white">
               Today&apos;s Cryptocurrency Prices by Market Cap
             </h1>
+          </div>
+          <div className="text-xs text-gray-400">
+            {globalMarketData.isLoading ? (
+              <span className="inline-block w-40 h-4 bg-gray-700/50 rounded animate-pulse" />
+            ) : (
+              <>
+                The global cryptocurrency market cap today is
+                <span className="font-semibold text-white ml-1">
+                  {(() => {
+                    const cap = globalMarketData.marketCap;
+                    if (cap >= 1e12)
+                      return `$${(cap / 1e12).toFixed(1)} Trillion`;
+                    if (cap >= 1e9) return `$${(cap / 1e9).toFixed(1)} Billion`;
+                    return `$${cap.toLocaleString()}`;
+                  })()}
+                </span>
+                ,
+                <span
+                  className={`ml-1 font-semibold ${
+                    globalMarketData.marketCapChange24h >= 0
+                      ? "text-green-400"
+                      : "text-red-400"
+                  }`}
+                >
+                  {globalMarketData.marketCapChange24h >= 0 ? (
+                    <>▲ {globalMarketData.marketCapChange24h.toFixed(2)}%</>
+                  ) : (
+                    <>
+                      ▼{" "}
+                      {Math.abs(globalMarketData.marketCapChange24h).toFixed(2)}
+                      %
+                    </>
+                  )}
+                </span>
+                change in the last 24 hours.
+              </>
+            )}
+            <a
+              href="https://www.coingecko.com/en/global-market-cap"
+              className="text-blue-400 hover:text-blue-500 ml-2"
+            >
+              Read More
+            </a>
           </div>
         </div>
 
@@ -448,8 +534,171 @@ export function CryptoMarketsPage({ initialData }: AnalyticsClientProps) {
             </div>
           </div>
 
+          {/* Global Market Stats Card */}
+          <div className="bg-gradient-to-r from-blue-900/10 via-green-900/10 to-blue-900/10 border border-gray-800/40 rounded-xl p-4 col-span-1 flex flex-col gap-3 min-h-[220px]">
+            <div className="text-lg font-semibold text-white mb-1">
+              Global Market Stats
+            </div>
+            {globalMarketData.isLoading ? (
+              <div className="flex flex-col gap-3">
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="w-full bg-gray-800/40 border border-gray-700/30 rounded-lg p-4 flex items-center min-h-[64px]"
+                  >
+                    <div className="w-8 h-8 bg-gray-700/50 rounded-full mr-4" />
+                    <div className="flex-1">
+                      <div className="w-24 h-5 bg-gray-700/40 rounded mb-1" />
+                      <div className="w-16 h-3 bg-gray-700/30 rounded" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {/* Market Cap */}
+                <div>
+                  <div className="font-bold text-sm text-blue-300 mb-1 pl-1">
+                    Market Capitalization
+                  </div>
+                  <div className="w-full bg-gray-800/40 border border-gray-700/30 rounded-lg p-4 flex items-center">
+                    <div className="w-8 h-8 flex items-center justify-center rounded-full bg-blue-900/30 mr-4">
+                      <svg
+                        width="28"
+                        height="28"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="#38bdf8"
+                          strokeWidth="2"
+                          fill="#0ea5e9"
+                          fillOpacity="0.15"
+                        />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-white font-bold text-xl">
+                        ${globalMarketData.marketCap.toLocaleString()}
+                      </div>
+                      <div className="text-xs text-blue-300 mt-0.5">
+                        Market Cap
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                {/* 24h Volume */}
+                <div>
+                  <div className="font-bold text-sm text-green-300 mb-1 pl-1">
+                    24h Trading Volume
+                  </div>
+                  <div className="w-full bg-gray-800/40 border border-gray-700/30 rounded-lg p-4 flex items-center">
+                    <div className="w-8 h-8 flex items-center justify-center rounded-full bg-green-900/30 mr-4">
+                      <svg
+                        width="28"
+                        height="28"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <rect
+                          x="4"
+                          y="10"
+                          width="16"
+                          height="8"
+                          rx="2"
+                          stroke="#34d399"
+                          strokeWidth="2"
+                          fill="#22c55e"
+                          fillOpacity="0.15"
+                        />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-white font-bold text-xl">
+                        ${globalMarketData.volume24h.toLocaleString()}
+                      </div>
+                      <div className="text-xs text-green-300 mt-0.5">
+                        24h Volume
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                {/* 24h % Change */}
+                <div>
+                  <div className="font-bold text-sm text-gray-300 mb-1 pl-1">
+                    24h Market Cap Change
+                  </div>
+                  <div className="w-full bg-gray-800/40 border border-gray-700/30 rounded-lg p-4 flex items-center">
+                    <div
+                      className={`w-8 h-8 flex items-center justify-center rounded-full mr-4 ${
+                        globalMarketData.marketCapChange24h >= 0
+                          ? "bg-green-900/30"
+                          : "bg-red-900/30"
+                      }`}
+                    >
+                      {globalMarketData.marketCapChange24h >= 0 ? (
+                        <svg
+                          width="28"
+                          height="28"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            d="M12 19V5M12 5l-5 5M12 5l5 5"
+                            stroke="#4ade80"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      ) : (
+                        <svg
+                          width="28"
+                          height="28"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            d="M12 5v14m0 0l-5-5m5 5l5-5"
+                            stroke="#f87171"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <div
+                        className={`font-bold text-xl ${
+                          globalMarketData.marketCapChange24h >= 0
+                            ? "text-green-400"
+                            : "text-red-400"
+                        }`}
+                      >
+                        {globalMarketData.marketCapChange24h >= 0 ? (
+                          <>
+                            +{globalMarketData.marketCapChange24h.toFixed(2)}%
+                          </>
+                        ) : (
+                          <>{globalMarketData.marketCapChange24h.toFixed(2)}%</>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-300 mt-0.5">
+                        24h Change
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Fear & Greed Index Card - Simpler Layout Matching User's Image */}
-          <div className="bg-gradient-to-r from-blue-900/10 via-purple-900/10 to-blue-900/10 border border-gray-800/40 rounded-xl p-4 col-span-1 md:col-span-1 xl:col-span-2">
+          <div className="bg-gradient-to-r from-blue-900/10 via-purple-900/10 to-blue-900/10 border border-gray-800/40 rounded-xl p-4 col-span-1 md:col-span-1 xl:col-span-1">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-white">Fear & Greed</h2>
               <button
@@ -466,7 +715,7 @@ export function CryptoMarketsPage({ initialData }: AnalyticsClientProps) {
                 <span className="text-xs">Refresh</span>
               </button>
             </div>
-            <div className="min-h-[260px]">
+            <div className="min-h-[180px]">
               {isLoadingFearGreed ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-pulse">
                   {/* Left Column - Value and Date Skeleton */}
