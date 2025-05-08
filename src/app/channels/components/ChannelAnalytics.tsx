@@ -261,10 +261,16 @@ export const ChannelAnalytics = ({ knowledge }: ChannelAnalyticsProps) => {
                     projectDistribution: processedData.projectDistribution,
                     projectTrends: processedData.projectTrends,
                     coinCategories: processedData.coinCategories.map(
-                      (coin, index) => ({
+                      (coin) => ({
                         coin: coin.coin,
                         channel: coin.channel,
-                        id: `${coin.coin}-${coin.channel}-${index}`,
+                        categories: coin.categories,
+                        date: new Date().toISOString().split("T")[0], // Use current date as fallback
+                        rpoints:
+                          processedData.coinDistribution.find(
+                            (c) => c.name === coin.coin
+                          )?.value || 0,
+                        total_count: 1, // Default value
                       })
                     ),
                   }}
@@ -295,9 +301,11 @@ export const ChannelAnalytics = ({ knowledge }: ChannelAnalyticsProps) => {
                   processedData={{
                     categoryDistribution: processedData.categoryDistribution,
                     coinCategories: processedData.coinCategories.map(
-                      (coin, index) => ({
+                      (coin, idx) => ({
                         ...coin,
-                        id: `${coin.coin}-${coin.channel}-${index}`,
+                        date: new Date().toISOString().split("T")[0],
+                        total_count: 1,
+                        id: `${coin.coin}-${coin.channel}-${idx}`,
                         channel: knowledge[0]?.["channel name"] || "",
                         rpoints:
                           processedData.coinDistribution.find(
