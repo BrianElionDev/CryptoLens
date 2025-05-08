@@ -44,10 +44,10 @@ interface CoinGeckoResponse {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   try {
-    const { id } = params;
+    const { id } = await params;
     // Decode the URL-encoded ID
     const decodedId = decodeURIComponent(id);
     const CMC_API_KEY = "853e5b5f-2819-49d3-a732-aa2616398d6d";

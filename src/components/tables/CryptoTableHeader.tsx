@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Filter, Search, X, ChevronLeft, ChevronRight } from "lucide-react";
-import { useKnowledgeData } from "@/hooks/useCoinData";
+import { useContextKnowledge } from "@/hooks/useContextKnowledge";
 import styles from "./cryptoTable.module.css";
 
 export type TabType = "all" | "categories" | string;
@@ -35,7 +35,7 @@ export function CryptoTableHeader({
   const tabsContainerRef = useRef<HTMLDivElement>(null);
 
   // Fetch knowledge data
-  const { data: knowledgeData } = useKnowledgeData();
+  const { data: knowledgeData } = useContextKnowledge();
   const [categories, setCategories] = useState<
     { id: TabType; label: string; icon?: React.ReactNode }[]
   >([

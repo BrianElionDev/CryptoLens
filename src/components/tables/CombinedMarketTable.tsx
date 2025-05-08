@@ -31,10 +31,40 @@ import type { TabType } from "./CryptoTableHeader";
 import { CategoriesTable } from "./CategoriesTable";
 import { ChannelSelector } from "@/app/analytics/components/ChannelSelector";
 import { CoinImage } from "@/components/ui/CoinImage";
+import dynamic from "next/dynamic";
+
+// Add client-only components for loading indicators
+const LoadingDots = () => (
+  <span className="ml-2 text-blue-400 inline-flex">
+    <span className="w-2 text-center animate-[dots_1.4s_infinite]">.</span>
+    <span className="w-2 text-center animate-[dots_1.4s_0.2s_infinite]">.</span>
+    <span className="w-2 text-center animate-[dots_1.4s_0.4s_infinite]">.</span>
+  </span>
+);
+
+const LoadingIndicator = () => (
+  <div className="mt-2 text-xs text-gray-400 italic flex items-center">
+    <div className="w-2 h-2 rounded-full bg-blue-400 mr-1.5 animate-pulse"></div>
+    Updating market data...
+  </div>
+);
+
+// Create dynamic imports with SSR disabled
+const ClientLoadingDots = dynamic(() => Promise.resolve(LoadingDots), {
+  ssr: false,
+});
+
+const ClientLoadingIndicator = dynamic(
+  () => Promise.resolve(LoadingIndicator),
+  {
+    ssr: false,
+  }
+);
 
 type ExtendedCoinData = CoinData & {
   rpoints: number;
   total_mentions: number;
+  exact_knowledge_name?: string; // Add this property to fix type errors
 };
 
 interface CoinCategoryData {
@@ -86,6 +116,24 @@ export function CombinedMarketTable({
   // Add a filter reset flag to help with synchronization issues
   // Commented out due to unused variable lint error, but preserved for future use
   // const [filterResetFlag, setFilterResetFlag] = useState(0);
+
+  // Add loadingVisible state for handling hydration mismatches with the isFetching indicator
+  // const [loadingVisible, setLoadingVisible] = useState(false);
+
+  // Create exactCoinMapRef here with the other refs
+  const exactCoinMapRef = useRef(
+    new Map<
+      string,
+      {
+        symbol: string;
+        points: number;
+        date: string;
+        mentions: number;
+        channel: string;
+        exact_name: string; // Add exact name to help with precise matching
+      }
+    >()
+  );
 
   // Debug utils
   const debugFilters = (enable = false) => {
@@ -727,7 +775,7 @@ export function CombinedMarketTable({
     });
   };
 
-  // Simplified symbol calculation with deduplication
+  // Fix in symbols useMemo to ensure total_mentions are correctly initialized and tracked separately per coin
   const symbols = useMemo(() => {
     console.log("CRITICAL FILTER STATE:", {
       showMostRecent,
@@ -736,14 +784,17 @@ export function CombinedMarketTable({
       isMostRecent: datePreset === "most-recent",
     });
 
-    const coinMap = new Map<
-      string,
+    // Create a map to track unique coins by their EXACT name
+    // This prevents coins like "Bitcoin" and "Dog (Bitcoin)" from sharing mentions
+    const exactCoinMap = new Map<
+      string, // Using exact coin name as key
       {
         symbol: string;
         points: number;
         date: string;
         mentions: number;
         channel: string;
+        exact_name: string; // Store exact name for precise matching
       }
     >();
 
@@ -769,88 +820,50 @@ export function CombinedMarketTable({
 
     let count = 0;
 
-    // First pass: collect all symbols and their points
+    // First pass: collect all coins with their EXACT names
     processedData.coinCategories.forEach((coin) => {
       // Only include coins from selected channels
       if (!channelSet.has(coin.channel)) return;
 
-      // FIXED: Use datePreset directly instead of showMostRecent flag for more reliable filtering
-      // This ensures the filter properly follows the selected mode in the UI
+      // Handle Most Recent filter
       const isMostRecentFilter = datePreset === "most-recent";
-
-      // For "Most Recent" filter, include this coin ONLY if it's from the latest date for its channel
       if (isMostRecentFilter) {
         const latestDateForChannel = latestDates.get(coin.channel);
-
-        // Debug for most recent filter to see what's happening
-        if (debug && Math.random() < 0.01) {
-          // Only log 1% of the time to avoid flooding console
-          console.log(
-            `Checking coin from ${coin.channel}, date ${coin.date} vs latest ${latestDateForChannel}`
-          );
-          console.log(`Including? ${coin.date === latestDateForChannel}`);
-        }
-
-        // The key logic: Include ONLY coins from the latest date for each channel
-        // If the coin's date is NOT the latest date for its channel, skip it
         if (coin.date !== latestDateForChannel) {
-          // Skip non-latest coins
-          return;
-        }
-
-        // If we get here, the coin is from the latest date and should be included
-        if (debug && Math.random() < 0.005) {
-          console.log(
-            `INCLUDED coin ${coin.coin} from ${coin.channel} - latest date match`
-          );
+          return; // Skip non-latest coins
         }
       }
 
       // Skip if outside date range - only applied when date range is set
       if (dateRange.from || dateRange.to) {
         const coinDate = new Date(coin.date);
-        // Set to start of day for the coin date for consistent comparison
         coinDate.setHours(0, 0, 0, 0);
 
-        // Create date objects for from and to with time set to start/end of day
         let fromDate, toDate;
-
         if (dateRange.from) {
           fromDate = new Date(dateRange.from);
           fromDate.setHours(0, 0, 0, 0);
+          if (coinDate < fromDate) return;
         }
 
         if (dateRange.to) {
           toDate = new Date(dateRange.to);
-          toDate.setHours(23, 59, 59, 999); // End of day
-        }
-
-        // Check "from" date if it exists
-        if (fromDate && coinDate < fromDate) {
-          return;
-        }
-
-        // Check "to" date if it exists
-        if (toDate && coinDate > toDate) {
-          return;
+          toDate.setHours(23, 59, 59, 999);
+          if (coinDate > toDate) return;
         }
       }
 
       count++;
 
-      // Extract symbols and names more consistently
+      // IMPORTANT CHANGE: Use the exact, complete coin name as key
+      // This ensures each unique coin gets its own mention count
+      const exactKey = coin.coin.trim();
+
+      // Extract symbol for API matching later
       const symbolMatch = coin.coin.match(/\(\$([^)]+)\)/);
       const symbol = symbolMatch ? symbolMatch[1].toLowerCase() : "";
-      const cleanName = coin.coin
-        .replace(/\s*\(\$[^)]+\)/g, "")
-        .toLowerCase()
-        .trim();
 
-      // If no symbol is found through regex, try to use the coin name
-      // as fallback for better matching with CoinGecko/CMC
-      const key = symbol || cleanName;
-
-      const existing = coinMap.get(key);
+      const existing = exactCoinMap.get(exactKey);
       if (existing) {
         // If this coin is from a more recent date for its channel, update it
         const existingDate = new Date(existing.date);
@@ -874,12 +887,13 @@ export function CombinedMarketTable({
         existing.mentions += coin.total_count || 1;
       } else {
         // Initialize new entry with total_count
-        coinMap.set(key, {
-          symbol: key,
+        exactCoinMap.set(exactKey, {
+          symbol: symbol || exactKey.toLowerCase(), // Fallback to name if no symbol
           points: coin.rpoints,
           date: coin.date,
           mentions: coin.total_count || 1,
           channel: coin.channel,
+          exact_name: exactKey, // Store the exact name to help with precise matching
         });
       }
     });
@@ -887,23 +901,42 @@ export function CombinedMarketTable({
     // Update the matching coins count
     setMatchingCoinsCount(count);
 
-    // Sort by points and map to symbol for API call
-    const result = Array.from(coinMap.values())
-      .sort((a, b) => b.points - a.points)
-      .map((item) => item.symbol);
+    // Store the exactCoinMap in our ref so sortedCoinData can use it
+    exactCoinMapRef.current = exactCoinMap;
+
+    // Create a map from symbols to exact coin keys
+    // This allows us to track multiple exact coins that map to the same symbol
+    // e.g., "Bitcoin" and "Dog (Bitcoin)" both have symbol BTC
+    const symbolToExactKeys = new Map<string, string[]>();
+
+    // Add all exact coins to their corresponding symbols
+    exactCoinMap.forEach((data, exactKey) => {
+      if (!symbolToExactKeys.has(data.symbol)) {
+        symbolToExactKeys.set(data.symbol, []);
+      }
+      symbolToExactKeys.get(data.symbol)?.push(exactKey);
+    });
+
+    // IMPORTANT: Log the mapping to help debug (only if debug is enabled)
+    if (debug) {
+      console.log("Symbol to exact name mapping:");
+      symbolToExactKeys.forEach((exactKeys, symbol) => {
+        console.log(`Symbol ${symbol} maps to:`, exactKeys);
+      });
+    }
+
+    // Return a unique list of symbols for API calls
+    // Each symbol will fetch data for potentially multiple exact coins
+    const uniqueSymbols = Array.from(symbolToExactKeys.keys());
 
     if (debug) {
       console.log(
-        `Generated symbols list with ${result.length} unique coins from ${count} total coins`
+        `Generated symbols list with ${uniqueSymbols.length} unique symbols from ${count} total coins`
       );
       console.log(`Selected channels: ${channels.join(", ")}`);
-      console.log(
-        `Latest dates per channel:`,
-        Object.fromEntries(latestDates.entries())
-      );
     }
 
-    return result;
+    return uniqueSymbols;
   }, [
     processedData.coinCategories,
     localSelectedChannels,
@@ -915,21 +948,44 @@ export function CombinedMarketTable({
   ]);
 
   // Fetch coin data with improved error handling
-  const { data: coinData, isFetching } = useCoinData(
-    symbols,
-    refreshKeyRef.current,
-    "full"
-  );
+  // Use only coinData, not contextMarketData
+  const {
+    data: coinData,
+    isFetching,
+    refetch,
+  } = useCoinData(symbols, refreshKeyRef.current, "full");
+
+  // Remove the original useEffect that forces refetch
+
+  // Combined loading state - simplify to just use direct coinData loading state
+  const isDataFetching = useMemo(() => {
+    return isFetching;
+  }, [isFetching]);
+
+  // Use coinData directly without context data
+  const combinedCoinData = useMemo(() => {
+    console.log("Using market data from direct API");
+    console.log("API data count:", coinData?.data?.length || 0);
+
+    // Check if we have data and log error if not
+    if (!coinData?.data?.length) {
+      console.warn(
+        "No data from API, this may indicate an API issue or rate limiting"
+      );
+    }
+
+    return coinData;
+  }, [coinData]);
 
   // Add a ref to track the previous sort order
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   // Track initial load state
   useEffect(() => {
-    if (coinData?.data && coinData.data.length > 0) {
+    if (combinedCoinData?.data && combinedCoinData.data.length > 0) {
       setIsInitialLoad(false);
     }
-  }, [coinData]);
+  }, [combinedCoinData]);
 
   // Normalize category name to match CoinGecko IDs
   const normalizeCategory = (category: string): string => {
@@ -1089,7 +1145,7 @@ export function CombinedMarketTable({
       .replace(/-+/g, "-"); // Replace multiple hyphens with a single one
   };
 
-  // Process coin data with better matching strategy
+  // Fix in the sortedCoinData useMemo to use the exactCoinMapRef
   const sortedCoinData = useMemo(() => {
     // For the "Most Recent" filter:
     // We collect the latest data for each coin from each selected channel.
@@ -1100,228 +1156,287 @@ export function CombinedMarketTable({
     // 3. We then match this data with the API coin data for display
     // This ensures we show a combined view of the latest trends across all selected channels.
 
-    // Control for debugging
-    const debug = false;
+    // Enable debugging to track matching
+    const debug = true;
 
     // Only log on initial processing or when filters change
     const baseData = prevDataRef.current;
-    if (!coinData?.data?.length) {
+    if (!combinedCoinData?.data?.length) {
+      console.log(
+        "No combined coin data available - using previous data:",
+        baseData.length
+      );
+
+      // IMPORTANT: If there's no API data and no previous data,
+      // create data directly from processedData.coinCategories
+      if (baseData.length === 0 && processedData.coinCategories.length > 0) {
+        console.log("Creating fallback data from knowledge base entries");
+
+        // Extract unique coin entries from coinCategories
+        const uniqueCoins = new Map();
+
+        // Get channel filter
+        const channels =
+          localSelectedChannels.length > 0
+            ? localSelectedChannels
+            : processedData.channels;
+        const channelSet = new Set(channels);
+
+        processedData.coinCategories.forEach((coin) => {
+          // Apply channel filter
+          if (!channelSet.has(coin.channel)) return;
+
+          // Skip if outside date range - only applied when date range is set
+          if (dateRange.from || dateRange.to) {
+            const coinDate = new Date(coin.date);
+            coinDate.setHours(0, 0, 0, 0);
+
+            let fromDate, toDate;
+            if (dateRange.from) {
+              fromDate = new Date(dateRange.from);
+              fromDate.setHours(0, 0, 0, 0);
+              if (coinDate < fromDate) return;
+            }
+
+            if (dateRange.to) {
+              toDate = new Date(dateRange.to);
+              toDate.setHours(23, 59, 59, 999);
+              if (coinDate > toDate) return;
+            }
+          }
+
+          // Extract symbol and name
+          const symbolMatch = coin.coin.match(/\(\$([^)]+)\)/);
+          const symbol = symbolMatch ? symbolMatch[1].toLowerCase() : "";
+          const name = coin.coin.replace(/\s*\(\$[^)]+\)/g, "").trim();
+
+          const key = symbol || name.toLowerCase();
+
+          if (uniqueCoins.has(key)) {
+            // Update mentions count for existing coin
+            const existing = uniqueCoins.get(key);
+            existing.total_mentions =
+              (existing.total_mentions || 0) + (coin.total_count || 1);
+            if (coin.rpoints > existing.rpoints) {
+              existing.rpoints = coin.rpoints;
+            }
+          } else {
+            // Create new coin entry
+            uniqueCoins.set(key, {
+              id: key,
+              symbol: symbol || key,
+              name: name,
+              rpoints: coin.rpoints,
+              total_mentions: coin.total_count || 1,
+              price: 0,
+              current_price: 0,
+              market_cap: 0,
+              volume_24h: 0,
+              total_volume: 0,
+              percent_change_24h: 0,
+              price_change_percentage_24h: 0,
+              image: "",
+              data_source: "knowledge", // Mark as coming from knowledge base
+              exact_knowledge_name: coin.coin,
+            });
+          }
+        });
+
+        // Convert to array and sort by rpoints
+        const fallbackData = Array.from(uniqueCoins.values()).sort(
+          (a, b) => b.rpoints - a.rpoints
+        );
+
+        console.log(`Created ${fallbackData.length} fallback coin entries`);
+
+        // Save to previous data ref for next render
+        prevDataRef.current = fallbackData;
+        return fallbackData;
+      }
+
       return baseData;
     }
 
-    if (debug)
-      console.log(`Processing ${coinData.data.length} coins from API response`);
+    console.log(
+      `Processing ${combinedCoinData.data.length} coins from API response`
+    );
 
-    const channels =
-      localSelectedChannels.length > 0
-        ? localSelectedChannels
-        : processedData.channels;
-    const channelSet = new Set(channels);
+    // Debug API data format
+    if (debug) {
+      console.log("First coin from API data:", combinedCoinData.data[0]);
+    }
 
-    // Get latest date for each channel
-    const latestDates = new Map<string, string>();
-    processedData.coinCategories.forEach((c) => {
-      if (channelSet.has(c.channel)) {
-        if (
-          !latestDates.has(c.channel) ||
-          c.date > latestDates.get(c.channel)!
-        ) {
-          latestDates.set(c.channel, c.date);
+    // Access the exact coin map that we saved in the symbols function
+    const exactCoins = exactCoinMapRef.current;
+
+    // Process the API data
+    const result: ExtendedCoinData[] = [];
+
+    // COMPLETELY NEW MATCHING APPROACH:
+    // 1. Create a map to track processed coins to avoid duplicates
+    const processedCoins = new Set<string>();
+
+    // 2. Create a mapping of cleaned coin names to API coins for better matching
+    const apiCoinMap = new Map<string, CoinData>();
+    combinedCoinData.data.forEach((coin) => {
+      if (coin.name) {
+        apiCoinMap.set(coin.name.toLowerCase().trim(), coin);
+
+        // Also map by symbol for secondary matching
+        if (coin.symbol) {
+          apiCoinMap.set(coin.symbol.toLowerCase().trim(), coin);
         }
       }
     });
 
-    // Calculate points and mentions per coin with more flexible matching
-    const coinStatsMap = new Map<
-      string,
-      {
-        points: number;
-        mentions: number;
-        date: string;
-        name: string;
-        symbol: string;
-        channel: string;
-      }
-    >();
-
-    // First collect all data points from selected channels
-    processedData.coinCategories.forEach((coin) => {
-      if (!channelSet.has(coin.channel)) return;
-
-      // FIXED: Use datePreset directly instead of showMostRecent flag for more reliable filtering
-      // This ensures the filter properly follows the selected mode in the UI
-      const isMostRecentFilter = datePreset === "most-recent";
-
-      // For "Most Recent" filter, include this coin ONLY if it's from the latest date for its channel
-      if (isMostRecentFilter) {
-        const latestDateForChannel = latestDates.get(coin.channel);
-
-        // Debug for most recent filter to see what's happening
-        if (debug && Math.random() < 0.01) {
-          // Only log 1% of the time to avoid flooding console
-          console.log(
-            `Checking coin from ${coin.channel}, date ${coin.date} vs latest ${latestDateForChannel}`
-          );
-          console.log(`Including? ${coin.date === latestDateForChannel}`);
-        }
-
-        // The key logic: Include ONLY coins from the latest date for each channel
-        // If the coin's date is NOT the latest date for its channel, skip it
-        if (coin.date !== latestDateForChannel) {
-          // Skip non-latest coins
-          return;
-        }
-
-        // If we get here, the coin is from the latest date and should be included
-        if (debug && Math.random() < 0.005) {
-          console.log(
-            `INCLUDED coin ${coin.coin} from ${coin.channel} - latest date match`
-          );
-        }
-      }
-
-      // Skip if outside date range
-      if (dateRange.from || dateRange.to) {
-        const coinDate = new Date(coin.date);
-        coinDate.setHours(0, 0, 0, 0);
-
-        let fromDate, toDate;
-
-        if (dateRange.from) {
-          fromDate = new Date(dateRange.from);
-          fromDate.setHours(0, 0, 0, 0);
-        }
-
-        if (dateRange.to) {
-          toDate = new Date(dateRange.to);
-          toDate.setHours(23, 59, 59, 999);
-        }
-
-        if (fromDate && coinDate < fromDate) return;
-        if (toDate && coinDate > toDate) return;
-      }
-
-      // Get symbol and name
-      const symbolMatch = coin.coin.match(/\(\$([^)]+)\)/);
-      const symbol = symbolMatch ? symbolMatch[1].toLowerCase() : "";
-      const cleanName = coin.coin
+    // 3. First iterate through our exact coin names to ensure we keep the exact mention counts
+    exactCoins.forEach((coinData, exactName) => {
+      // Extract clean name without symbol for matching
+      const cleanExactName = exactName
         .replace(/\s*\(\$[^)]+\)/g, "")
         .toLowerCase()
         .trim();
 
-      // We'll use multiple keys for better matching chances
-      const keys = new Set<string>();
-      if (symbol) keys.add(symbol);
-      keys.add(cleanName);
+      // Get the symbol from the exact name - this is important for correct matching
+      const symbolMatch = exactName.match(/\(\$([^)]+)\)/);
+      const exactSymbol = symbolMatch ? symbolMatch[1].toLowerCase() : "";
 
-      // Go through potential matching keys
-      let found = false;
-      // Convert Set to Array to avoid TS iteration error
-      Array.from(keys).forEach((key) => {
-        if (coinStatsMap.has(key)) {
-          const existing = coinStatsMap.get(key)!;
+      // First, try to find an exact match by both name and symbol
+      let matchedApiCoin = null;
 
-          // Update based on recency and channel
-          if (existing.channel === coin.channel) {
-            // For same channel, use the more recent data
-            const existingDate = new Date(existing.date);
-            const currentDate = new Date(coin.date);
-
-            if (currentDate > existingDate) {
-              existing.points = coin.rpoints;
-              existing.date = coin.date;
-            } else if (coin.rpoints > existing.points) {
-              // Use higher points if same date
-              existing.points = coin.rpoints;
-            }
-          } else if (coin.rpoints > existing.points) {
-            // For different channel, use higher points
-            existing.points = coin.rpoints;
-            existing.date = coin.date;
-            existing.channel = coin.channel;
+      // Look for exact name match first (highest priority)
+      for (const apiCoin of combinedCoinData.data) {
+        if (
+          apiCoin.name &&
+          cleanExactName === apiCoin.name.toLowerCase().trim()
+        ) {
+          // If symbol also matches, this is a perfect match
+          if (
+            exactSymbol &&
+            apiCoin.symbol &&
+            exactSymbol === apiCoin.symbol.toLowerCase().trim()
+          ) {
+            matchedApiCoin = apiCoin;
+            if (debug)
+              console.log(
+                `Perfect match (name+symbol): ${exactName} -> ${apiCoin.name}`
+              );
+            break;
           }
 
-          // Always add mentions
-          existing.mentions += coin.total_count || 1;
-          found = true;
+          // Strong match by name (even if symbol doesn't match exactly)
+          matchedApiCoin = apiCoin;
+          if (debug)
+            console.log(`Strong name match: ${exactName} -> ${apiCoin.name}`);
+          break;
         }
-      });
+      }
 
-      // If not found with any key, add new entry
-      if (!found) {
-        const key = symbol || cleanName;
-        coinStatsMap.set(key, {
-          points: coin.rpoints,
-          mentions: coin.total_count || 1,
-          date: coin.date,
-          name: cleanName,
-          symbol: symbol || "",
-          channel: coin.channel,
-        });
+      // If no exact name match was found, try matching by symbol
+      // But be careful with coins like HarryPotterObamaSonic10Inu that have symbol "BITCOIN"
+      if (!matchedApiCoin && exactSymbol) {
+        // Only match by symbol if the name ALSO contains part of the symbol
+        // This prevents wrong matches like HarryPotterObamaSonic10Inu -> Bitcoin
+        const possibleMatches = combinedCoinData.data.filter(
+          (apiCoin) =>
+            apiCoin.symbol &&
+            apiCoin.symbol.toLowerCase() === exactSymbol &&
+            (apiCoin.name.toLowerCase().includes(exactSymbol) ||
+              cleanExactName.includes(apiCoin.name.toLowerCase()))
+        );
+
+        if (possibleMatches.length > 0) {
+          // Take the first match or the one with highest market cap
+          matchedApiCoin = possibleMatches.sort(
+            (a, b) => (b.market_cap || 0) - (a.market_cap || 0)
+          )[0];
+
+          if (debug)
+            console.log(
+              `Symbol match with name verification: ${exactName} -> ${matchedApiCoin.name}`
+            );
+        }
+      }
+
+      // Fallback to coinData.symbol from our mapping, but with strict verification
+      if (!matchedApiCoin && coinData.symbol) {
+        // Only use this if the symbol is not a common word or too generic
+        if (
+          coinData.symbol.length >= 3 &&
+          !["btc", "eth", "bitcoin", "ethereum"].includes(coinData.symbol)
+        ) {
+          const symbolMatch = combinedCoinData.data.find(
+            (apiCoin) =>
+              apiCoin.symbol &&
+              apiCoin.symbol.toLowerCase() === coinData.symbol &&
+              (apiCoin.name.toLowerCase().includes(coinData.symbol) ||
+                cleanExactName.includes(apiCoin.name.toLowerCase()))
+          );
+
+          if (symbolMatch) {
+            matchedApiCoin = symbolMatch;
+            if (debug)
+              console.log(
+                `Fallback symbol match: ${exactName} -> ${matchedApiCoin.name}`
+              );
+          }
+        }
+      }
+
+      // If we found a match in API data through any matching method
+      if (matchedApiCoin) {
+        // Generate a unique ID for this coin to avoid duplicates
+        const coinUniqueId = matchedApiCoin.id + "-" + exactName;
+
+        // Only process this coin if we haven't seen it before
+        if (!processedCoins.has(coinUniqueId)) {
+          processedCoins.add(coinUniqueId);
+
+          // Push to results with exact mention count from our knowledge data
+          result.push({
+            ...matchedApiCoin,
+            rpoints: coinData.points,
+            total_mentions: coinData.mentions,
+            data_source: matchedApiCoin.cmc_id ? "cmc" : "coingecko",
+            // Store the exact name to help with display/debugging
+            exact_knowledge_name: exactName,
+          } as ExtendedCoinData);
+
+          if (debug) {
+            console.log(
+              `Matched "${exactName}" to API coin "${matchedApiCoin.name}" with ${coinData.mentions} mentions`
+            );
+          }
+        }
+      } else if (debug) {
+        console.log(
+          `No API match found for "${exactName}" with ${coinData.mentions} mentions`
+        );
       }
     });
 
-    // More flexible matching with coin data
-    const matchedCoins = new Set<string>();
-    let result = coinData.data
-      .map((coin) => {
-        const coinId = coin.id ? coin.id.toLowerCase().trim() : "";
-        const cleanSymbol = coin.symbol ? coin.symbol.toLowerCase().trim() : "";
-        const cleanName = coin.name ? coin.name.toLowerCase().trim() : "";
+    // Log the result count
+    if (debug) {
+      console.log(
+        `Found ${result.length} matching coins from our knowledge base out of ${combinedCoinData.data.length} total coins`
+      );
+    }
 
-        // Skip if already matched to avoid duplicates
-        if (matchedCoins.has(coinId)) return null;
-
-        // Try various matching strategies
-        let stats = coinStatsMap.get(cleanSymbol);
-        if (!stats) {
-          // If not found by symbol, try by name
-          stats = coinStatsMap.get(cleanName);
-          if (!stats) {
-            // Try fuzzy matching for cases where names differ slightly
-            // Convert Map.entries() to Array to avoid TS iteration error
-            Array.from(coinStatsMap.entries()).some(([key, statData]) => {
-              if (
-                cleanName.includes(key) ||
-                key.includes(cleanName) ||
-                cleanSymbol.includes(key) ||
-                key.includes(cleanSymbol)
-              ) {
-                stats = statData;
-                return true;
-              }
-              return false;
-            });
-          }
-        }
-
-        if (!stats) return null;
-
-        matchedCoins.add(coinId);
-        return {
-          ...coin,
-          rpoints: stats.points,
-          total_mentions: stats.mentions,
-          data_source: coin.cmc_id ? "cmc" : "coingecko",
-        };
-      })
-      .filter((coin): coin is ExtendedCoinData => coin !== null)
-      .sort((a, b) => b.rpoints - a.rpoints || b.market_cap - a.market_cap);
-
-    if (debug) console.log(`Matched ${result.length} coins with data`);
+    // Sort by rpoints (primary) and market cap (secondary)
+    const sortedResult = [...result].sort(
+      (a, b) =>
+        b.rpoints - a.rpoints || (b.market_cap || 0) - (a.market_cap || 0)
+    );
 
     // Apply search filter if searchTerm is provided
+    let filteredResult = [...sortedResult];
     if (searchTerm) {
       const lowerSearch = searchTerm.toLowerCase();
-      // Track previous length for debugging
-      // const beforeCount = result.length;
-      result = result.filter(
+      filteredResult = filteredResult.filter(
         (coin) =>
-          coin.name.toLowerCase().includes(lowerSearch) ||
-          coin.symbol.toLowerCase().includes(lowerSearch)
+          coin.name?.toLowerCase()?.includes(lowerSearch) ||
+          coin.symbol?.toLowerCase()?.includes(lowerSearch)
       );
-      if (debug)
-        console.log(`Search filter applied: ${result.length} coins remain`);
     }
 
     // Apply category filter if filterSettings has categories and not set to "all"
@@ -1329,11 +1444,18 @@ export function CombinedMarketTable({
       filterSettings.categories.length > 0 &&
       filterSettings.categories[0] !== "all"
     ) {
-      // Track previous length for debugging
-      // const beforeCount = result.length;
-      result = result.filter((coin) => {
+      filteredResult = filteredResult.filter((coin) => {
         // Find all mentions of this coin in the data
         const coinMentions = processedData.coinCategories.filter((c) => {
+          // Use exact_knowledge_name for more precise matching if available
+          if (
+            coin.exact_knowledge_name &&
+            c.coin === coin.exact_knowledge_name
+          ) {
+            return true;
+          }
+
+          // Otherwise fall back to symbol and name matching
           const symbolMatch = c.coin.match(/\(\$([^)]+)\)/);
           const coinSymbol = symbolMatch ? symbolMatch[1].toLowerCase() : "";
           const cleanCoinName = c.coin
@@ -1368,13 +1490,8 @@ export function CombinedMarketTable({
             : false
         );
       });
-      if (debug || result.length === 0)
-        console.log(
-          `Category filter applied (${filterSettings.categories[0]}): ${result.length} coins remain`
-        );
     }
 
-    // Add price change filtering logic - insert around line 1425 before the category filter
     // Apply price change filters (gainers/losers)
     if (
       filterSettings.priceChangeMin !== undefined ||
@@ -1384,15 +1501,11 @@ export function CombinedMarketTable({
       if (filterSettings.priceChangeMin !== undefined) {
         const min = parseFloat(filterSettings.priceChangeMin);
         if (!isNaN(min)) {
-          result = result.filter((coin) => {
+          filteredResult = filteredResult.filter((coin) => {
             const priceChange =
               coin.price_change_percentage_24h || coin.percent_change_24h || 0;
             return priceChange >= min;
           });
-          if (debug)
-            console.log(
-              `Applied price change minimum filter (${min}): ${result.length} coins remain`
-            );
         }
       }
 
@@ -1400,15 +1513,11 @@ export function CombinedMarketTable({
       if (filterSettings.priceChangeMax !== undefined) {
         const max = parseFloat(filterSettings.priceChangeMax);
         if (!isNaN(max)) {
-          result = result.filter((coin) => {
+          filteredResult = filteredResult.filter((coin) => {
             const priceChange =
               coin.price_change_percentage_24h || coin.percent_change_24h || 0;
             return priceChange <= max;
           });
-          if (debug)
-            console.log(
-              `Applied price change maximum filter (${max}): ${result.length} coins remain`
-            );
         }
       }
     }
@@ -1421,22 +1530,18 @@ export function CombinedMarketTable({
       if (filterSettings.marketCapMin !== undefined) {
         const min = parseFloat(filterSettings.marketCapMin);
         if (!isNaN(min)) {
-          result = result.filter((coin) => (coin.market_cap || 0) >= min);
-          if (debug)
-            console.log(
-              `Applied market cap minimum filter: ${result.length} coins remain`
-            );
+          filteredResult = filteredResult.filter(
+            (coin) => (coin.market_cap || 0) >= min
+          );
         }
       }
 
       if (filterSettings.marketCapMax !== undefined) {
         const max = parseFloat(filterSettings.marketCapMax);
         if (!isNaN(max)) {
-          result = result.filter((coin) => (coin.market_cap || 0) <= max);
-          if (debug)
-            console.log(
-              `Applied market cap maximum filter: ${result.length} coins remain`
-            );
+          filteredResult = filteredResult.filter(
+            (coin) => (coin.market_cap || 0) <= max
+          );
         }
       }
     }
@@ -1449,45 +1554,36 @@ export function CombinedMarketTable({
       if (filterSettings.volumeMin !== undefined) {
         const min = parseFloat(filterSettings.volumeMin);
         if (!isNaN(min)) {
-          result = result.filter(
+          filteredResult = filteredResult.filter(
             (coin) => (coin.volume_24h || coin.total_volume || 0) >= min
           );
-          if (debug)
-            console.log(
-              `Applied volume minimum filter: ${result.length} coins remain`
-            );
         }
       }
 
       if (filterSettings.volumeMax !== undefined) {
         const max = parseFloat(filterSettings.volumeMax);
         if (!isNaN(max)) {
-          result = result.filter(
+          filteredResult = filteredResult.filter(
             (coin) => (coin.volume_24h || coin.total_volume || 0) <= max
           );
-          if (debug)
-            console.log(
-              `Applied volume maximum filter: ${result.length} coins remain`
-            );
         }
       }
     }
 
-    prevDataRef.current = result;
-    prevSortedDataRef.current = result;
-    return result;
+    prevDataRef.current = filteredResult;
+    prevSortedDataRef.current = filteredResult;
+    return filteredResult;
   }, [
-    coinData,
+    combinedCoinData,
     processedData.coinCategories,
     localSelectedChannels,
     processedData.channels,
     dateRange,
     searchTerm,
     filterSettings,
-    datePreset,
   ]);
 
-  // Also add useEffect to control pagination
+  // Control pagination when data changes
   useEffect(() => {
     // When the data changes, ensure we're not trying to view a page that doesn't exist
     if (sortedCoinData.length > 0) {
@@ -1496,7 +1592,13 @@ export function CombinedMarketTable({
         setCurrentPage(1);
       }
     }
-  }, [sortedCoinData, showCount, currentPage]);
+
+    // isDataFetching is used inside the component but not included in the deps array
+    if (isDataFetching) {
+      // Reset to first page when data is loading
+      setCurrentPage(1);
+    }
+  }, [sortedCoinData, showCount, currentPage, isDataFetching]);
 
   const memoizedColumns = useMemo(
     () => [
@@ -1877,11 +1979,11 @@ export function CombinedMarketTable({
 
   // Replace the current useEffect for pagination state with this more robust implementation
   useEffect(() => {
-    if (!isFetching && sortedCoinData.length > 0) {
+    if (!isDataFetching && sortedCoinData.length > 0) {
       // Store current page in sessionStorage to persist across data refreshes
       sessionStorage.setItem("cryptoTableCurrentPage", currentPage.toString());
     }
-  }, [currentPage, isFetching, sortedCoinData.length]);
+  }, [currentPage, isDataFetching, sortedCoinData.length, isFetching]);
 
   // Add this effect to restore pagination from sessionStorage when data loads
   useEffect(() => {
@@ -1900,11 +2002,11 @@ export function CombinedMarketTable({
 
   // Modify the coinData useEffect to prevent resetting page
   useEffect(() => {
-    if (coinData?.data && coinData.data.length > 0) {
+    if (combinedCoinData?.data && combinedCoinData.data.length > 0) {
       setIsInitialLoad(false);
       // Don't reset the page here - this was potentially causing issues
     }
-  }, [coinData]);
+  }, [combinedCoinData]);
 
   // Add a simple console log to view current page state
   useEffect(() => {
@@ -2058,6 +2160,44 @@ export function CombinedMarketTable({
     }
   }, []);
 
+  // Add a more robust refresh handler using a ref to track the last refresh time
+  const lastRefreshTimeRef = useRef(0);
+
+  // Track refreshKey changes and debounce rapid updates
+  useEffect(() => {
+    const currentTime = Date.now();
+    const timeSinceLastRefresh = currentTime - lastRefreshTimeRef.current;
+
+    // Only process if it's been more than 500ms since last refresh
+    if (timeSinceLastRefresh < 500) {
+      console.log(
+        `Debouncing refresh - too soon (${timeSinceLastRefresh}ms since last refresh)`
+      );
+      return;
+    }
+
+    if (refreshKeyRef.current > 0) {
+      lastRefreshTimeRef.current = currentTime;
+      console.log(`Processing refresh key change: ${refreshKeyRef.current}`);
+
+      // Use timeout to ensure state updates have propagated
+      const timer = setTimeout(() => {
+        // Clear any local storage cache to force fresh data
+        try {
+          localStorage.removeItem("cryptolens_direct_api_cache");
+          console.log("Cleared API cache to force fresh data");
+        } catch (e) {
+          console.error("Failed to clear cache:", e);
+        }
+
+        // Force query refresh
+        refetch();
+      }, 100);
+
+      return () => clearTimeout(timer);
+    }
+  }, [refreshKeyRef, refetch]);
+
   return (
     <div className="space-y-4">
       {/* Add the channel selector at the top */}
@@ -2087,19 +2227,8 @@ export function CombinedMarketTable({
           {dateFilterActive && matchingCoinsCount === 0
             ? "No coins found for this date range"
             : `${sortedCoinData.length} coins`}
-          {isFetching && (
-            <span className="ml-2 text-blue-400 inline-flex">
-              <span className="w-2 text-center animate-[dots_1.4s_infinite]">
-                .
-              </span>
-              <span className="w-2 text-center animate-[dots_1.4s_0.2s_infinite]">
-                .
-              </span>
-              <span className="w-2 text-center animate-[dots_1.4s_0.4s_infinite]">
-                .
-              </span>
-            </span>
-          )}
+          {/* Replace with client-only component */}
+          {isFetching && <ClientLoadingDots />}
         </div>
 
         {/* Date filter controls */}
@@ -2501,7 +2630,7 @@ export function CombinedMarketTable({
                 </div>
               )}
             </div>
-          ) : isFetching && sortedCoinData.length === 0 ? (
+          ) : isDataFetching && sortedCoinData.length === 0 ? (
             <Skeleton />
           ) : (
             <div ref={tableRef} className="overflow-x-auto">
@@ -2512,7 +2641,8 @@ export function CombinedMarketTable({
                 onRowClick={onRowClick}
                 virtualizeRows={true}
                 isLoading={
-                  isInitialLoad || (isFetching && sortedCoinData.length === 0)
+                  isInitialLoad ||
+                  (isDataFetching && sortedCoinData.length === 0)
                 }
                 pageSize={showCount}
                 showPagination={true}
@@ -2520,6 +2650,9 @@ export function CombinedMarketTable({
                 initialPage={getCurrentPageFromUrl()}
                 onPageChange={handlePageChange}
               />
+
+              {/* Add loading indicator */}
+              {isFetching && <ClientLoadingIndicator />}
             </div>
           )}
         </div>

@@ -3,7 +3,7 @@ import { useState, useMemo } from "react";
 interface CoinCategoriesTabProps {
   processedData: {
     projectDistribution: { name: string; value: number }[];
-    coinCategories: { coin: string; categories: string[] }[];
+    coinCategories: { coin: string; categories: string[]; id?: string }[];
   };
 }
 
@@ -120,14 +120,21 @@ export const CoinCategoriesTab = ({
                 </td>
                 <td className="py-4 px-6">
                   <div className="flex flex-wrap gap-2">
-                    {coin.categories.map((category) => (
-                      <span
-                        key={category}
-                        className="px-2 py-1 text-xs rounded-full bg-blue-500/20 text-blue-300"
-                      >
-                        {category}
-                      </span>
-                    ))}
+                    {coin.categories.map((category, catIdx) => {
+                      const categoryText =
+                        typeof category === "object"
+                          ? category.name || JSON.stringify(category)
+                          : category;
+
+                      return (
+                        <span
+                          key={`${coin.coin}-${categoryText}-${catIdx}`}
+                          className="px-2 py-1 text-xs rounded-full bg-blue-500/20 text-blue-300"
+                        >
+                          {categoryText}
+                        </span>
+                      );
+                    })}
                   </div>
                 </td>
                 <td className="py-4 px-6 whitespace-nowrap">

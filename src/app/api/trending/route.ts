@@ -17,29 +17,86 @@ interface TrendingResponse {
   coins: TrendingCoin[];
 }
 
-let cache: TrendingResponse | null = null;
-let cacheTime = 0;
-const CACHE_DURATION = 60 * 1000; // 1 minute
+// Store last successful response for fallback
+let lastSuccessfulResponse: TrendingResponse | null = null;
 
-export async function GET() {
+// Add rate limiting tracking
+let isRateLimited = false;
+let rateLimitResetTime = 0;
+const RATE_LIMIT_DURATION = 60 * 1000; // 1 minute cooldown
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function GET(_request: Request) {
   const now = Date.now();
-  if (cache && now - cacheTime < CACHE_DURATION) {
-    return NextResponse.json(cache, { status: 200 });
+
+  // Check if we're currently rate limited
+  if (isRateLimited && now < rateLimitResetTime) {
+    console.log(
+      "[API] Rate limited - cannot fetch trending data",
+      Math.round((rateLimitResetTime - now) / 1000),
+      "seconds remaining"
+    );
+
+    // Return last successful response if available
+    if (lastSuccessfulResponse) {
+      return NextResponse.json(lastSuccessfulResponse, { status: 200 });
+    }
+
+    return NextResponse.json(
+      { error: "Rate limit exceeded, please try again later" },
+      { status: 429 }
+    );
+  }
+
+  // Reset rate limit status if cooldown period has passed
+  if (isRateLimited && now >= rateLimitResetTime) {
+    console.log(
+      "[API] Trending rate limit cooldown period complete, resetting status"
+    );
+    isRateLimited = false;
   }
 
   try {
+    console.log("[API] Fetching fresh trending data");
     const response = await fetch(
       "https://api.coingecko.com/api/v3/search/trending"
     );
+
     if (!response.ok) {
-      throw new Error("Failed to fetch trending coins");
+      // Handle rate limiting
+      if (response.status === 429) {
+        isRateLimited = true;
+        rateLimitResetTime = now + RATE_LIMIT_DURATION;
+        console.log(
+          "[API] Trending rate limited - cooling down for 60 seconds"
+        );
+
+        if (lastSuccessfulResponse) {
+          return NextResponse.json(lastSuccessfulResponse, { status: 200 });
+        }
+        return NextResponse.json(
+          { error: "Rate limit exceeded, please try again later" },
+          { status: 429 }
+        );
+      }
+
+      throw new Error(`Failed to fetch trending coins: ${response.status}`);
     }
+
     const data = await response.json();
-    cache = data;
-    cacheTime = now;
+    lastSuccessfulResponse = data;
     return NextResponse.json(data, { status: 200 });
   } catch (error) {
     console.error("Error fetching trending coins:", error);
+
+    // Return last successful response if available
+    if (lastSuccessfulResponse) {
+      console.log(
+        "[API] Error occurred - returning last successful trending data"
+      );
+      return NextResponse.json(lastSuccessfulResponse, { status: 200 });
+    }
+
     return NextResponse.json(
       { error: "Failed to fetch trending coins" },
       { status: 500 }

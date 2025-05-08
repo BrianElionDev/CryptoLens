@@ -1,13 +1,56 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import axios, { AxiosError } from "axios";
 import { API_ENDPOINTS } from "@/config/api";
-import type { KnowledgeItem } from "@/types/knowledge";
-import { toast } from "react-hot-toast";
-import { useRef, useEffect } from "react";
+import { useEffect } from "react";
 
 // Keep track of market data between renders
 const marketDataRef: { current: Record<string, CoinData> } = { current: {} };
 const loadedSymbolsRef: { current: Set<string> } = { current: new Set() };
+
+// Cache functions for storing and retrieving coin data
+const CACHE_KEY_GECKO = "cryptolens_coingecko_cache";
+const CACHE_KEY_CMC = "cryptolens_cmc_cache";
+const CACHE_EXPIRY = 30 * 60 * 1000; // Extend to 30 minutes to reduce API calls
+
+function getCachedData(cacheKey: string) {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const cached = localStorage.getItem(cacheKey);
+    if (!cached) return null;
+
+    const { data, timestamp } = JSON.parse(cached);
+
+    // Return even expired cache data with flag if available
+    const isExpired = Date.now() - timestamp > CACHE_EXPIRY;
+
+    if (isExpired) {
+      console.log(`Using expired cache for ${cacheKey} as fallback`);
+      return { data, timestamp, isExpired: true };
+    }
+
+    return { data, timestamp, isExpired: false };
+  } catch (error) {
+    console.error("Error retrieving cache:", error);
+    return null;
+  }
+}
+
+function setCachedData(cacheKey: string, data: Record<string, CoinData>) {
+  if (typeof window === "undefined") return;
+
+  try {
+    localStorage.setItem(
+      cacheKey,
+      JSON.stringify({
+        data,
+        timestamp: Date.now(),
+      })
+    );
+  } catch (error) {
+    console.error("Error setting cache:", error);
+  }
+}
 
 // Debug flag to control logging
 const DEBUG_LOGS = false;
@@ -97,22 +140,83 @@ export function useCoinData(
     queryFn: async () => {
       if (DEBUG_LOGS)
         console.log(`Querying CoinGecko for ${symbols.length} symbols...`);
-      const response = await axios.post(
-        "/api/coingecko",
-        {
-          symbols,
-          mode,
-        },
-        { timeout: API_TIMEOUT }
-      );
 
-      const coinCount = Object.keys(response.data.data || {}).length;
-      if (DEBUG_LOGS) console.log(`CoinGecko response: ${coinCount} coins`);
-      return response.data;
+      // Try to get data from cache first
+      const cachedData = getCachedData(CACHE_KEY_GECKO);
+      if (cachedData && symbols.length > 0) {
+        const cachedCoins = new Set(
+          Object.keys(cachedData.data).map((s) => s.toLowerCase())
+        );
+        const allSymbolsCached = symbols.every((s) =>
+          cachedCoins.has(s.toLowerCase())
+        );
+
+        if (allSymbolsCached) {
+          console.log("Using cached CoinGecko data");
+          return cachedData;
+        }
+      }
+
+      // Implement retry with exponential backoff for rate limiting
+      const MAX_RETRIES = 3;
+      let retries = 0;
+
+      const fetchWithRetry = async () => {
+        try {
+          const response = await axios.post(
+            "/api/coingecko",
+            {
+              symbols,
+              mode,
+            },
+            { timeout: API_TIMEOUT }
+          );
+
+          const coinCount = Object.keys(response.data.data || {}).length;
+          if (DEBUG_LOGS) console.log(`CoinGecko response: ${coinCount} coins`);
+
+          // Save response to cache
+          if (
+            response.data.data &&
+            Object.keys(response.data.data).length > 0
+          ) {
+            setCachedData(CACHE_KEY_GECKO, response.data.data);
+          }
+
+          return response.data;
+        } catch (error) {
+          if (axios.isAxiosError(error) && error.response?.status === 429) {
+            if (retries < MAX_RETRIES) {
+              // Exponential backoff: 2s, 4s, 8s
+              const delay = Math.pow(2, retries + 1) * 1000;
+              console.log(
+                `CoinGecko API rate limited. Retrying in ${delay / 1000}s...`
+              );
+              retries++;
+              await new Promise((resolve) => setTimeout(resolve, delay));
+              return fetchWithRetry();
+            }
+            console.warn(
+              `CoinGecko API rate limited. Max retries (${MAX_RETRIES}) reached.`
+            );
+          }
+          throw error;
+        }
+      };
+
+      return fetchWithRetry();
     },
-    staleTime: 10000,
-    gcTime: 30000,
-    refetchInterval: 15000,
+    staleTime: 60000,
+    gcTime: 300000,
+    refetchInterval: 60000,
+    retry: (failureCount, error) => {
+      // Don't use React Query's built-in retry for rate limits as we handle it manually
+      if (axios.isAxiosError(error) && error.response?.status === 429) {
+        return false;
+      }
+      // For other errors, retry up to 2 times
+      return failureCount < 2;
+    },
   });
 
   // Get missing symbols from CoinGecko response
@@ -142,24 +246,85 @@ export function useCoinData(
         console.log(
           `Querying CMC for ${missingSymbols.length} missing symbols...`
         );
-      const response = await axios.post(
-        "/api/coinmarketcap",
-        {
-          symbols: missingSymbols,
-          fallbackMode: true,
-          reason: "Symbols not found in CoinGecko",
-        },
-        { timeout: API_TIMEOUT }
-      );
 
-      const coinCount = Object.keys(response.data.data || {}).length;
-      if (DEBUG_LOGS) console.log(`CMC response: ${coinCount} coins`);
-      return response.data;
+      // Try to get data from cache first
+      const cachedData = getCachedData(CACHE_KEY_CMC);
+      if (cachedData && missingSymbols.length > 0) {
+        const cachedCoins = new Set(
+          Object.keys(cachedData.data).map((s) => s.toLowerCase())
+        );
+        const allSymbolsCached = missingSymbols.every((s) =>
+          cachedCoins.has(s.toLowerCase())
+        );
+
+        if (allSymbolsCached) {
+          console.log("Using cached CMC data");
+          return cachedData;
+        }
+      }
+
+      // Implement retry with exponential backoff for rate limiting
+      const MAX_RETRIES = 3;
+      let retries = 0;
+
+      const fetchWithRetry = async () => {
+        try {
+          const response = await axios.post(
+            "/api/coinmarketcap",
+            {
+              symbols: missingSymbols,
+              fallbackMode: true,
+              reason: "Symbols not found in CoinGecko",
+            },
+            { timeout: API_TIMEOUT }
+          );
+
+          const coinCount = Object.keys(response.data.data || {}).length;
+          if (DEBUG_LOGS) console.log(`CMC response: ${coinCount} coins`);
+
+          // Save response to cache
+          if (
+            response.data.data &&
+            Object.keys(response.data.data).length > 0
+          ) {
+            setCachedData(CACHE_KEY_CMC, response.data.data);
+          }
+
+          return response.data;
+        } catch (error) {
+          if (axios.isAxiosError(error) && error.response?.status === 429) {
+            if (retries < MAX_RETRIES) {
+              // Exponential backoff: 2s, 4s, 8s
+              const delay = Math.pow(2, retries + 1) * 1000;
+              console.log(
+                `CMC API rate limited. Retrying in ${delay / 1000}s...`
+              );
+              retries++;
+              await new Promise((resolve) => setTimeout(resolve, delay));
+              return fetchWithRetry();
+            }
+            console.warn(
+              `CMC API rate limited. Max retries (${MAX_RETRIES}) reached.`
+            );
+          }
+          throw error;
+        }
+      };
+
+      return fetchWithRetry();
     },
     enabled: missingSymbols.length > 0,
     staleTime: 10 * 60 * 1000, // 10 minutes
     gcTime: 15 * 60 * 1000, // 15 minutes
     refetchInterval: 15 * 60 * 1000, // 15 minutes
+    retry: (failureCount, error) => {
+      // Don't use React Query's built-in retry for rate limits
+      if (axios.isAxiosError(error) && error.response?.status === 429) {
+        return false;
+      }
+      // For other errors, retry up to 2 times
+      return failureCount < 2;
+    },
   });
 
   // Merge data from both queries
@@ -213,6 +378,13 @@ export function useCoinData(
     isFetching:
       geckoQuery.isFetching ||
       (missingSymbols.length > 0 && cmcQuery.isFetching),
+    refetch: async () => {
+      const results = await Promise.allSettled([
+        geckoQuery.refetch(),
+        missingSymbols.length > 0 ? cmcQuery.refetch() : Promise.resolve(),
+      ]);
+      return results;
+    },
   };
 }
 
@@ -253,114 +425,95 @@ export function useCoinHistory(symbol: string, timeframe: string = "1") {
   });
 }
 
-export function useKnowledgeData() {
-  const prevDataLength = useRef<number>(0);
-  const queryClient = useQueryClient();
-  const hasAttemptedFullLoad = useRef(false);
-
-  return useQuery<KnowledgeItem[], AxiosError>({
-    queryKey: ["knowledge"],
-    queryFn: async (): Promise<KnowledgeItem[]> => {
-      // Check if we need a full data load
-      const needsFullLoad =
-        !hasAttemptedFullLoad.current || // First attempt
-        sessionStorage.getItem("navigatingBackToCryptoMarkets") === "true" || // Coming back to the page
-        sessionStorage.getItem("needsDataRefresh") === "true"; // Data was previously incomplete
-
-      // Check if we already have complete data
-      const hasCompleteData =
-        sessionStorage.getItem("completeDataLoaded") === "true";
-
-      // Log the fetch attempt context
-      console.log(
-        `Fetching knowledge data... (needs full load: ${needsFullLoad}, has complete data: ${hasCompleteData})`
-      );
-
-      // If we need a full load or don't have complete data, force a fresh request
-      const forceFresh = needsFullLoad && !hasCompleteData;
-
-      // Mark that we've attempted a full load
-      hasAttemptedFullLoad.current = true;
-
-      // Make the API request with appropriate caching settings
-      const response = await axios.get<{ knowledge: KnowledgeItem[] }>(
-        "/api/knowledge",
-        {
-          headers: {
-            // Force no cache when we need fresh data
-            "Cache-Control": forceFresh ? "no-cache, no-store" : "max-age=0",
-            Pragma: forceFresh ? "no-cache" : undefined,
-            tags: "knowledge",
-          },
-          params: {
-            // Always request all data
-            limit: "all",
-            // Add cache-busting timestamp when forcing fresh data
-            _t: forceFresh ? Date.now() : undefined,
-          },
-        }
-      );
-
-      const data = response.data.knowledge;
-      console.log(`Received ${data.length} knowledge items from API`);
-
-      // Count channels to verify data completeness
-      const channels = new Set<string>();
-      data.forEach((item) => {
-        if (item["channel name"]) {
-          channels.add(item["channel name"]);
-        }
-      });
-      console.log(`Found ${channels.size} unique channels in API response`);
-
-      // Mark data as complete if it meets our criteria
-      const isComplete = channels.size >= 7 && data.length >= 200;
-      if (isComplete) {
-        sessionStorage.setItem("completeDataLoaded", "true");
-        console.log("Data completeness verified ✓");
-      } else {
-        console.warn("Data may be incomplete! Consider refetching.");
-      }
-
-      // Clear navigation flags
-      sessionStorage.removeItem("navigatingBackToCryptoMarkets");
-      sessionStorage.removeItem("needsDataRefresh");
-      sessionStorage.removeItem("navigatingFromAnalytics");
-
-      // Check if we have new data compared to previous load
-      if (prevDataLength.current > 0 && data.length > prevDataLength.current) {
-        const newItemsCount = data.length - prevDataLength.current;
-        toast.success(`${newItemsCount} new items added to the database!`);
-      }
-
-      // Store the full data in cache for better navigation experience
-      if (data.length > prevDataLength.current) {
-        queryClient.setQueryData(["knowledge"], data);
-        prevDataLength.current = data.length;
-      }
-
-      return data;
-    },
-    staleTime: 1000 * 60, // 1 minute stale time
-    gcTime: 1000 * 60 * 10, // 10 minutes cache time
-    refetchOnWindowFocus: true,
-    refetchOnMount: true,
-    refetchOnReconnect: true,
-    retry: 3, // Increased retry attempts
-  });
-}
-
 export function useCoinDataQuery() {
   return useQuery({
     queryKey: ["coins"],
     queryFn: async () => {
-      const response = await axios.get<CoinData[]>("/api/coins/markets");
-      return response.data;
+      // Try to get data from cache first
+      const DIRECT_API_CACHE_KEY = "cryptolens_direct_api_cache";
+      const cachedData = getCachedData(DIRECT_API_CACHE_KEY);
+
+      // Always use cached data if available, even if expired
+      if (cachedData?.data && Object.keys(cachedData.data).length > 0) {
+        console.log(
+          "Using cached direct API data",
+          cachedData.isExpired ? "(expired)" : ""
+        );
+        return Object.values(cachedData.data);
+      }
+
+      // Implement retry with exponential backoff for rate limiting
+      const MAX_RETRIES = 5;
+      let retries = 0;
+
+      const fetchWithRetry = async (): Promise<CoinData[]> => {
+        try {
+          const response = await axios.get<CoinData[]>("/api/coins/markets");
+
+          // Save to cache
+          if (response.data && response.data.length > 0) {
+            const dataMap: Record<string, CoinData> = {};
+            response.data.forEach((coin) => {
+              if (coin.id) dataMap[coin.id] = coin;
+            });
+            setCachedData(DIRECT_API_CACHE_KEY, dataMap);
+            console.log(
+              `Cached ${response.data.length} coins to local storage`
+            );
+          }
+
+          return response.data;
+        } catch (error) {
+          if (
+            axios.isAxiosError(error) &&
+            (error.response?.status === 429 || error.response?.status === 403)
+          ) {
+            if (retries < MAX_RETRIES) {
+              // Use longer and more randomized backoff to avoid concurrent retries
+              const baseDelay = Math.pow(2, retries) * 1500; // Start with 3s, then 6s, 12s, etc.
+              const jitter = Math.random() * 1000; // Add up to 1s random jitter
+              const delay = baseDelay + jitter;
+
+              console.log(
+                `API rate limited. Retrying in ${(delay / 1000).toFixed(
+                  1
+                )}s... (attempt ${retries + 1}/${MAX_RETRIES})`
+              );
+              retries++;
+              await new Promise((resolve) => setTimeout(resolve, delay));
+              return fetchWithRetry();
+            }
+
+            // If we have a cache but it was expired, return it as fallback after all retries fail
+            if (cachedData?.data) {
+              console.log(
+                "Rate limit exceeded. Falling back to expired cache data"
+              );
+              return Object.values(cachedData.data);
+            }
+          }
+          console.error("Failed to fetch market data:", error);
+          throw error;
+        }
+      };
+
+      return fetchWithRetry();
     },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    refetchInterval: 5 * 60 * 1000,
+    staleTime: 10 * 60 * 1000, // Increase stale time to 10 minutes
+    gcTime: 30 * 60 * 1000, // Increase cache time to 30 minutes
+    refetchInterval: 15 * 60 * 1000, // Reduce refetch frequency to 15 minutes
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
+    retry: (failureCount, error) => {
+      // Don't use React Query's built-in retry for rate limits
+      if (
+        axios.isAxiosError(error) &&
+        (error.response?.status === 429 || error.response?.status === 403)
+      ) {
+        return false;
+      }
+      // For other errors, retry up to 2 times
+      return failureCount < 2;
+    },
   });
 }

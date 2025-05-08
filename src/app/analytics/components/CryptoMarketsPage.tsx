@@ -1,16 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import { useKnowledgeData } from "@/hooks/useCoinData";
+import { useState, useEffect, useMemo } from "react";
 import { CombinedMarketTable } from "@/components/tables/CombinedMarketTable";
 import type { KnowledgeItem } from "@/types/knowledge";
-import { RefreshCw, TrendingUp } from "lucide-react";
+import { TrendingUp } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-
-interface AnalyticsClientProps {
-  initialData: KnowledgeItem[];
-}
+import { useQuery } from "@tanstack/react-query";
+import { useContextKnowledge } from "@/hooks/useContextKnowledge";
 
 // Trending coin interface from CoinGecko
 interface TrendingCoin {
@@ -58,66 +55,103 @@ interface Project {
   category?: string[];
 }
 
-export function CryptoMarketsPage({ initialData }: AnalyticsClientProps) {
+export function CryptoMarketsPage() {
   const router = useRouter();
-
-  // Try to use the hook, but handle potential errors gracefully
-  let knowledgeData;
-  try {
-    const result = useKnowledgeData();
-    knowledgeData = result?.data;
-  } catch (error) {
-    console.error("Error using useKnowledgeData:", error);
-    // Fall back to initialData
-    knowledgeData = initialData;
-  }
-
-  // Make sure we always have valid data
-  const knowledge = knowledgeData || initialData;
+  const {
+    data: knowledge = [],
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    isLoading: isLoadingKnowledge,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    refetch: refetchKnowledge,
+  } = useContextKnowledge();
 
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
-  const [trendingCoins, setTrendingCoins] = useState<TrendingCoin[]>([]);
-  const [fearGreedIndex, setFearGreedIndex] = useState<{
-    value: string;
-    classification: string;
-    timestamp: string;
-  } | null>(null);
-  const [isLoadingTrending, setIsLoadingTrending] = useState(true);
-  const [isLoadingFearGreed, setIsLoadingFearGreed] = useState(true);
-  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const refreshCountdownRef = useRef<NodeJS.Timeout | null>(null);
-  const [globalMarketData, setGlobalMarketData] = useState<{
-    marketCap: number;
-    volume24h: number;
-    marketCapChange24h: number;
-    isLoading: boolean;
-  }>({
-    marketCap: 0,
-    volume24h: 0,
-    marketCapChange24h: 0,
-    isLoading: true,
+  const {
+    data: trendingCoins = [],
+    isLoading: isLoadingTrending,
+    refetch: refetchTrending,
+  } = useQuery({
+    queryKey: ["trending"],
+    queryFn: async () => {
+      const response = await fetch(`/api/trending`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch trending coins");
+      }
+      const data = await response.json();
+      return data.coins.slice(0, 5); // Take top 5 coins
+    },
+    staleTime: 1000 * 30, // 30 seconds
+    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+    refetchInterval: 1000 * 60, // 1 minute refresh
+    retry: false,
   });
 
-  const fetchGlobalMarketData = useCallback(async () => {
-    setGlobalMarketData((prev) => ({ ...prev, isLoading: true }));
-    try {
-      const res = await fetch("/api/globalmarket");
+  const {
+    data: fearGreedData,
+    isLoading: isLoadingFearGreed,
+    refetch: refetchFearGreed,
+  } = useQuery({
+    queryKey: ["feargreed"],
+    queryFn: async () => {
+      const response = await fetch(`/api/feargreed`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch fear & greed index");
+      }
+      const data: FearGreedData = await response.json();
+      if (data?.data?.[0]) {
+        return {
+          value: data.data[0].value,
+          classification: data.data[0].value_classification,
+          timestamp: data.data[0].timestamp,
+        };
+      }
+      return null;
+    },
+    staleTime: 1000 * 30, // 30 seconds
+    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+    refetchInterval: 1000 * 60, // 1 minute refresh
+    retry: false,
+  });
+
+  const {
+    data: globalMarketData = {
+      marketCap: 0,
+      volume24h: 0,
+      marketCapChange24h: 0,
+    },
+    isLoading: isLoadingGlobalMarket,
+    refetch: refetchGlobalMarket,
+  } = useQuery({
+    queryKey: ["globalMarket"],
+    queryFn: async () => {
+      const res = await fetch(`/api/globalmarket`);
       if (!res.ok) throw new Error("Failed to fetch global market data");
       const data = await res.json();
-      setGlobalMarketData({
+      return {
         marketCap: data.data.total_market_cap.usd,
         volume24h: data.data.total_volume.usd,
         marketCapChange24h: data.data.market_cap_change_percentage_24h_usd,
-        isLoading: false,
-      });
-    } catch (e) {
-      console.error("Error fetching global market data:", e);
-      setGlobalMarketData((prev) => ({ ...prev, isLoading: false }));
-    }
-  }, []);
+      };
+    },
+    staleTime: 1000 * 30, // 30 seconds
+    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+    refetchInterval: 1000 * 60, // 1 minute refresh
+    retry: false,
+  });
+
+  // Mark as unused to avoid lint errors but keep in case needed in future
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleRefreshData = () => {
+    refetchTrending();
+    refetchFearGreed();
+    refetchGlobalMarket();
+  };
 
   // Process data for market table
-  const processedData = useState(() => {
+  const processedData = useMemo(() => {
     const data = {
       projectDistribution: [] as { name: string; value: number }[],
       projectTrends: new Map<string, { date: string; rpoints: number }[]>(),
@@ -236,7 +270,7 @@ export function CryptoMarketsPage({ initialData }: AnalyticsClientProps) {
     );
 
     return data;
-  })[0];
+  }, [knowledge]);
 
   // Initialize channels with a stable reference
   useEffect(() => {
@@ -247,89 +281,6 @@ export function CryptoMarketsPage({ initialData }: AnalyticsClientProps) {
       setSelectedChannels(stableChannels);
     }
   }, [processedData.channels]);
-
-  // Fetch trending coins from CoinGecko
-  const fetchTrendingCoins = async () => {
-    try {
-      setIsLoadingTrending(true);
-      const response = await fetch("/api/trending");
-      if (!response.ok) {
-        throw new Error("Failed to fetch trending coins");
-      }
-      const data = await response.json();
-      setTrendingCoins(data.coins.slice(0, 5)); // Take top 5 coins
-    } catch (error) {
-      console.error("Error fetching trending coins:", error);
-    } finally {
-      setIsLoadingTrending(false);
-    }
-  };
-
-  // Fetch Fear & Greed Index data
-  const fetchFearGreedIndex = async () => {
-    try {
-      setIsLoadingFearGreed(true);
-      const response = await fetch("/api/feargreed");
-      if (!response.ok) {
-        throw new Error("Failed to fetch fear & greed index");
-      }
-      const data: FearGreedData = await response.json();
-      if (data?.data?.[0]) {
-        setFearGreedIndex({
-          value: data.data[0].value,
-          classification: data.data[0].value_classification,
-          timestamp: data.data[0].timestamp,
-        });
-      }
-    } catch (error) {
-      console.error("Error fetching fear & greed index:", error);
-    } finally {
-      setIsLoadingFearGreed(false);
-    }
-  };
-
-  // Replace the standalone refreshData function with useCallback
-  const refreshData = useCallback(async () => {
-    try {
-      await Promise.all([fetchTrendingCoins(), fetchFearGreedIndex()]);
-    } catch (error) {
-      console.error("Error refreshing data:", error);
-    }
-  }, []);
-
-  // Set up data refresh interval
-  useEffect(() => {
-    // Initial data load
-    fetchTrendingCoins();
-    fetchFearGreedIndex();
-    fetchGlobalMarketData();
-
-    // Set up refresh interval (every 30 seconds)
-    const refreshInterval = setInterval(() => {
-      refreshData();
-    }, 30000);
-    refreshIntervalRef.current = refreshInterval;
-
-    // Set up global market data refresh at 5-minute intervals
-    const globalMarketRefresh = setInterval(() => {
-      fetchGlobalMarketData();
-    }, 120000); // 2 minutes
-
-    // Save ref to countdown timer
-    const countdownTimer = refreshCountdownRef.current;
-
-    // Cleanup on unmount
-    return () => {
-      // Clear the intervals using the local variables
-      clearInterval(refreshInterval);
-      clearInterval(globalMarketRefresh);
-
-      // Clear countdown timer if it exists
-      if (countdownTimer) {
-        clearInterval(countdownTimer);
-      }
-    };
-  }, [refreshData, fetchGlobalMarketData]);
 
   // Get color for fear & greed index
   const getFearGreedColor = (classification: string) => {
@@ -380,7 +331,7 @@ export function CryptoMarketsPage({ initialData }: AnalyticsClientProps) {
             </h1>
           </div>
           <div className="text-xs text-gray-400">
-            {globalMarketData.isLoading ? (
+            {isLoadingGlobalMarket ? (
               <span className="inline-block w-40 h-4 bg-gray-700/50 rounded animate-pulse" />
             ) : (
               <>
@@ -435,19 +386,6 @@ export function CryptoMarketsPage({ initialData }: AnalyticsClientProps) {
                 <TrendingUp className="h-5 w-5 text-blue-400" />
                 <h2 className="font-semibold text-white">Trending Coins</h2>
               </div>
-              <button
-                className={`text-gray-400 hover:text-white flex items-center gap-1 ${
-                  isLoadingTrending ? "text-blue-400" : ""
-                }`}
-                onClick={fetchTrendingCoins}
-              >
-                <RefreshCw
-                  className={`h-3 w-3 ${
-                    isLoadingTrending ? "animate-spin" : ""
-                  }`}
-                />
-                <span className="text-xs">Refresh</span>
-              </button>
             </div>
             <div className="space-y-3 min-h-[230px]">
               {isLoadingTrending
@@ -473,7 +411,7 @@ export function CryptoMarketsPage({ initialData }: AnalyticsClientProps) {
                       </div>
                     ))
                 : // Actual trending coins
-                  trendingCoins.map((coin, index) => (
+                  trendingCoins.map((coin: TrendingCoin, index: number) => (
                     <div
                       key={coin.item.id}
                       className="flex items-center justify-between py-1 hover:bg-gray-800/20 rounded-lg transition cursor-pointer h-[46px]"
@@ -532,7 +470,7 @@ export function CryptoMarketsPage({ initialData }: AnalyticsClientProps) {
             <div className="text-lg font-semibold text-white mb-1">
               Global Market Stats
             </div>
-            {globalMarketData.isLoading ? (
+            {isLoadingGlobalMarket ? (
               <div className="flex flex-col gap-3">
                 {[1, 2, 3].map((i) => (
                   <div
@@ -700,19 +638,6 @@ export function CryptoMarketsPage({ initialData }: AnalyticsClientProps) {
           <div className="bg-gradient-to-r from-blue-900/10 via-purple-900/10 to-blue-900/10 border border-gray-800/40 rounded-xl p-4 col-span-1 md:col-span-1 xl:col-span-1">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-white">Fear & Greed</h2>
-              <button
-                className={`text-gray-400 hover:text-white flex items-center gap-1 ${
-                  isLoadingFearGreed ? "text-blue-400" : ""
-                }`}
-                onClick={fetchFearGreedIndex}
-              >
-                <RefreshCw
-                  className={`h-3 w-3 ${
-                    isLoadingFearGreed ? "animate-spin" : ""
-                  }`}
-                />
-                <span className="text-xs">Refresh</span>
-              </button>
             </div>
             <div className="min-h-[180px]">
               {isLoadingFearGreed ? (
@@ -767,26 +692,26 @@ export function CryptoMarketsPage({ initialData }: AnalyticsClientProps) {
                   <div className="bg-gray-800/50 border border-gray-700/30 rounded-lg p-3 flex flex-col justify-center items-center text-center">
                     <div
                       className={`text-4xl font-bold mb-1 ${
-                        fearGreedIndex
-                          ? getFearGreedColor(fearGreedIndex.classification)
+                        fearGreedData
+                          ? getFearGreedColor(fearGreedData.classification)
                           : "text-gray-400"
                       }`}
                     >
-                      {fearGreedIndex?.value || "N/A"}
+                      {fearGreedData?.value || "N/A"}
                     </div>
                     <div
                       className={`text-lg font-medium mb-1 ${
-                        fearGreedIndex
-                          ? getFearGreedColor(fearGreedIndex.classification)
+                        fearGreedData
+                          ? getFearGreedColor(fearGreedData.classification)
                           : "text-gray-400"
                       }`}
                     >
-                      {fearGreedIndex?.classification || "N/A"}
+                      {fearGreedData?.classification || "N/A"}
                     </div>
                     <div className="text-xs text-gray-400 text-center">
                       Updated:{" "}
-                      {fearGreedIndex?.timestamp
-                        ? formatFearGreedDate(fearGreedIndex.timestamp)
+                      {fearGreedData?.timestamp
+                        ? formatFearGreedDate(fearGreedData.timestamp)
                         : "N/A"}
                     </div>
                   </div>
@@ -895,7 +820,7 @@ export function CryptoMarketsPage({ initialData }: AnalyticsClientProps) {
                         </text>
 
                         {/* Gauge needle - larger and more visible */}
-                        {fearGreedIndex?.value && (
+                        {fearGreedData?.value && (
                           <>
                             {/* Center point indicator */}
                             <circle
@@ -911,7 +836,7 @@ export function CryptoMarketsPage({ initialData }: AnalyticsClientProps) {
                             {(() => {
                               // Convert value to angle in radians (0 = -180°, 100 = 0°)
                               const angle =
-                                (parseInt(fearGreedIndex.value) / 100) *
+                                (parseInt(fearGreedData.value) / 100) *
                                   Math.PI -
                                 Math.PI;
 
@@ -1001,15 +926,15 @@ export function CryptoMarketsPage({ initialData }: AnalyticsClientProps) {
                         Interpretation
                       </h3>
                       <div className="text-xs text-gray-200">
-                        {fearGreedIndex?.classification === "Extreme Fear" &&
+                        {fearGreedData?.classification === "Extreme Fear" &&
                           "Investors are extremely worried, which could represent a buying opportunity."}
-                        {fearGreedIndex?.classification === "Fear" &&
+                        {fearGreedData?.classification === "Fear" &&
                           "Investors are worried, which may indicate assets are undervalued."}
-                        {fearGreedIndex?.classification === "Neutral" &&
+                        {fearGreedData?.classification === "Neutral" &&
                           "Market sentiment is balanced between fear and greed."}
-                        {fearGreedIndex?.classification === "Greed" &&
+                        {fearGreedData?.classification === "Greed" &&
                           "Investors are getting greedy, which may signal a correction soon."}
-                        {fearGreedIndex?.classification === "Extreme Greed" &&
+                        {fearGreedData?.classification === "Extreme Greed" &&
                           "Investors are extremely greedy, market may be due for a correction."}
                       </div>
                     </div>

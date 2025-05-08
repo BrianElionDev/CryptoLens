@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useKnowledgeData } from "@/hooks/useCoinData";
+import { useContextKnowledge } from "@/hooks/useContextKnowledge";
 import { KnowledgeItem, Project } from "@/types/knowledge";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -78,7 +78,7 @@ export default function CategoryDetailPage() {
       ? decodeURIComponent(params.id).replace(/\s+/g, "-").toLowerCase()
       : "";
   const { data: knowledge = [], isLoading: knowledgeLoading } =
-    useKnowledgeData();
+    useContextKnowledge();
 
   const [categoryData, setCategoryData] = useState<CategoryDetailData | null>(
     null

@@ -11,10 +11,14 @@ interface CategoriesTabProps {
       categories: string[];
       channel: string;
       rpoints: number;
+      id?: string;
     }[];
   };
   selectedChannels: string[];
 }
+
+// Define category types for stronger typing
+type CategoryInput = string | { name: string } | unknown;
 
 export const CategoriesTab = ({
   processedData,
@@ -33,8 +37,23 @@ export const CategoriesTab = ({
     .sort((a, b) => b.value - a.value);
 
   // Normalize category name to match CoinGecko IDs
-  const normalizeCategory = (category: string): string => {
-    const normalized = category.toLowerCase().trim();
+  const normalizeCategory = (category: CategoryInput): string => {
+    // Ensure we're working with a string
+    let categoryStr: string;
+
+    if (typeof category !== "string") {
+      // If it's an object with a name property, use that
+      if (category && typeof category === "object" && "name" in category) {
+        categoryStr = String(category.name);
+      } else {
+        // Otherwise, stringify the object or use a default
+        categoryStr = String(category || "unknown");
+      }
+    } else {
+      categoryStr = category;
+    }
+
+    const normalized = categoryStr.toLowerCase().trim();
 
     // Handle specific categories that need exact mapping to CoinGecko
     const exactMappings: Record<string, string> = {

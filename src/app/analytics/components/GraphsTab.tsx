@@ -23,7 +23,7 @@ interface GraphsTabProps {
   processedData: {
     projectDistribution: { name: string; value: number }[];
     projectTrends: Map<string, { date: string; rpoints: number }[]>;
-    coinCategories: { coin: string; channel: string }[];
+    coinCategories: { coin: string; channel: string; id: string }[];
   };
   selectedChannels: string[];
   knowledge?: KnowledgeItem[];

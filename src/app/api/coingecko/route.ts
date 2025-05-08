@@ -324,6 +324,34 @@ export async function POST(request: Request) {
   const requestSymbols: string[] = requestData?.symbols || [];
   const mode = requestData?.mode || "full";
 
+  // Handle empty or invalid symbol arrays early
+  if (!requestSymbols.length) {
+    console.warn("Empty symbols array received");
+    return NextResponse.json(
+      {
+        error: "No valid symbols provided",
+        data: {},
+        timestamp: Date.now(),
+      },
+      { status: 200 }
+    );
+  }
+
+  // Filter out invalid symbols
+  const validSymbols = requestSymbols.filter((s) => s && s.trim().length >= 2);
+
+  if (validSymbols.length === 0) {
+    console.warn("No valid symbols after filtering");
+    return NextResponse.json(
+      {
+        error: "No valid symbols provided after filtering",
+        data: {},
+        timestamp: Date.now(),
+      },
+      { status: 200 }
+    );
+  }
+
   try {
     const now = Date.now();
     const currentDelay = getRequestDelay();
@@ -342,7 +370,7 @@ export async function POST(request: Request) {
           mode === "quick"
             ? marketDataCache.quickData
             : marketDataCache.fullData;
-        const filteredData = requestSymbols.reduce<Record<string, CoinData>>(
+        const filteredData = validSymbols.reduce<Record<string, CoinData>>(
           (acc, symbol) => {
             const key = symbol.toLowerCase();
             if (cacheToUse[key]) {
@@ -373,7 +401,7 @@ export async function POST(request: Request) {
           mode === "quick"
             ? marketDataCache.quickData
             : marketDataCache.fullData;
-        const filteredData = requestSymbols.reduce<Record<string, CoinData>>(
+        const filteredData = validSymbols.reduce<Record<string, CoinData>>(
           (acc, symbol) => {
             const key = symbol.toLowerCase();
             if (cacheToUse[key]) {
@@ -541,8 +569,7 @@ export async function POST(request: Request) {
     const allCoinData: Record<string, CoinData> = {};
 
     // Process requested symbols with Map for O(1) lookup
-
-    for (const symbol of requestSymbols) {
+    for (const symbol of validSymbols) {
       const match = findCoinMatch(symbol, marketData);
       if (match) {
         const key = symbol.toLowerCase();
@@ -596,11 +623,59 @@ export async function POST(request: Request) {
     console.error("CoinGecko API Error:", error);
     consecutiveFailures++;
 
+    // Handle specific error types
+    if (axios.isAxiosError(error)) {
+      // Handle 400 Bad Request errors
+      if (error.response?.status === 400) {
+        console.warn("Bad request to CoinGecko API:", error.response.data);
+
+        // Try to return cache on bad request
+        if (marketDataCache) {
+          const cacheToUse =
+            mode === "quick"
+              ? marketDataCache.quickData
+              : marketDataCache.fullData;
+          const filteredData = validSymbols.reduce<Record<string, CoinData>>(
+            (acc, symbol) => {
+              const key = symbol.toLowerCase();
+              if (cacheToUse[key]) {
+                acc[key] = cacheToUse[key];
+              }
+              return acc;
+            },
+            {}
+          );
+
+          if (Object.keys(filteredData).length > 0) {
+            return NextResponse.json({
+              data: filteredData,
+              timestamp: marketDataCache.timestamp,
+              fromCache: true,
+              stale: true,
+              error: "Using cache due to bad request error",
+              mode,
+            });
+          }
+        }
+
+        // Return empty data with 200 status (not error) to prevent retries
+        return NextResponse.json(
+          {
+            data: {},
+            timestamp: Date.now(),
+            error: "Invalid request parameters",
+            details: error.response.data,
+          },
+          { status: 200 }
+        );
+      }
+    }
+
     // Always try to return cache on error
     if (marketDataCache) {
       const cacheToUse =
         mode === "quick" ? marketDataCache.quickData : marketDataCache.fullData;
-      const filteredData = requestSymbols.reduce<Record<string, CoinData>>(
+      const filteredData = validSymbols.reduce<Record<string, CoinData>>(
         (acc, symbol) => {
           const key = symbol.toLowerCase();
           if (cacheToUse[key]) {

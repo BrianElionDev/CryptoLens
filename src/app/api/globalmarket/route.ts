@@ -11,23 +11,43 @@ interface GlobalMarketData {
   };
 }
 
-// In-memory cache
-let globalDataCache: GlobalMarketData | null = null;
-let lastFetchTime = 0;
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+// Store last successful response for fallback
+let lastSuccessfulResponse: GlobalMarketData | null = null;
 
-export async function GET() {
+// Track rate limiting
+let isRateLimited = false;
+let rateLimitResetTime = 0;
+const RATE_LIMIT_DURATION = 60 * 1000; // 1 minute rate limit cooldown
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function GET(_request: Request) {
   const currentTime = Date.now();
 
-  // Return cached data if it's still valid
-  if (globalDataCache && currentTime - lastFetchTime < CACHE_DURATION) {
-    console.log("[API] Using cached global market data");
-    return NextResponse.json(globalDataCache, {
-      status: 200,
-      headers: {
-        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=60",
-      },
-    });
+  // Check if we're currently rate limited
+  if (isRateLimited && currentTime < rateLimitResetTime) {
+    console.log(
+      "[API] Rate limited - cannot fetch global market data",
+      Math.round((rateLimitResetTime - currentTime) / 1000),
+      "seconds remaining"
+    );
+
+    // Return last successful response if available
+    if (lastSuccessfulResponse) {
+      return NextResponse.json(lastSuccessfulResponse, {
+        status: 200,
+      });
+    }
+
+    return NextResponse.json(
+      { error: "Rate limit exceeded, please try again later" },
+      { status: 429 }
+    );
+  }
+
+  // Reset rate limit status if cooldown period has passed
+  if (isRateLimited && currentTime >= rateLimitResetTime) {
+    console.log("[API] Rate limit cooldown period complete, resetting status");
+    isRateLimited = false;
   }
 
   try {
@@ -48,19 +68,19 @@ export async function GET() {
 
       // Special handling for rate limit errors
       if (response.status === 429) {
-        // Return cached data if available, even if expired
-        if (globalDataCache) {
-          console.log("[API] Rate limited - returning stale cache");
-          return NextResponse.json(globalDataCache, {
+        // Set rate limited status
+        isRateLimited = true;
+        rateLimitResetTime = currentTime + RATE_LIMIT_DURATION;
+        console.log("[API] Rate limited - cooling down for 60 seconds");
+
+        // Return last successful response if available
+        if (lastSuccessfulResponse) {
+          return NextResponse.json(lastSuccessfulResponse, {
             status: 200,
-            headers: {
-              "Cache-Control":
-                "public, s-maxage=60, stale-while-revalidate=300",
-            },
           });
         }
         return NextResponse.json(
-          { error: "Rate limit exceeded" },
+          { error: "Rate limit exceeded, please try again later" },
           { status: 429 }
         );
       }
@@ -72,27 +92,20 @@ export async function GET() {
 
     const data = await response.json();
 
-    // Update cache
-    globalDataCache = data;
-    lastFetchTime = currentTime;
+    // Store last successful response
+    lastSuccessfulResponse = data;
 
     return NextResponse.json(data, {
       status: 200,
-      headers: {
-        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=60",
-      },
     });
   } catch (error) {
     console.error("Error fetching global market data:", error);
 
-    // Return cached data if available, even if expired
-    if (globalDataCache) {
-      console.log("[API] Error occurred - returning stale cache");
-      return NextResponse.json(globalDataCache, {
+    // Return last successful response if available
+    if (lastSuccessfulResponse) {
+      console.log("[API] Error occurred - returning last successful data");
+      return NextResponse.json(lastSuccessfulResponse, {
         status: 200,
-        headers: {
-          "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
-        },
       });
     }
 
