@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useState, useEffect } from "react";
 
 interface CoinImageProps {
@@ -101,7 +100,7 @@ export function CoinImage({
   }
 
   return (
-    <Image
+    <img
       src={imgSrc}
       alt={alt}
       width={width}
