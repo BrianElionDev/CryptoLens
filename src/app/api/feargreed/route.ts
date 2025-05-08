@@ -6,21 +6,76 @@ interface FearGreedData {
   timestamp: string;
 }
 
-let cache: FearGreedData | null = null;
-let cacheTime = 0;
-const CACHE_DURATION = 60 * 1000; // 1 minute
+// Store last successful response for fallback
+let lastSuccessfulResponse: FearGreedData | null = null;
 
-export async function GET() {
+// Add rate limiting tracking
+let isRateLimited = false;
+let rateLimitResetTime = 0;
+const RATE_LIMIT_DURATION = 60 * 1000; // 1 minute cooldown
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function GET(_request: Request) {
   const now = Date.now();
-  if (cache && now - cacheTime < CACHE_DURATION) {
-    return NextResponse.json({ data: [cache] }, { status: 200 });
+
+  // Check if we're currently rate limited
+  if (isRateLimited && now < rateLimitResetTime) {
+    console.log(
+      "[API] Rate limited - cannot fetch fear/greed data",
+      Math.round((rateLimitResetTime - now) / 1000),
+      "seconds remaining"
+    );
+
+    // Return last successful response if available
+    if (lastSuccessfulResponse) {
+      return NextResponse.json(
+        { data: [lastSuccessfulResponse] },
+        { status: 200 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: "Rate limit exceeded, please try again later" },
+      { status: 429 }
+    );
+  }
+
+  // Reset rate limit status if cooldown period has passed
+  if (isRateLimited && now >= rateLimitResetTime) {
+    console.log(
+      "[API] Fear/greed rate limit cooldown period complete, resetting status"
+    );
+    isRateLimited = false;
   }
 
   try {
+    console.log("[API] Fetching fresh fear & greed data");
     const response = await fetch("https://api.alternative.me/fng/?limit=1");
+
     if (!response.ok) {
-      throw new Error("Failed to fetch fear & greed index");
+      // Handle rate limiting
+      if (response.status === 429) {
+        isRateLimited = true;
+        rateLimitResetTime = now + RATE_LIMIT_DURATION;
+        console.log(
+          "[API] Fear/greed rate limited - cooling down for 60 seconds"
+        );
+
+        if (lastSuccessfulResponse) {
+          return NextResponse.json(
+            { data: [lastSuccessfulResponse] },
+            { status: 200 }
+          );
+        }
+        return NextResponse.json(
+          { error: "Rate limit exceeded, please try again later" },
+          { status: 429 }
+        );
+      }
+
+      throw new Error(`Failed to fetch fear & greed index: ${response.status}`);
     }
+
     const data = await response.json();
 
     // Check if we have the expected data structure
@@ -46,11 +101,20 @@ export async function GET() {
       timestamp: fearGreedData.timestamp || new Date().toISOString(),
     };
 
-    cache = formattedData;
-    cacheTime = now;
+    lastSuccessfulResponse = formattedData;
     return NextResponse.json({ data: [formattedData] }, { status: 200 });
   } catch (error) {
     console.error("Error fetching fear & greed index:", error);
+
+    // Return last successful response if available
+    if (lastSuccessfulResponse) {
+      console.log("[API] Error occurred - returning last fear/greed data");
+      return NextResponse.json(
+        { data: [lastSuccessfulResponse] },
+        { status: 200 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Failed to fetch fear & greed index" },
       { status: 500 }

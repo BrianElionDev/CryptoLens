@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import type { KnowledgeItem } from "@/types/knowledge";
+import { prefetchKnowledgeData } from "@/lib/server/prefetch";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -22,65 +22,41 @@ interface RawProject {
   category?: string[];
 }
 
+// Cache for 5 minutes
+export const revalidate = 300;
+
 export async function GET(request: Request) {
   try {
-    // Parse the URL to get search params
-    const { searchParams } = new URL(request.url);
-    const limit = searchParams.get("limit");
+    const url = new URL(request.url);
+    const limit = url.searchParams.get("limit");
 
-    // Start building the query
-    let query = supabase
-      .from("knowledge")
-      .select("*")
-      .order("date", { ascending: false });
-
-    // Apply limit if specified and it's not "all"
-    if (limit && limit !== "all") {
-      const limitNum = parseInt(limit);
-      if (!isNaN(limitNum) && limitNum > 0) {
-        query = query.limit(limitNum);
-      }
-    }
-
-    // Execute the query
-    const { data: knowledgeData, error } = await query;
-
-    if (error) {
-      console.error("Knowledge fetch error:", error);
-      throw error;
-    }
+    // Fetch all knowledge data from the server
+    const knowledgeData = await prefetchKnowledgeData();
 
     if (!knowledgeData || knowledgeData.length === 0) {
-      console.log("No knowledge data found");
-      return NextResponse.json({ knowledge: [] });
+      return NextResponse.json(
+        { error: "No knowledge data found" },
+        { status: 404 }
+      );
     }
 
     console.log(`Found ${knowledgeData.length} knowledge entries`);
 
-    const transformedData: KnowledgeItem[] = knowledgeData.map((item) => ({
-      id: item.id,
-      date: item.date,
-      transcript: item.transcript,
-      corrected_transcript: item.corrected_transcript,
-      video_title: item.video_title,
-      "channel name": item["channel name"],
-      link: item.link || "",
-      answer: item.answer || "",
-      summary: item.summary || "",
-      usage: item.usage || 0,
-      hasUpdatedTranscript: item.hasUpdatedTranscript,
-      llm_answer: item.llm_answer || { projects: [] },
-      video_type: item.video_type || "video",
-    }));
+    // Return all data if limit=all, otherwise return limited amount
+    const responseData =
+      limit === "all"
+        ? knowledgeData
+        : knowledgeData.slice(0, parseInt(limit || "10", 10));
 
-    return NextResponse.json({ knowledge: transformedData });
-  } catch (error: unknown) {
-    console.error("GET Error:", error);
-    return NextResponse.json(
-      {
-        error: "Failed to fetch knowledge data",
-        details: error instanceof Error ? error.message : String(error),
+    return NextResponse.json(responseData, {
+      headers: {
+        "Cache-Control": "public, max-age=300",
       },
+    });
+  } catch (error) {
+    console.error("Error fetching knowledge data:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch knowledge data" },
       { status: 500 }
     );
   }

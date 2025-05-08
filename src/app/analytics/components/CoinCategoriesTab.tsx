@@ -1,9 +1,12 @@
 import { useState, useMemo } from "react";
 
+// Define a proper type for category items that can be strings or objects with name
+type CategoryItem = string | { name: string } | Record<string, unknown>;
+
 interface CoinCategoriesTabProps {
   processedData: {
     projectDistribution: { name: string; value: number }[];
-    coinCategories: { coin: string; categories: string[] }[];
+    coinCategories: { coin: string; categories: CategoryItem[]; id?: string }[];
   };
 }
 
@@ -21,9 +24,10 @@ export const CoinCategoriesTab = ({
       .filter(
         (coin) =>
           coin.coin.toLowerCase().includes(search.toLowerCase()) ||
-          coin.categories.some((cat) =>
-            cat.toLowerCase().includes(search.toLowerCase())
-          )
+          coin.categories.some((cat) => {
+            const catStr = typeof cat === "string" ? cat : "";
+            return catStr.toLowerCase().includes(search.toLowerCase());
+          })
       )
       .sort((a, b) => {
         const aPoints =
@@ -49,6 +53,20 @@ export const CoinCategoriesTab = ({
         }
       });
   }, [processedData, search, sortBy, sortOrder]);
+
+  // Helper function to get display text for a category
+  const getCategoryDisplayText = (category: CategoryItem): string => {
+    if (typeof category === "string") {
+      return category;
+    }
+    if (category && typeof category === "object") {
+      if ("name" in category && category.name) {
+        return String(category.name);
+      }
+      return JSON.stringify(category);
+    }
+    return String(category || "");
+  };
 
   return (
     <div className="overflow-hidden rounded-xl bg-gradient-to-r from-blue-900/20 via-purple-900/20 to-pink-900/20 border border-blue-500/20 backdrop-blur-sm">
@@ -120,14 +138,17 @@ export const CoinCategoriesTab = ({
                 </td>
                 <td className="py-4 px-6">
                   <div className="flex flex-wrap gap-2">
-                    {coin.categories.map((category) => (
-                      <span
-                        key={category}
-                        className="px-2 py-1 text-xs rounded-full bg-blue-500/20 text-blue-300"
-                      >
-                        {category}
-                      </span>
-                    ))}
+                    {coin.categories.map((category, catIdx) => {
+                      const categoryText = getCategoryDisplayText(category);
+                      return (
+                        <span
+                          key={`${coin.coin}-${categoryText}-${catIdx}`}
+                          className="px-2 py-1 text-xs rounded-full bg-blue-500/20 text-blue-300"
+                        >
+                          {categoryText}
+                        </span>
+                      );
+                    })}
                   </div>
                 </td>
                 <td className="py-4 px-6 whitespace-nowrap">

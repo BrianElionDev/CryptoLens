@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { useKnowledgeData } from "@/hooks/useCoinData";
+import { useContextKnowledge } from "@/hooks/useContextKnowledge";
 import {
   Table,
   TableBody,
@@ -51,7 +51,7 @@ const columns: ColumnDef<ChannelMention>[] = [
 ];
 
 export default function ChannelMentionsTable({ coinId }: { coinId: string }) {
-  const { data: knowledge, isLoading } = useKnowledgeData();
+  const { data: knowledge, isLoading } = useContextKnowledge();
   const currentCoinId = coinId.toLowerCase();
 
   const channelMentions = useMemo(() => {

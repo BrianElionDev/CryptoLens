@@ -4,8 +4,8 @@ import { useEffect, Suspense, memo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import KnowledgeBase from "@/components/KnowledgeBase";
 import { useKnowledgeStore } from "@/stores/knowledgeStore";
-import { useKnowledgeData } from "@/hooks/useCoinData";
-import { useCoinDataQuery } from "@/hooks/useCoinData";
+import { useContextKnowledge } from "@/hooks/useContextKnowledge";
+import { useCoinData } from "@/hooks/useCoinData";
 import { KnowledgeItem } from "@/types/knowledge";
 
 type DateFilterType = "all" | "today" | "week" | "month" | "year";
@@ -176,11 +176,17 @@ const KnowledgePageContent = memo(function KnowledgePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const {
-    data: knowledge,
+    data: knowledge = [],
     isLoading: isKnowledgeLoading,
     error: knowledgeError,
-  } = useKnowledgeData();
-  const { isLoading: isCoinsLoading, isError: coinsError } = useCoinDataQuery();
+  } = useContextKnowledge();
+
+  // Use useCoinData with an empty array to get all coins
+  const { isLoading: isCoinsLoading, isError: coinsError } = useCoinData(
+    [],
+    0,
+    "full"
+  );
 
   useEffect(() => {
     if (isKnowledgeLoading) {
@@ -334,12 +340,13 @@ const KnowledgePageContent = memo(function KnowledgePageContent() {
     );
 
   const isLoading = isKnowledgeLoading || isCoinsLoading;
-  const error =
-    typeof knowledgeError === "string"
+  const error = knowledgeError
+    ? typeof knowledgeError === "string"
       ? knowledgeError
-      : coinsError
-      ? "Failed to fetch coin data"
-      : null;
+      : "Failed to fetch knowledge data"
+    : coinsError
+    ? "Failed to fetch coin data"
+    : null;
 
   if (error) {
     return <div className="text-red-500 text-center py-8">{error}</div>;
@@ -373,7 +380,7 @@ export default function KnowledgePage() {
     setCurrentPage,
   } = useKnowledgeStore();
 
-  const { data: knowledge } = useKnowledgeData();
+  const { data: knowledge } = useContextKnowledge();
 
   // Count filtered items for the header
   const filteredCount = (knowledge || []).filter((item) => {

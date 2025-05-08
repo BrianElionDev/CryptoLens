@@ -8,7 +8,7 @@ import { PlayCircle } from "lucide-react";
 import { StatsModal } from "./modals/StatsModal";
 import { useCoinGecko } from "@/contexts/CoinGeckoContext";
 import { useCMC } from "@/contexts/CMCContext";
-import { useCoinDataQuery } from "@/hooks/useCoinData";
+import { useCoinData } from "@/hooks/useCoinData";
 
 interface KnowledgeBaseProps {
   items: KnowledgeItem[];
@@ -21,27 +21,125 @@ export default function KnowledgeBase({
 }: KnowledgeBaseProps) {
   const [activeVideo, setActiveVideo] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<KnowledgeItem | null>(null);
-  const { matchCoins: matchCoingecko } = useCoinGecko();
-  const { matchCoins: matchCMC } = useCMC();
+  const { matchCoins: matchCoingecko, topCoins: geckoCoins } = useCoinGecko();
+  const { matchCoins: matchCMC, topCoins: cmcCoins } = useCMC();
   const [matchedItems, setMatchedItems] = useState<KnowledgeItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const { isLoading: isCoinsLoading } = useCoinDataQuery();
+  const [symbolsToFetch, setSymbolsToFetch] = useState<string[]>([]);
+
+  const { isLoading: isCoinsLoading, data: coinData } = useCoinData(
+    symbolsToFetch.length > 0 ? symbolsToFetch : ["bitcoin", "ethereum"],
+    0,
+    "full"
+  );
+
+  useEffect(() => {
+    // Extract symbols from items if available
+    if (items && items.length > 0) {
+      const symbols = new Set<string>();
+
+      // Loop through all items and their projects to extract coin names
+      items.forEach((item) => {
+        if (item.llm_answer && Array.isArray(item.llm_answer.projects)) {
+          item.llm_answer.projects.forEach((project) => {
+            if (
+              project.coin_or_project &&
+              project.coin_or_project.trim() !== ""
+            ) {
+              symbols.add(project.coin_or_project.toLowerCase());
+            }
+          });
+        }
+      });
+
+      // Convert to array and limit to 100 coins
+      if (symbols.size > 0) {
+        const symbolArray = Array.from(symbols)
+          .filter((s) => s.length >= 2) // Filter out very short symbols
+          .slice(0, 100); // Limit to 100 coins to prevent API overload
+
+        setSymbolsToFetch(symbolArray);
+      }
+    }
+  }, [items]);
+
+  useEffect(() => {
+    // Debug logs to diagnose coin loading issues
+    console.log("CoinGecko topCoins length:", geckoCoins?.length || 0);
+    console.log("CMC topCoins length:", cmcCoins?.length || 0);
+    console.log("Coin data loading:", isCoinsLoading);
+
+    // Log more details about coin data structure
+    if (coinData) {
+      console.log("Coin data structure:", {
+        hasData: !!coinData.data,
+        dataType: coinData.data ? typeof coinData.data : "undefined",
+        isArray: Array.isArray(coinData.data),
+        dataLength: Array.isArray(coinData.data)
+          ? coinData.data.length
+          : "not an array",
+        timestamp: coinData.timestamp,
+        sample:
+          Array.isArray(coinData.data) && coinData.data.length > 0
+            ? coinData.data.slice(0, 2)
+            : "no data",
+      });
+    } else {
+      console.log("No coin data available");
+    }
+  }, [geckoCoins, cmcCoins, isCoinsLoading, coinData]);
 
   useEffect(() => {
     const matchProjects = async () => {
-      if (!items.length || isCoinsLoading) {
+      if (!items.length) {
+        console.log("Not matching projects - no items available");
+        return;
+      }
+
+      // Even if we're loading or have no coins, set the items without matching
+      if (isCoinsLoading) {
+        console.log(
+          "Coin data is still loading, showing items without matching for now"
+        );
+        setMatchedItems(items);
+        return;
+      }
+
+      // Count how many coins we have to match against
+      const geckoCoinsCount = geckoCoins?.length || 0;
+      const cmcCoinsCount = cmcCoins?.length || 0;
+      const totalCoinsAvailable = geckoCoinsCount + cmcCoinsCount;
+
+      // If we have no coins to match against, just show the items as-is
+      if (totalCoinsAvailable === 0) {
+        console.log("No coin data available for matching, showing items as-is");
+        setMatchedItems(items);
         return;
       }
 
       setIsProcessing(true);
       try {
-        console.log("Fetching project matches...");
+        console.log(
+          `Matching against ${geckoCoinsCount} CoinGecko coins and ${cmcCoinsCount} CMC coins`
+        );
+
+        // Log some sample projects to check
+        if (items.length > 0 && items[0].llm_answer.projects.length > 0) {
+          console.log(
+            "Sample projects to match:",
+            items[0].llm_answer.projects.slice(0, 3)
+          );
+        }
+
         const matched = await Promise.all(
           items.map(async (item) => {
             const projects = item.llm_answer.projects;
 
             // First try CoinGecko
             const geckoMatched = matchCoingecko(projects);
+            const geckoMatchCount = geckoMatched.filter(
+              (p) => p.coingecko_matched
+            ).length;
 
             // Then try CMC for any unmatched projects
             const unmatchedProjects = geckoMatched.filter(
@@ -49,6 +147,20 @@ export default function KnowledgeBase({
             );
 
             const cmcMatched = await matchCMC(unmatchedProjects);
+            const cmcMatchCount = cmcMatched.filter(
+              (p) => p.cmc_matched
+            ).length;
+
+            // Log match statistics for debugging
+            if (projects.length > 0) {
+              console.log(
+                `Item ${
+                  item.id || item.video_title.slice(0, 20)
+                }: ${geckoMatchCount} CoinGecko matches, ${cmcMatchCount} CMC matches out of ${
+                  projects.length
+                } projects`
+              );
+            }
 
             // Merge results
             const finalProjects = projects.map((project) => {
@@ -93,15 +205,18 @@ export default function KnowledgeBase({
           })
         );
         setMatchedItems(matched);
+        console.log(`Successfully matched ${matched.length} items`);
       } catch (error) {
         console.error("Error matching projects:", error);
+        // If matching fails, still show the items without matches
+        setMatchedItems(items);
       } finally {
         setIsProcessing(false);
       }
     };
 
     matchProjects();
-  }, [items, matchCoingecko, matchCMC, isCoinsLoading]);
+  }, [items, matchCoingecko, matchCMC, isCoinsLoading, geckoCoins, cmcCoins]);
 
   // Loading skeleton component
   const LoadingSkeleton = () => (
@@ -151,10 +266,13 @@ export default function KnowledgeBase({
     );
   }
 
+  // If we have items but no matched items yet, use original items
+  const displayItems = matchedItems.length > 0 ? matchedItems : items;
+
   return (
     <div className="space-y-6">
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {matchedItems.map((item, index) => {
+        {displayItems.map((item, index) => {
           const projects = item.llm_answer.projects;
 
           const validCoins = projects.filter(

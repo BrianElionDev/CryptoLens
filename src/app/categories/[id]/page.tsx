@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useKnowledgeData } from "@/hooks/useCoinData";
+import { useContextKnowledge } from "@/hooks/useContextKnowledge";
 import { KnowledgeItem, Project } from "@/types/knowledge";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -78,7 +78,7 @@ export default function CategoryDetailPage() {
       ? decodeURIComponent(params.id).replace(/\s+/g, "-").toLowerCase()
       : "";
   const { data: knowledge = [], isLoading: knowledgeLoading } =
-    useKnowledgeData();
+    useContextKnowledge();
 
   const [categoryData, setCategoryData] = useState<CategoryDetailData | null>(
     null
@@ -220,9 +220,12 @@ export default function CategoryDetailPage() {
           }
 
           // Normalize project categories
-          const projectCategories = project.category.map((c) =>
-            c ? c.toLowerCase().trim() : ""
-          );
+          const projectCategories = project.category.map((c) => {
+            // Handle non-string or null/undefined values
+            if (c === null || c === undefined) return "";
+            if (typeof c !== "string") return String(c).toLowerCase().trim();
+            return c.toLowerCase().trim();
+          });
 
           // Check if any of our category variants match any project category
           const categoryMatches = projectCategories.some(
@@ -230,19 +233,27 @@ export default function CategoryDetailPage() {
               // Direct match with any variant
               categoryVariants.has(projectCat) ||
               // Or partial match for special cases
-              (categoryId === "layer-1" && projectCat.includes("layer")) ||
-              (categoryId === "meme-token" && projectCat.includes("meme")) ||
+              (categoryId === "layer-1" &&
+                projectCat &&
+                projectCat.includes("layer")) ||
+              (categoryId === "meme-token" &&
+                projectCat &&
+                projectCat.includes("meme")) ||
               (categoryId === "gaming-entertainment-social" &&
+                projectCat &&
                 (projectCat.includes("game") ||
                   projectCat.includes("gaming") ||
                   projectCat.includes("meta"))) ||
               (categoryId === "artificial-intelligence-ai" &&
+                projectCat &&
                 (projectCat.includes("ai") ||
                   projectCat.includes("intelligence"))) ||
               (categoryId === "decentralized-finance-defi" &&
+                projectCat &&
                 (projectCat.includes("defi") ||
                   projectCat.includes("finance"))) ||
               (categoryId === "payment" &&
+                projectCat &&
                 (projectCat.includes("payment") ||
                   projectCat.includes("transaction") ||
                   projectCat.includes("remittance") ||

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, Suspense } from "react";
-import { useKnowledgeData } from "@/hooks/useCoinData";
+import { useContextKnowledge } from "@/hooks/useContextKnowledge";
 import { motion, AnimatePresence } from "framer-motion";
 import type { KnowledgeItem, Project } from "@/types/knowledge";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -13,7 +13,7 @@ import Link from "next/link";
 type SortOption = "rpoints" | "mentions" | "coins" | "recent";
 
 function CategoriesContent() {
-  const { data: knowledge = [], isLoading } = useKnowledgeData();
+  const { data: knowledge = [], isLoading } = useContextKnowledge();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<SortOption>("rpoints");

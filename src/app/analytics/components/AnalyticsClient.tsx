@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { useKnowledgeData } from "@/hooks/useCoinData";
+import { useContextKnowledge } from "@/hooks/useContextKnowledge";
 import { GraphsTab } from "./GraphsTab";
 import { CategoriesTab } from "./CategoriesTab";
 import { CombinedMarketTable } from "@/components/tables/CombinedMarketTable";
@@ -25,7 +25,7 @@ interface AnalyticsClientProps {
 }
 
 export function AnalyticsClient({ initialData }: AnalyticsClientProps) {
-  const { data: knowledge = initialData, isLoading } = useKnowledgeData();
+  const { data: knowledge = initialData, isLoading } = useContextKnowledge();
   const [activeTab, setActiveTab] = useState<TabType>("market");
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
 
