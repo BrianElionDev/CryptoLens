@@ -39,7 +39,7 @@ export function CategoriesTable({
   const normalizeCategory = (
     category: string
   ): { id: string; displayName: string } => {
-    const normalized = category.toLowerCase().trim();
+    const normalized = category ? category.toLowerCase().trim() : "";
 
     // Direct mappings to CoinGecko category IDs
     const coingeckoCategoryMapping: Record<string, string> = {
@@ -171,7 +171,7 @@ export function CategoriesTable({
     const rawCategories = new Set<string>();
     processedData.coinCategories.forEach((coinData) => {
       coinData.categories.forEach((category) => {
-        if (category.trim()) {
+        if (category && category.trim()) {
           rawCategories.add(category.trim());
         }
       });
@@ -190,7 +190,7 @@ export function CategoriesTable({
       // Get normalized category IDs for this coin
       const categoryIds = new Set<string>();
       coinData.categories.forEach((category) => {
-        if (category.trim()) {
+        if (category && category.trim()) {
           const { id } = normalizeCategory(category);
           categoryIds.add(id);
         }

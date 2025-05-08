@@ -4,7 +4,7 @@ import type { CoinData } from "@/hooks/useCoinData";
 import { formatCurrency, formatPercentage } from "@/lib/utils";
 import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { useCoinData } from "@/hooks/useCoinData";
-import Image from "next/image";
+
 import { DataTable } from "@/components/ui/data-table";
 import type { Row } from "@tanstack/react-table";
 import { CalendarIcon, Filter, X } from "lucide-react";
@@ -30,6 +30,7 @@ import { CryptoColumnsSelector, Column } from "./CryptoColumnsSelector";
 import type { TabType } from "./CryptoTableHeader";
 import { CategoriesTable } from "./CategoriesTable";
 import { ChannelSelector } from "@/app/analytics/components/ChannelSelector";
+import { CoinImage } from "@/components/ui/CoinImage";
 
 type ExtendedCoinData = CoinData & {
   rpoints: number;
@@ -98,8 +99,6 @@ export function CombinedMarketTable({
     console.log("Date range:", dateRange);
     console.groupEnd();
   };
-
-
 
   const defaultChannels = processedData.channels;
 
@@ -934,6 +933,10 @@ export function CombinedMarketTable({
 
   // Normalize category name to match CoinGecko IDs
   const normalizeCategory = (category: string): string => {
+    if (!category || typeof category !== "string") {
+      return ""; // Return empty string for null/undefined/non-string values
+    }
+
     const normalized = category.toLowerCase().trim();
 
     // Handle specific categories that need exact mapping to CoinGecko
@@ -1262,9 +1265,9 @@ export function CombinedMarketTable({
     const matchedCoins = new Set<string>();
     let result = coinData.data
       .map((coin) => {
-        const coinId = coin.id.toLowerCase().trim();
-        const cleanSymbol = coin.symbol.toLowerCase().trim();
-        const cleanName = coin.name.toLowerCase().trim();
+        const coinId = coin.id ? coin.id.toLowerCase().trim() : "";
+        const cleanSymbol = coin.symbol ? coin.symbol.toLowerCase().trim() : "";
+        const cleanName = coin.name ? coin.name.toLowerCase().trim() : "";
 
         // Skip if already matched to avoid duplicates
         if (matchedCoins.has(coinId)) return null;
@@ -1334,24 +1337,35 @@ export function CombinedMarketTable({
           const symbolMatch = c.coin.match(/\(\$([^)]+)\)/);
           const coinSymbol = symbolMatch ? symbolMatch[1].toLowerCase() : "";
           const cleanCoinName = c.coin
-            .replace(/\s*\(\$[^)]+\)/g, "")
-            .toLowerCase()
-            .trim();
+            ? c.coin
+                .replace(/\s*\(\$[^)]+\)/g, "")
+                .toLowerCase()
+                .trim()
+            : "";
 
           return (
             coinSymbol === coin.symbol.toLowerCase() ||
-            cleanCoinName.includes(coin.name.toLowerCase()) ||
-            coin.name.toLowerCase().includes(cleanCoinName)
+            (cleanCoinName &&
+              coin.name &&
+              cleanCoinName.includes(coin.name.toLowerCase())) ||
+            (coin.name &&
+              cleanCoinName &&
+              coin.name.toLowerCase().includes(cleanCoinName))
           );
         });
 
         // Check if any mention has one of the required categories
         return coinMentions.some((mention) =>
-          mention.categories.some((cat) =>
-            filterSettings.categories.includes(
-              normalizeCategory(cat.toLowerCase())
-            )
-          )
+          mention.categories && Array.isArray(mention.categories)
+            ? mention.categories.some(
+                (cat) =>
+                  cat &&
+                  typeof cat === "string" &&
+                  filterSettings.categories.includes(
+                    normalizeCategory(cat.toLowerCase())
+                  )
+              )
+            : false
         );
       });
       if (debug || result.length === 0)
@@ -1503,22 +1517,17 @@ export function CombinedMarketTable({
         cell: ({ row }: { row: Row<ExtendedCoinData> }) => (
           <div className="flex items-center gap-3">
             {row.original.image && (
-              <Image
+              <CoinImage
                 src={row.original.image}
                 alt={row.original.name || ""}
                 width={32}
                 height={32}
-                className="rounded-full w-8 h-8 md:w-8 md:h-8"
-                onError={(e) => {
-                  const imgElement = e.target as HTMLImageElement;
-                  imgElement.style.display = "none";
-                  const parent = imgElement.parentElement;
-                  if (parent) {
-                    const fallback = document.createElement("div");
-                    fallback.innerHTML = `<svg viewBox="0 0 24 24" class="w-8 h-8 text-blue-400"><path fill="currentColor" d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm0-2a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm-3-7h6v2H9v-2zm0-3h6v2H9v-2z"/></svg>`;
-                    parent.appendChild(fallback.firstChild as Node);
-                  }
-                }}
+                className="w-8 h-8 md:w-8 md:h-8"
+                coinId={row.original.cmc_id || row.original.id}
+                fallbackText={row.original.symbol?.substring(0, 2)}
+                source={
+                  row.original.data_source === "cmc" ? "cmc" : "coingecko"
+                }
               />
             )}
             <div className="flex flex-col items-start">
