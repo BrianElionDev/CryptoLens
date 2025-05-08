@@ -47,7 +47,7 @@ export function CryptoTableHeader({
   const normalizeCategory = (
     category: string
   ): { id: string; displayName: string } => {
-    const normalized = category.toLowerCase().trim();
+    const normalized = category ? category.toLowerCase().trim() : "";
 
     // Handle specific categories that need exact mapping to CoinGecko
     const exactMappings: Record<string, { id: string; displayName: string }> = {
@@ -230,21 +230,32 @@ export function CryptoTableHeader({
       >();
 
       knowledgeData.forEach((item) => {
-        item.llm_answer.projects.forEach((project) => {
-          project.category.forEach((cat) => {
-            if (cat.trim()) {
-              const { id, displayName } = normalizeCategory(cat.trim());
-              const existing = allCategories.get(id) || {
-                count: 0,
-                displayName,
-              };
-              allCategories.set(id, {
-                count: existing.count + 1,
-                displayName: existing.displayName,
+        if (item.llm_answer && item.llm_answer.projects) {
+          item.llm_answer.projects.forEach((project) => {
+            if (
+              project &&
+              project.category &&
+              Array.isArray(project.category)
+            ) {
+              project.category.forEach((cat) => {
+                if (cat && typeof cat === "string") {
+                  const trimmedCat = cat.trim();
+                  if (trimmedCat) {
+                    const { id, displayName } = normalizeCategory(trimmedCat);
+                    const existing = allCategories.get(id) || {
+                      count: 0,
+                      displayName,
+                    };
+                    allCategories.set(id, {
+                      count: existing.count + 1,
+                      displayName: existing.displayName,
+                    });
+                  }
+                }
               });
             }
           });
-        });
+        }
       });
 
       // Sort categories by frequency and get top 8 (plus All and Categories tabs)

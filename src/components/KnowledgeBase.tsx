@@ -15,7 +15,6 @@ interface KnowledgeBaseProps {
   isMatching?: boolean;
 }
 
-// We're separating the base component from the one with pagination capabilities
 export default function KnowledgeBase({
   items,
   isMatching = false,
@@ -55,8 +54,8 @@ export default function KnowledgeBase({
             const finalProjects = projects.map((project) => {
               const geckoMatch = geckoMatched.find(
                 (p) =>
-                  p.coin_or_project.toLowerCase() ===
-                  project.coin_or_project.toLowerCase()
+                  p.coin_or_project?.toLowerCase() ===
+                  project.coin_or_project?.toLowerCase()
               );
 
               if (geckoMatch?.coingecko_matched) {
@@ -69,8 +68,8 @@ export default function KnowledgeBase({
 
               const cmcMatch = cmcMatched.find(
                 (p) =>
-                  p.coin_or_project.toLowerCase() ===
-                  project.coin_or_project.toLowerCase()
+                  p.coin_or_project?.toLowerCase() ===
+                  project.coin_or_project?.toLowerCase()
               );
 
               if (cmcMatch?.cmc_matched) {

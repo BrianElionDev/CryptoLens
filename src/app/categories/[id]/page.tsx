@@ -29,7 +29,6 @@ import {
 } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import React from "react";
-import Image from "next/image";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -39,6 +38,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Home } from "lucide-react";
+import { CoinImage } from "@/components/ui/CoinImage";
 
 interface CategoryDetailData {
   id: string;
@@ -221,7 +221,7 @@ export default function CategoryDetailPage() {
 
           // Normalize project categories
           const projectCategories = project.category.map((c) =>
-            (c || "").toLowerCase().trim()
+            c ? c.toLowerCase().trim() : ""
           );
 
           // Check if any of our category variants match any project category
@@ -851,13 +851,15 @@ export default function CategoryDetailPage() {
                           key={index}
                           className="flex items-center bg-black/60 p-3 rounded-lg ring-2 ring-cyan-500/20"
                         >
-                          <Image
+                          <CoinImage
                             src={coinImageUrl}
                             alt={`${categoryData.top_3_coins_id[index]} coin`}
                             width={48}
                             height={48}
                             className="rounded-full"
-                            style={{ height: "auto" }}
+                            fallbackText={categoryData.top_3_coins_id[index]}
+                            coinId={categoryData.top_3_coins_id[index]}
+                            source="coingecko"
                           />
                           <span className="ml-3 text-gray-300 capitalize">
                             {categoryData.top_3_coins_id[index]}
