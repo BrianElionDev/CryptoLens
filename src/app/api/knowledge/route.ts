@@ -25,36 +25,77 @@ interface RawProject {
 // Cache for 5 minutes
 export const revalidate = 300;
 
+// Set this to true to bypass prefetch and query Supabase directly
+// from the API route (needed for client-side only approach)
+const BYPASS_PREFETCH = false;
+
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
-    const limit = url.searchParams.get("limit");
+    const limitParam = url.searchParams.get("limit");
+    const offset = parseInt(url.searchParams.get("offset") || "0", 10);
+    const limit =
+      limitParam === "all" ? undefined : parseInt(limitParam || "10", 10);
 
-    // Fetch all knowledge data from the server
-    const knowledgeData = await prefetchKnowledgeData();
+    console.log(
+      `API route: Processing request with limit=${limitParam}, offset=${offset}`
+    );
 
-    if (!knowledgeData || knowledgeData.length === 0) {
-      return NextResponse.json(
-        { error: "No knowledge data found" },
-        { status: 404 }
+    let knowledgeData;
+
+    // Choose data source strategy
+    if (BYPASS_PREFETCH) {
+      // Option 1: Direct database query (better for pure client-side approaches)
+      console.log("API route: Querying database directly");
+
+      let query = supabase
+        .from("knowledge")
+        .select("*")
+        .order("date", { ascending: false });
+
+      // Apply pagination if needed
+      if (typeof limit === "number") {
+        query = query.range(offset, offset + limit - 1);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw new Error(`Database query error: ${error.message}`);
+      }
+
+      knowledgeData = data || [];
+
+      console.log(
+        `API route: Direct query returned ${knowledgeData.length} items`
       );
+    } else {
+      // Option 2: Use prefetch function (better for hybrid approaches)
+      console.log("API route: Using prefetch function");
+      knowledgeData = await prefetchKnowledgeData(limit, offset);
+      console.log(`API route: Prefetch returned ${knowledgeData.length} items`);
     }
 
-    console.log(`Found ${knowledgeData.length} knowledge entries`);
+    if (!knowledgeData || knowledgeData.length === 0) {
+      // No data case - return empty array instead of error
+      return NextResponse.json([], {
+        headers: {
+          "Cache-Control": "public, max-age=300",
+        },
+      });
+    }
 
-    // Return all data if limit=all, otherwise return limited amount
-    const responseData =
-      limit === "all"
-        ? knowledgeData
-        : knowledgeData.slice(0, parseInt(limit || "10", 10));
+    console.log(
+      `API route: Returning ${knowledgeData.length} knowledge entries`
+    );
 
-    return NextResponse.json(responseData, {
+    return NextResponse.json(knowledgeData, {
       headers: {
         "Cache-Control": "public, max-age=300",
       },
     });
   } catch (error) {
-    console.error("Error fetching knowledge data:", error);
+    console.error("Error in knowledge API route:", error);
     return NextResponse.json(
       { error: "Failed to fetch knowledge data" },
       { status: 500 }

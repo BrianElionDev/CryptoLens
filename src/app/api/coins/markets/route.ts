@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import axios from "axios";
+import axios, { AxiosResponse } from "axios";
 
 // Cache for 5 minutes
 export const revalidate = 300;
@@ -31,7 +31,7 @@ export async function GET() {
     const now = Date.now();
 
     // Return cached data if it's less than 5 minutes old
-    if (cachedData && now - cachedData.timestamp < 5 * 60 * 1000) {
+    if (cachedData && now - cachedData.timestamp < 1 * 60 * 1000) {
       return NextResponse.json(cachedData.data, {
         headers: {
           "Cache-Control": "public, max-age=300",
@@ -43,7 +43,7 @@ export async function GET() {
     console.log("Fetching coin market data...");
     // Fetch all pages in parallel
     const perPage = 250;
-    const totalPages = 3;
+    const totalPages = 4;
     const pagePromises = Array.from({ length: totalPages }, (_, i) =>
       axios.get("https://api.coingecko.com/api/v3/coins/markets", {
         params: {
@@ -54,14 +54,43 @@ export async function GET() {
           sparkline: false,
         },
         timeout: 10000,
+        headers: {
+          // Add standard headers to reduce chance of being rate-limited
+          Accept: "application/json",
+          "User-Agent": "CryptoLens/1.0",
+        },
       })
     );
 
-    const responses = await Promise.all(pagePromises);
-    const allCoins = responses.flatMap((response) => response.data);
+    // Use allSettled instead of all to handle partial failures
+    const responses = await Promise.allSettled(pagePromises);
 
-    // Update cache
-    cachedData = { data: allCoins, timestamp: now };
+    // Extract successful responses
+    const allCoins = responses
+      .filter(
+        (
+          result
+        ): result is PromiseFulfilledResult<AxiosResponse<CoinGeckoData[]>> =>
+          result.status === "fulfilled"
+      )
+      .flatMap((result) => result.value.data);
+
+    // If we got no data but have cache, use the expired cache
+    if (allCoins.length === 0 && cachedData) {
+      console.log("API returned no data - using expired cache");
+      return NextResponse.json(cachedData.data, {
+        headers: {
+          "Cache-Control": "public, max-age=60",
+          ETag: `"${cachedData.timestamp}"`,
+          "X-Cache-Status": "expired-fallback",
+        },
+      });
+    }
+
+    // Only update cache if we got data
+    if (allCoins.length > 0) {
+      cachedData = { data: allCoins, timestamp: now };
+    }
 
     return NextResponse.json(allCoins, {
       headers: {
@@ -70,28 +99,25 @@ export async function GET() {
       },
     });
   } catch (error) {
-    console.error("Error fetching coins:", error);
+    console.error("Error fetching coin market data:", error);
 
-    // Return cached data if available, even if stale
+    // Fallback to cache if available when API fails
     if (cachedData) {
+      console.log("Using cached data due to API error");
       return NextResponse.json(cachedData.data, {
         headers: {
-          "Cache-Control": "public, max-age=300",
-          ETag: `"${cachedData.timestamp}"`,
+          "Cache-Control": "public, max-age=60",
+          "X-Cache-Status": "error-fallback",
         },
       });
     }
 
-    if (axios.isAxiosError(error)) {
-      const status = error.response?.status || 500;
-      const message =
-        error.response?.data?.error || "Failed to fetch coin data";
-      return NextResponse.json({ error: message }, { status });
-    }
-
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    // Return empty array if no cache available
+    return NextResponse.json([], {
+      status: 200,
+      headers: {
+        "X-Error": "Failed to fetch market data",
+      },
+    });
   }
 }
