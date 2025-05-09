@@ -57,13 +57,7 @@ interface Project {
 
 export function CryptoMarketsPage() {
   const router = useRouter();
-  const {
-    data: knowledge = [],
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    isLoading: isLoadingKnowledge,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    refetch: refetchKnowledge,
-  } = useContextKnowledge();
+  const { data: knowledge = [] } = useContextKnowledge();
 
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   const {
