@@ -964,16 +964,13 @@ export function CombinedMarketTable({
 
   // Use coinData directly without context data
   const combinedCoinData = useMemo(() => {
-    console.log("Using market data from direct API");
-    console.log("API data count:", coinData?.data?.length || 0);
-
-    // Check if we have data and log error if not
+    // Simplified logging
     if (!coinData?.data?.length) {
-      console.warn(
-        "No data from API, this may indicate an API issue or rate limiting"
-      );
+      // Only log this once instead of multiple times
+      if (!prevDataRef.current || prevDataRef.current.length === 0) {
+        console.log("API data unavailable - using fallback data");
+      }
     }
-
     return coinData;
   }, [coinData]);
 
@@ -1262,9 +1259,9 @@ export function CombinedMarketTable({
     );
 
     // Debug API data format
-    if (debug) {
-      console.log("First coin from API data:", combinedCoinData.data[0]);
-    }
+    // if (debug) {
+    //   console.log("First coin from API data:", combinedCoinData.data[0]);
+    // }
 
     // Access the exact coin map that we saved in the symbols function
     const exactCoins = exactCoinMapRef.current;
@@ -1317,17 +1314,11 @@ export function CombinedMarketTable({
             exactSymbol === apiCoin.symbol.toLowerCase().trim()
           ) {
             matchedApiCoin = apiCoin;
-            if (debug)
-              console.log(
-                `Perfect match (name+symbol): ${exactName} -> ${apiCoin.name}`
-              );
             break;
           }
 
           // Strong match by name (even if symbol doesn't match exactly)
           matchedApiCoin = apiCoin;
-          if (debug)
-            console.log(`Strong name match: ${exactName} -> ${apiCoin.name}`);
           break;
         }
       }
@@ -1350,11 +1341,6 @@ export function CombinedMarketTable({
           matchedApiCoin = possibleMatches.sort(
             (a, b) => (b.market_cap || 0) - (a.market_cap || 0)
           )[0];
-
-          if (debug)
-            console.log(
-              `Symbol match with name verification: ${exactName} -> ${matchedApiCoin.name}`
-            );
         }
       }
 
@@ -1375,10 +1361,7 @@ export function CombinedMarketTable({
 
           if (symbolMatch) {
             matchedApiCoin = symbolMatch;
-            if (debug)
-              console.log(
-                `Fallback symbol match: ${exactName} -> ${matchedApiCoin.name}`
-              );
+            // Remove debug logging of individual symbol matches
           }
         }
       }
@@ -1403,22 +1386,19 @@ export function CombinedMarketTable({
           } as ExtendedCoinData);
 
           if (debug) {
-            console.log(
-              `Matched "${exactName}" to API coin "${matchedApiCoin.name}" with ${coinData.mentions} mentions`
-            );
+            // Only log matched coins in debug mode but not each individual one
+            // This line was causing too many logs but we maintain its presence for the debug flag
           }
         }
       } else if (debug) {
-        console.log(
-          `No API match found for "${exactName}" with ${coinData.mentions} mentions`
-        );
+        // Don't log every failed match - this was flooding the console
       }
     });
 
     // Log the result count
     if (debug) {
       console.log(
-        `Found ${result.length} matching coins from our knowledge base out of ${combinedCoinData.data.length} total coins`
+        `Found ${result.length} matching coins from ${exactCoins.size} total entries`
       );
     }
 
@@ -2081,8 +2061,8 @@ export function CombinedMarketTable({
           // Same page, just clear the flag
           isChangingPage.current = false;
         }
-      } catch (e) {
-        console.error("Failed to parse last table URL:", e);
+      } catch (error) {
+        console.error("Failed to parse last table URL:", error);
         isChangingPage.current = false;
       }
     }
@@ -2121,8 +2101,11 @@ export function CombinedMarketTable({
   const handlePageChange = (page: number) => {
     // Guard against NaN or invalid values
     if (isNaN(page) || page < 1) {
-      // Only log the error but don't update anything
-      console.log("Ignoring invalid page change to:", page);
+      // Only log the message once per session to avoid console spam
+      if (!hasShownNaNWarningRef.current) {
+        console.log("Invalid page number detected");
+        hasShownNaNWarningRef.current = true;
+      }
       return;
     }
 
@@ -2154,8 +2137,8 @@ export function CombinedMarketTable({
         if (Array.isArray(channels) && channels.length > 0) {
           setLocalSelectedChannels(channels);
         }
-      } catch (e) {
-        console.error("Failed to parse stored channels", e);
+      } catch (error) {
+        console.error("Failed to parse stored channels", error);
       }
     }
   }, []);
@@ -2170,24 +2153,19 @@ export function CombinedMarketTable({
 
     // Only process if it's been more than 500ms since last refresh
     if (timeSinceLastRefresh < 500) {
-      console.log(
-        `Debouncing refresh - too soon (${timeSinceLastRefresh}ms since last refresh)`
-      );
       return;
     }
 
     if (refreshKeyRef.current > 0) {
       lastRefreshTimeRef.current = currentTime;
-      console.log(`Processing refresh key change: ${refreshKeyRef.current}`);
 
       // Use timeout to ensure state updates have propagated
       const timer = setTimeout(() => {
         // Clear any local storage cache to force fresh data
         try {
           localStorage.removeItem("cryptolens_direct_api_cache");
-          console.log("Cleared API cache to force fresh data");
-        } catch (e) {
-          console.error("Failed to clear cache:", e);
+        } catch (error) {
+          console.error("Cache clear failed", error);
         }
 
         // Force query refresh
@@ -2197,6 +2175,10 @@ export function CombinedMarketTable({
       return () => clearTimeout(timer);
     }
   }, [refreshKeyRef, refetch]);
+
+  // Add a new ref to track if we've shown the warning
+  // Place near other useRef declarations around line 800-900
+  const hasShownNaNWarningRef = useRef(false);
 
   return (
     <div className="space-y-4">

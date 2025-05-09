@@ -1,14 +1,14 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import type { KnowledgeItem } from "@/types/knowledge";
-import { useState, useEffect } from "react";
+import type { KnowledgeItem, Project } from "@/types/knowledge";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { VideoModal } from "./modals/VideoModal";
 import { PlayCircle } from "lucide-react";
 import { StatsModal } from "./modals/StatsModal";
 import { useCoinGecko } from "@/contexts/CoinGeckoContext";
 import { useCMC } from "@/contexts/CMCContext";
-import { useCoinData } from "@/hooks/useCoinData";
+import { CoinData, useCoinDataQuery } from "@/hooks/useCoinData";
 
 interface KnowledgeBaseProps {
   items: KnowledgeItem[];
@@ -21,191 +21,146 @@ export default function KnowledgeBase({
 }: KnowledgeBaseProps) {
   const [activeVideo, setActiveVideo] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<KnowledgeItem | null>(null);
-  const { matchCoins: matchCoingecko, topCoins: geckoCoins } = useCoinGecko();
-  const { matchCoins: matchCMC, topCoins: cmcCoins } = useCMC();
+  const { topCoins: geckoCoins } = useCoinGecko();
+  const { topCoins: cmcCoins } = useCMC();
   const [matchedItems, setMatchedItems] = useState<KnowledgeItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [symbolsToFetch, setSymbolsToFetch] = useState<string[]>([]);
 
-  const { isLoading: isCoinsLoading, data: coinData } = useCoinData(
-    symbolsToFetch.length > 0 ? symbolsToFetch : ["bitcoin", "ethereum"],
-    0,
-    "full"
-  );
+  // Use useCoinDataQuery instead of the individual coin data hook
+  const { data: allCoinData, isLoading: isAllCoinsLoading } =
+    useCoinDataQuery();
 
+  // Debug logging for coin data - only in development mode
   useEffect(() => {
-    // Extract symbols from items if available
-    if (items && items.length > 0) {
-      const symbols = new Set<string>();
+    if (process.env.NODE_ENV !== "development") return;
 
-      // Loop through all items and their projects to extract coin names
-      items.forEach((item) => {
-        if (item.llm_answer && Array.isArray(item.llm_answer.projects)) {
-          item.llm_answer.projects.forEach((project) => {
-            if (
-              project.coin_or_project &&
-              project.coin_or_project.trim() !== ""
-            ) {
-              symbols.add(project.coin_or_project.toLowerCase());
-            }
-          });
+    // Simplify our logging to reduce console clutter
+    console.log("CoinData stats:", {
+      gecko: geckoCoins?.length || 0,
+      cmc: cmcCoins?.length || 0,
+      all: Array.isArray(allCoinData) ? allCoinData.length : 0,
+      loading: isAllCoinsLoading,
+    });
+  }, [geckoCoins, cmcCoins, isAllCoinsLoading, allCoinData]);
+
+  // Create a mapping of coin symbols/names to their data
+  const coinDataMap = useMemo(() => {
+    const map = new Map();
+
+    if (Array.isArray(allCoinData)) {
+      allCoinData.forEach((coin) => {
+        const typedCoin = coin as CoinData;
+        // Map by symbol (lowercase)
+        if (typedCoin.symbol) {
+          map.set(typedCoin.symbol.toLowerCase(), typedCoin);
+        }
+
+        // Also map by name (lowercase)
+        if (typedCoin.name) {
+          map.set(typedCoin.name.toLowerCase(), typedCoin);
         }
       });
-
-      // Convert to array and limit to 100 coins
-      if (symbols.size > 0) {
-        const symbolArray = Array.from(symbols)
-          .filter((s) => s.length >= 2) // Filter out very short symbols
-          .slice(0, 100); // Limit to 100 coins to prevent API overload
-
-        setSymbolsToFetch(symbolArray);
-      }
     }
-  }, [items]);
 
-  useEffect(() => {
-    // Debug logs to diagnose coin loading issues
-    console.log("CoinGecko topCoins length:", geckoCoins?.length || 0);
-    console.log("CMC topCoins length:", cmcCoins?.length || 0);
-    console.log("Coin data loading:", isCoinsLoading);
+    return map;
+  }, [allCoinData]);
 
-    // Log more details about coin data structure
-    if (coinData) {
-      console.log("Coin data structure:", {
-        hasData: !!coinData.data,
-        dataType: coinData.data ? typeof coinData.data : "undefined",
-        isArray: Array.isArray(coinData.data),
-        dataLength: Array.isArray(coinData.data)
-          ? coinData.data.length
-          : "not an array",
-        timestamp: coinData.timestamp,
-        sample:
-          Array.isArray(coinData.data) && coinData.data.length > 0
-            ? coinData.data.slice(0, 2)
-            : "no data",
+  // New matching function using the coinDataMap
+  const matchProjectsWithCoinData = useCallback(
+    (projects: Project[]) => {
+      return projects.map((project: Project) => {
+        if (!project.coin_or_project) return project;
+
+        const name = project.coin_or_project.toLowerCase();
+        // Try direct match
+        let coin = coinDataMap.get(name);
+
+        // If no match, try fuzzy match
+        if (!coin) {
+          // Try to match part of the name
+          const nameParts = name.split(/\s+/);
+          for (const part of nameParts) {
+            if (part.length >= 3) {
+              // Only try with meaningful parts
+              for (const [key, value] of Array.from(coinDataMap.entries())) {
+                if (key.includes(part) || part.includes(key)) {
+                  coin = value;
+                  break;
+                }
+              }
+              if (coin) break;
+            }
+          }
+        }
+
+        // If we found a match, determine the source (CoinGecko or CMC)
+        if (coin) {
+          // Check if this is a CMC coin or CoinGecko coin
+          if (coin.data_source === "cmc") {
+            return {
+              ...project,
+              cmc_matched: true,
+              cmc_data: coin,
+            };
+          } else {
+            return {
+              ...project,
+              coingecko_matched: true,
+              coingecko_data: coin,
+            };
+          }
+        }
+
+        return project;
       });
-    } else {
-      console.log("No coin data available");
-    }
-  }, [geckoCoins, cmcCoins, isCoinsLoading, coinData]);
+    },
+    [coinDataMap]
+  );
 
   useEffect(() => {
     const matchProjects = async () => {
       if (!items.length) {
-        console.log("Not matching projects - no items available");
+        // Skip verbose logging
         return;
       }
 
-      // Even if we're loading or have no coins, set the items without matching
-      if (isCoinsLoading) {
-        console.log(
-          "Coin data is still loading, showing items without matching for now"
-        );
+      // Wait for coin data to load
+      if (isAllCoinsLoading) {
+        // Set items without logging
         setMatchedItems(items);
         return;
       }
 
-      // Count how many coins we have to match against
-      const geckoCoinsCount = geckoCoins?.length || 0;
-      const cmcCoinsCount = cmcCoins?.length || 0;
-      const totalCoinsAvailable = geckoCoinsCount + cmcCoinsCount;
-
-      // If we have no coins to match against, just show the items as-is
-      if (totalCoinsAvailable === 0) {
-        console.log("No coin data available for matching, showing items as-is");
+      // If we have no coin data map, just show the items as-is
+      if (!coinDataMap.size) {
         setMatchedItems(items);
         return;
       }
 
       setIsProcessing(true);
       try {
-        console.log(
-          `Matching against ${geckoCoinsCount} CoinGecko coins and ${cmcCoinsCount} CMC coins`
-        );
-
-        // Log some sample projects to check
-        if (items.length > 0 && items[0].llm_answer.projects.length > 0) {
+        // Only log in development
+        if (process.env.NODE_ENV === "development") {
           console.log(
-            "Sample projects to match:",
-            items[0].llm_answer.projects.slice(0, 3)
+            `Matching ${items.length} items against ${coinDataMap.size} coins`
           );
         }
 
-        const matched = await Promise.all(
-          items.map(async (item) => {
-            const projects = item.llm_answer.projects;
+        // Map through all items and match their projects
+        const matched = items.map((item) => {
+          const projects = item.llm_answer.projects;
+          const matchedProjects = matchProjectsWithCoinData(projects);
 
-            // First try CoinGecko
-            const geckoMatched = matchCoingecko(projects);
-            const geckoMatchCount = geckoMatched.filter(
-              (p) => p.coingecko_matched
-            ).length;
+          return {
+            ...item,
+            llm_answer: {
+              ...item.llm_answer,
+              projects: matchedProjects,
+            },
+          };
+        });
 
-            // Then try CMC for any unmatched projects
-            const unmatchedProjects = geckoMatched.filter(
-              (p) => !p.coingecko_matched
-            );
-
-            const cmcMatched = await matchCMC(unmatchedProjects);
-            const cmcMatchCount = cmcMatched.filter(
-              (p) => p.cmc_matched
-            ).length;
-
-            // Log match statistics for debugging
-            if (projects.length > 0) {
-              console.log(
-                `Item ${
-                  item.id || item.video_title.slice(0, 20)
-                }: ${geckoMatchCount} CoinGecko matches, ${cmcMatchCount} CMC matches out of ${
-                  projects.length
-                } projects`
-              );
-            }
-
-            // Merge results
-            const finalProjects = projects.map((project) => {
-              const geckoMatch = geckoMatched.find(
-                (p) =>
-                  p.coin_or_project?.toLowerCase() ===
-                  project.coin_or_project?.toLowerCase()
-              );
-
-              if (geckoMatch?.coingecko_matched) {
-                return {
-                  ...project,
-                  coingecko_matched: true,
-                  coingecko_data: geckoMatch.coingecko_data,
-                };
-              }
-
-              const cmcMatch = cmcMatched.find(
-                (p) =>
-                  p.coin_or_project?.toLowerCase() ===
-                  project.coin_or_project?.toLowerCase()
-              );
-
-              if (cmcMatch?.cmc_matched) {
-                return {
-                  ...project,
-                  cmc_matched: true,
-                  cmc_data: cmcMatch.cmc_data,
-                };
-              }
-
-              return project;
-            });
-
-            return {
-              ...item,
-              llm_answer: {
-                ...item.llm_answer,
-                projects: finalProjects,
-              },
-            };
-          })
-        );
         setMatchedItems(matched);
-        console.log(`Successfully matched ${matched.length} items`);
       } catch (error) {
         console.error("Error matching projects:", error);
         // If matching fails, still show the items without matches
@@ -216,7 +171,7 @@ export default function KnowledgeBase({
     };
 
     matchProjects();
-  }, [items, matchCoingecko, matchCMC, isCoinsLoading, geckoCoins, cmcCoins]);
+  }, [items, coinDataMap, isAllCoinsLoading, matchProjectsWithCoinData]);
 
   // Loading skeleton component
   const LoadingSkeleton = () => (
@@ -255,7 +210,7 @@ export default function KnowledgeBase({
   );
 
   // Show skeleton immediately if matching or processing
-  if (isMatching || isProcessing || isCoinsLoading) {
+  if (isMatching || isProcessing || isAllCoinsLoading) {
     return <LoadingSkeleton />;
   }
 

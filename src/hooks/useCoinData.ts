@@ -258,7 +258,10 @@ export function useCoinData(
         );
 
         if (allSymbolsCached) {
-          console.log("Using cached CMC data");
+          // Only log cache usage in development
+          if (process.env.NODE_ENV === "development" && DEBUG_LOGS) {
+            console.log("Using cached CMC data");
+          }
           return cachedData;
         }
       }
@@ -280,7 +283,10 @@ export function useCoinData(
           );
 
           const coinCount = Object.keys(response.data.data || {}).length;
-          if (DEBUG_LOGS) console.log(`CMC response: ${coinCount} coins`);
+          // Only log in debug mode and development environment
+          if (DEBUG_LOGS && process.env.NODE_ENV === "development") {
+            console.log(`CMC response: ${coinCount} coins`);
+          }
 
           // Save response to cache
           if (
@@ -296,6 +302,7 @@ export function useCoinData(
             if (retries < MAX_RETRIES) {
               // Exponential backoff: 2s, 4s, 8s
               const delay = Math.pow(2, retries + 1) * 1000;
+              // Keep this log as it's important for debugging rate limiting
               console.log(
                 `CMC API rate limited. Retrying in ${delay / 1000}s...`
               );
@@ -354,9 +361,14 @@ export function useCoinData(
       }
 
       // Only log this once at the end - more concise summary
-      if (missingSymbols.length > 0 && cmcCount > 0) {
+      if (
+        missingSymbols.length > 0 &&
+        cmcCount > 0 &&
+        process.env.NODE_ENV === "development" &&
+        DEBUG_LOGS
+      ) {
         console.log(
-          `Data: CoinGecko: ${geckoCount}, CMC: ${cmcCount}, Total: ${uniqueCoins.size} coins`
+          `Data sources: CG=${geckoCount}, CMC=${cmcCount}, Total=${uniqueCoins.size}`
         );
       }
 
@@ -435,10 +447,12 @@ export function useCoinDataQuery() {
 
       // Always use cached data if available, even if expired
       if (cachedData?.data && Object.keys(cachedData.data).length > 0) {
-        console.log(
-          "Using cached direct API data",
-          cachedData.isExpired ? "(expired)" : ""
-        );
+        if (process.env.NODE_ENV === "development" && DEBUG_LOGS) {
+          console.log(
+            "Using cached direct API data",
+            cachedData.isExpired ? "(expired)" : ""
+          );
+        }
         return Object.values(cachedData.data);
       }
 

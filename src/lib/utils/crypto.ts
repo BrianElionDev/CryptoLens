@@ -12,7 +12,10 @@ interface NormalizedCoinData extends CoinData {
 
 export async function fetchCryptoData(symbols: string[]): Promise<ApiResponse> {
   try {
-    console.log("Fetching data for symbols:", symbols);
+    // Only log in development mode with fewer details
+    if (process.env.NODE_ENV === "development") {
+      console.log(`Fetching data for ${symbols.length} symbols`);
+    }
 
     // Try CoinGecko first
     const geckoResponse = await fetch("/api/coingecko", {
@@ -32,16 +35,12 @@ export async function fetchCryptoData(symbols: string[]): Promise<ApiResponse> {
         (s) => !foundSymbols.has(s.toLowerCase())
       );
 
-      console.log("CoinGecko found symbols:", Array.from(foundSymbols));
-      console.log("Missing symbols to try with CMC:", missingSymbols);
-
       // If all symbols found in CoinGecko, return the data
       if (missingSymbols.length === 0) {
         return geckoData;
       }
 
       // Try CMC for missing symbols
-      console.log("Trying CMC for missing symbols");
       const cmcResponse = await fetch("/api/coinmarketcap", {
         method: "POST",
         headers: {
@@ -56,7 +55,7 @@ export async function fetchCryptoData(symbols: string[]): Promise<ApiResponse> {
 
       if (cmcResponse.ok) {
         const cmcData = await cmcResponse.json();
-        console.log("CMC found data:", Object.keys(cmcData.data));
+
         // Merge data from both APIs
         return {
           data: { ...geckoData.data, ...cmcData.data },

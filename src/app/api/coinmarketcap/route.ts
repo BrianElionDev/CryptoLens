@@ -77,7 +77,10 @@ let marketDataCache: {
 } | null = null;
 
 export async function GET() {
-  console.log("CMC API Key:", CMC_API_KEY);
+  // Hide API key from logs
+  if (process.env.NODE_ENV === "development") {
+    console.log("Testing CMC API connection");
+  }
 
   if (!CMC_API_KEY) {
     return NextResponse.json(
@@ -131,7 +134,10 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  console.log("CMC API called with request");
+  // Reduce verbosity - only log that the API was called
+  if (process.env.NODE_ENV === "development") {
+    console.log("CMC API called");
+  }
 
   if (!CMC_API_KEY) {
     console.log("CMC API key missing");
@@ -144,7 +150,8 @@ export async function POST(request: Request) {
   let requestData;
   try {
     requestData = await request.json();
-    console.log("CMC API request data:", requestData);
+    // Remove the verbose logging of all symbols in the request data
+    // console.log("CMC API request data:", requestData);
   } catch {
     return NextResponse.json(
       { error: "Invalid JSON in request body" },

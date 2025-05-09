@@ -2,13 +2,16 @@
 
 import { useKnowledge } from "@/contexts/ClientKnowledgeProvider";
 export function useContextKnowledge() {
-  const { knowledgeData, isLoading, error, refetch } = useKnowledge();
+  const { knowledgeData, isLoading, error, totalItems, isComplete, progress } =
+    useKnowledge();
 
   return {
     data: knowledgeData,
     isLoading,
     isError: !!error,
     error,
-    refetch,
+    totalItems,
+    isComplete,
+    progress,
   };
 }
