@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
-import ChatWindow from './ChatWindow';
+import N8nChatWindow from './N8nChatWindow';
 
 const ChatButton = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -27,7 +27,7 @@ const ChatButton = () => {
 
   return (
     <>
-      {isOpen && <ChatWindow onClose={() => setIsOpen(false)} />}
+      {isOpen && <N8nChatWindow onClose={() => setIsOpen(false)} />}
       
       <button
         type="button"
