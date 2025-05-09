@@ -9,6 +9,20 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
+
+// Create a client-only component for the channel counter
+const ChannelCounter = ({ count }: { count: number }) => (
+  <span className="ml-2 text-blue-400">({count})</span>
+);
+
+// Create a dynamic import with SSR disabled
+const ClientOnlyChannelCounter = dynamic(
+  () => Promise.resolve(ChannelCounter),
+  {
+    ssr: false, // This ensures the component only renders on the client
+  }
+);
 
 interface ChannelSelectorProps {
   channels: string[];
@@ -58,9 +72,7 @@ export function ChannelSelector({
         >
           Channels
           {selectedChannels.length > 0 && (
-            <span className="ml-2 text-blue-400">
-              ({selectedChannels.length})
-            </span>
+            <ClientOnlyChannelCounter count={selectedChannels.length} />
           )}
         </Button>
       </DropdownMenuTrigger>

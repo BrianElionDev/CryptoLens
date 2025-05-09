@@ -16,7 +16,7 @@ import {
   Tag,
   CircleDollarSign,
 } from "lucide-react";
-import Image from "next/image";
+import { CoinImage } from "@/components/ui/CoinImage";
 import CoinChart from "./CoinChart";
 import { useQuery } from "@tanstack/react-query";
 import { use } from "react";
@@ -217,13 +217,16 @@ export default function CoinPage({
           <div className="flex items-center gap-4">
             <div className="relative w-16 h-16">
               {displayData.image ? (
-                <Image
+                <CoinImage
                   src={displayData.image}
                   alt={`${displayData.name} logo`}
-                  fill
-                  className="rounded-full object-cover ring-2 ring-blue-500/20"
-                  sizes="64px"
-                  priority
+                  width={64}
+                  height={64}
+                  className="w-16 h-16 object-cover ring-2 ring-blue-500/20"
+                  coinId={displayData.coingecko_id || displayData.cmc_id}
+                  source={
+                    displayData.data_source === "cmc" ? "cmc" : "coingecko"
+                  }
                 />
               ) : (
                 <CoinsIcon

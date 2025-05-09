@@ -4,10 +4,10 @@ import toast from "react-hot-toast";
 export const queryConfig = {
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60, // 1 minute
-      gcTime: 1000 * 60 * 60, // 1 hour
+      staleTime: 1000 * 60 * 15, // 15 minutes (increased from 5 minutes)
+      gcTime: 1000 * 60 * 120, // 2 hours (increased from 1 hour)
       refetchOnWindowFocus: true,
-      refetchOnMount: true,
+      refetchOnMount: true, // Keep as boolean for compatibility
       refetchOnReconnect: true,
       retry: 3,
       retryDelay: (attemptIndex: number) =>

@@ -1,0 +1,176 @@
+/* Custom table styles for CoinMarketCap-like design */
+
+.cryptoTableContainer {
+  @apply w-full h-full bg-gradient-to-r from-blue-900/10 via-purple-900/10 to-pink-900/10 backdrop-blur-sm rounded-xl border border-gray-800/20;
+}
+
+.cryptoTable {
+  @apply w-full table-fixed border-collapse;
+}
+
+.cryptoTable th {
+  @apply py-4 px-4 text-sm font-medium text-gray-400 border-b border-gray-800/50 hover:text-gray-200 transition-colors cursor-pointer;
+}
+
+.cryptoTable td {
+  @apply py-5 px-4 text-gray-300 border-t border-gray-800/50;
+}
+
+.cryptoTable tr {
+  @apply hover:bg-blue-500/5 transition-colors cursor-pointer;
+}
+
+.favoriteStar {
+  @apply text-gray-600 hover:text-yellow-400 transition-colors cursor-pointer;
+}
+
+.favoriteStarActive {
+  @apply text-yellow-400;
+}
+
+.cryptoTabsContainer {
+  @apply border-b border-gray-800 overflow-x-auto;
+}
+
+.cryptoTabs {
+  @apply flex space-x-1 min-w-max pb-2;
+}
+
+.cryptoTab {
+  @apply px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap;
+}
+
+.cryptoTabActive {
+  @apply bg-blue-500/10 text-blue-500 border-b-2 border-blue-500;
+}
+
+.cryptoTabInactive {
+  @apply text-gray-400 hover:text-white hover:bg-gray-800/40;
+}
+
+.cryptoFilterButton {
+  @apply bg-gray-800/50 hover:bg-gray-700/50 text-white border border-gray-700 rounded-md px-4 py-2 flex items-center gap-1.5;
+}
+
+.cryptoToolbar {
+  @apply flex items-center space-x-2 overflow-x-auto py-2;
+}
+
+.cryptoToolbarButton {
+  @apply rounded-md px-4 py-2 flex items-center gap-1.5;
+}
+
+.cryptoToolbarButtonActive {
+  @apply bg-gray-900 text-white hover:bg-gray-800;
+}
+
+.cryptoToolbarButtonInactive {
+  @apply text-gray-400 hover:text-white hover:bg-gray-800/40;
+}
+
+.cryptoPriceUp {
+  @apply text-emerald-400 font-medium transition-colors duration-300;
+}
+
+.cryptoPriceDown {
+  @apply text-red-400 font-medium transition-colors duration-300;
+}
+
+.cryptoPriceNeutral {
+  @apply text-gray-100 font-medium transition-colors duration-300;
+}
+
+.cryptoColumnsSelector {
+  @apply fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm;
+}
+
+.glowChange {
+  animation: glow 2s ease-out;
+}
+
+@keyframes glow {
+  0% {
+    box-shadow: 0 0 0 rgba(59, 130, 246, 0);
+  }
+  20% {
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.6);
+  }
+  100% {
+    box-shadow: 0 0 0 rgba(59, 130, 246, 0);
+  }
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+  .cryptoTable th,
+  .cryptoTable td {
+    @apply px-2 py-3;
+  }
+
+  .cryptoTabs {
+    @apply pb-1;
+  }
+
+  .cryptoTab {
+    @apply px-3 py-1.5 text-xs;
+  }
+
+  .cryptoToolbarButton {
+    @apply px-3 py-1.5 text-xs;
+  }
+}
+
+/* Custom scrollbar styles */
+.scrollbarHide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbarHide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Make sure the global class also works for any element */
+/* Replace the problematic global selectors */
+.scrollbarHideGlobal::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbarHideGlobal {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Tooltip styles */
+.cryptoTooltip {
+  @apply px-2 py-1 bg-gray-800 text-gray-200 text-xs rounded shadow-lg z-50;
+}
+
+/* Loading animation */
+@keyframes dots {
+  0%,
+  20% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.animateDots {
+  animation: dots 1.4s infinite;
+}
+
+/* Pagination styles */
+.cryptoPaginationButton {
+  @apply p-2 rounded-md border border-gray-700 bg-gray-800/50 text-gray-400 
+         hover:bg-gray-700/50 hover:text-gray-200 transition-colors disabled:opacity-50 
+         disabled:cursor-not-allowed disabled:hover:bg-gray-800/50 disabled:hover:text-gray-400;
+}
+
+.cryptoPaginationInfo {
+  @apply text-sm text-gray-400;
+}

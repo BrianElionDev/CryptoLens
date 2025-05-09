@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import type { KnowledgeItem } from "@/types/knowledge";
+import { prefetchKnowledgeData } from "@/lib/server/prefetch";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -22,49 +22,82 @@ interface RawProject {
   category?: string[];
 }
 
-export async function GET() {
-  try {
-    const { data: knowledgeData, error } = await supabase
-      .from("knowledge")
-      .select("*")
-      .order("date", { ascending: false });
+// Cache for 5 minutes
+export const revalidate = 300;
 
-    if (error) {
-      console.error("Knowledge fetch error:", error);
-      throw error;
+// Set this to true to bypass prefetch and query Supabase directly
+// from the API route (needed for client-side only approach)
+const BYPASS_PREFETCH = false;
+
+export async function GET(request: Request) {
+  try {
+    const url = new URL(request.url);
+    const limitParam = url.searchParams.get("limit");
+    const offset = parseInt(url.searchParams.get("offset") || "0", 10);
+    const limit =
+      limitParam === "all" ? undefined : parseInt(limitParam || "10", 10);
+
+    console.log(
+      `API route: Processing request with limit=${limitParam}, offset=${offset}`
+    );
+
+    let knowledgeData;
+
+    // Choose data source strategy
+    if (BYPASS_PREFETCH) {
+      // Option 1: Direct database query (better for pure client-side approaches)
+      console.log("API route: Querying database directly");
+
+      let query = supabase
+        .from("knowledge")
+        .select("*")
+        .order("date", { ascending: false });
+
+      // Apply pagination if needed
+      if (typeof limit === "number") {
+        query = query.range(offset, offset + limit - 1);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw new Error(`Database query error: ${error.message}`);
+      }
+
+      knowledgeData = data || [];
+
+      console.log(
+        `API route: Direct query returned ${knowledgeData.length} items`
+      );
+    } else {
+      // Option 2: Use prefetch function (better for hybrid approaches)
+      console.log("API route: Using prefetch function");
+      knowledgeData = await prefetchKnowledgeData(limit, offset);
+      console.log(`API route: Prefetch returned ${knowledgeData.length} items`);
     }
 
     if (!knowledgeData || knowledgeData.length === 0) {
-      console.log("No knowledge data found");
-      return NextResponse.json({ knowledge: [] });
+      // No data case - return empty array instead of error
+      return NextResponse.json([], {
+        headers: {
+          "Cache-Control": "public, max-age=300",
+        },
+      });
     }
 
-    console.log(`Found ${knowledgeData.length} knowledge entries`);
+    console.log(
+      `API route: Returning ${knowledgeData.length} knowledge entries`
+    );
 
-    const transformedData: KnowledgeItem[] = knowledgeData.map((item) => ({
-      id: item.id,
-      date: item.date,
-      transcript: item.transcript,
-      corrected_transcript: item.corrected_transcript,
-      video_title: item.video_title,
-      "channel name": item["channel name"],
-      link: item.link || "",
-      answer: item.answer || "",
-      summary: item.summary || "",
-      usage: item.usage || 0,
-      hasUpdatedTranscript: item.hasUpdatedTranscript,
-      llm_answer: item.llm_answer || { projects: [] },
-      video_type: item.video_type || "video",
-    }));
-
-    return NextResponse.json({ knowledge: transformedData });
-  } catch (error: unknown) {
-    console.error("GET Error:", error);
-    return NextResponse.json(
-      {
-        error: "Failed to fetch knowledge data",
-        details: error instanceof Error ? error.message : String(error),
+    return NextResponse.json(knowledgeData, {
+      headers: {
+        "Cache-Control": "public, max-age=300",
       },
+    });
+  } catch (error) {
+    console.error("Error in knowledge API route:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch knowledge data" },
       { status: 500 }
     );
   }

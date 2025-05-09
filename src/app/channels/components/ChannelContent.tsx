@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useMemo, useState } from "react";
-import { useKnowledgeData } from "@/hooks/useCoinData";
+import { useContextKnowledge } from "@/hooks/useContextKnowledge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -14,9 +14,29 @@ import {
 import { ChannelAnalytics } from "./ChannelAnalytics";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useChannelStore } from "@/stores/channelStore";
+import dynamic from "next/dynamic";
+
+// Define the category type
+interface CategoryObject {
+  name: string;
+  [key: string]: unknown;
+}
+
+// Create a client-only component for the channel counter
+const ChannelCounter = ({ count }: { count: number }) => (
+  <span className="ml-2 text-blue-400">({count})</span>
+);
+
+// Create a dynamic import with SSR disabled
+const ClientOnlyChannelCounter = dynamic(
+  () => Promise.resolve(ChannelCounter),
+  {
+    ssr: false, // This ensures the component only renders on the client
+  }
+);
 
 export const ChannelContent = () => {
-  const { data: knowledge } = useKnowledgeData();
+  const { data: knowledge } = useContextKnowledge();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { selectedChannels, setSelectedChannels } = useChannelStore();
@@ -98,9 +118,10 @@ export const ChannelContent = () => {
           : [item.llm_answer.projects];
 
         projects.forEach((project) => {
-          const coin = project.coin_or_project;
+          const coin = project.coin_or_project || "Unknown";
           const rpoints = project.rpoints || 0;
           const categories = project.category || [];
+          const mentions = project.total_count || 1;
 
           if (!data.has(coin)) {
             data.set(coin, {
@@ -113,7 +134,7 @@ export const ChannelContent = () => {
           const coinData = data.get(coin)!;
           coinData.rpoints += rpoints;
           categories.forEach((cat) => coinData.categories.add(cat));
-          coinData.mentions += 1;
+          coinData.mentions += mentions;
         });
       }
     });
@@ -147,9 +168,7 @@ export const ChannelContent = () => {
             >
               Channels
               {selectedChannels.length > 0 && (
-                <span className="ml-2 text-blue-400">
-                  ({selectedChannels.length})
-                </span>
+                <ClientOnlyChannelCounter count={selectedChannels.length} />
               )}
             </Button>
           </DropdownMenuTrigger>
@@ -365,20 +384,20 @@ export const ChannelContent = () => {
                       </thead>
                       <tbody className="divide-y divide-gray-800/30">
                         {aggregatedData.map(
-                          ({ coin, rpoints, categories, mentions }) => (
+                          ({ coin, rpoints, categories, mentions }, idx) => (
                             <tr
-                              key={coin}
+                              key={`coin-${idx}-${coin}`}
                               className="hover:bg-gray-800/30 transition-colors"
                             >
                               <td className="px-6 py-4">
                                 <div className="flex items-center">
                                   <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center mr-3">
                                     <span className="text-indigo-400 font-medium">
-                                      {coin.charAt(0)}
+                                      {(coin && coin.charAt(0)) || "-"}
                                     </span>
                                   </div>
                                   <span className="font-medium text-indigo-300">
-                                    {coin}
+                                    {coin || "Unknown"}
                                   </span>
                                 </div>
                               </td>
@@ -398,14 +417,23 @@ export const ChannelContent = () => {
                               </td>
                               <td className="px-6 py-4">
                                 <div className="flex flex-wrap gap-2">
-                                  {categories.map((category) => (
-                                    <span
-                                      key={category}
-                                      className="px-2 py-1 text-xs font-medium bg-gray-800/50 text-gray-400 rounded-lg whitespace-nowrap"
-                                    >
-                                      {category}
-                                    </span>
-                                  ))}
+                                  {categories.map((category, catIdx) => {
+                                    // Handle case where category could be an object
+                                    const categoryText =
+                                      typeof category === "object"
+                                        ? (category as CategoryObject).name ||
+                                          JSON.stringify(category)
+                                        : category;
+
+                                    return (
+                                      <span
+                                        key={`${coin}-${categoryText}-${catIdx}`}
+                                        className="px-2 py-1 text-xs font-medium bg-gray-800/50 text-gray-400 rounded-lg whitespace-nowrap"
+                                      >
+                                        {categoryText}
+                                      </span>
+                                    );
+                                  })}
                                 </div>
                               </td>
                             </tr>

@@ -1,13 +1,19 @@
-// Server Component
-import { prefetchKnowledgeData } from "@/lib/server/prefetch";
-import { AnalyticsClient } from "@/app/analytics/components/AnalyticsClient";
+"use client";
 
-export default async function AnalyticsPage() {
-  const initialData = await prefetchKnowledgeData();
+import { Suspense } from "react";
+import { CryptoMarketsPage } from "@/app/analytics/components/CryptoMarketsPage";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
 
+export default function AnalyticsPage() {
   return (
-    <div className="space-y-6">
-      <AnalyticsClient initialData={initialData} />
-    </div>
+    <Suspense
+      fallback={
+        <div className="pt-24 px-4 text-center flex justify-center">
+          <LoadingSpinner />
+        </div>
+      }
+    >
+      <CryptoMarketsPage />
+    </Suspense>
   );
 }

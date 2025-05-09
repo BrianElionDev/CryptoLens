@@ -48,7 +48,7 @@ export const ChannelAnalytics = ({ knowledge }: ChannelAnalyticsProps) => {
           : [item.llm_answer.projects];
 
         projects.forEach((project: Project) => {
-          const coin = project.coin_or_project;
+          const coin = project.coin_or_project || "Unknown";
           const rpoints = project.rpoints || 0;
           const categories = project.category || [];
 
@@ -149,7 +149,13 @@ export const ChannelAnalytics = ({ knowledge }: ChannelAnalyticsProps) => {
         {/* highest rated coin */}
         <StatCard
           title="Highest Rated Coin"
-          value={topCoin.name}
+          value={
+            typeof topCoin.name === "string"
+              ? topCoin.name
+              : topCoin.name
+              ? String(topCoin.name)
+              : "N/A"
+          }
           icon={<CurrencyDollarIcon className="w-5 h-5" />}
         />
         {/* categories */}
@@ -161,7 +167,13 @@ export const ChannelAnalytics = ({ knowledge }: ChannelAnalyticsProps) => {
         {/* highest rated category */}
         <StatCard
           title="Highest Rated Category"
-          value={processedData.categoryDistribution[0]?.name || "N/A"}
+          value={
+            typeof processedData.categoryDistribution[0]?.name === "string"
+              ? processedData.categoryDistribution[0]?.name
+              : processedData.categoryDistribution[0]?.name
+              ? String(processedData.categoryDistribution[0]?.name)
+              : "N/A"
+          }
           icon={<TagIcon className="w-5 h-5" />}
         />
       </div>
@@ -252,6 +264,13 @@ export const ChannelAnalytics = ({ knowledge }: ChannelAnalyticsProps) => {
                       (coin) => ({
                         coin: coin.coin,
                         channel: coin.channel,
+                        categories: coin.categories,
+                        date: new Date().toISOString().split("T")[0], // Use current date as fallback
+                        rpoints:
+                          processedData.coinDistribution.find(
+                            (c) => c.name === coin.coin
+                          )?.value || 0,
+                        total_count: 1, // Default value
                       })
                     ),
                   }}
@@ -282,8 +301,11 @@ export const ChannelAnalytics = ({ knowledge }: ChannelAnalyticsProps) => {
                   processedData={{
                     categoryDistribution: processedData.categoryDistribution,
                     coinCategories: processedData.coinCategories.map(
-                      (coin) => ({
+                      (coin, idx) => ({
                         ...coin,
+                        date: new Date().toISOString().split("T")[0],
+                        total_count: 1,
+                        id: `${coin.coin}-${coin.channel}-${idx}`,
                         channel: knowledge[0]?.["channel name"] || "",
                         rpoints:
                           processedData.coinDistribution.find(

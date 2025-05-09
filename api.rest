@@ -95,3 +95,17 @@ Accept: {{contentType}}
 POST {{baseUrl}}/api/revalidate
 Content-Type: {{contentType}}
 Accept: {{contentType}} 
+
+### Fetch all coingecko categories
+GET https://api.coingecko.com/api/v3/coins/categories/list
+Accept: {{contentType}}
+
+### Coingecko trending coins
+GET https://api.coingecko.com/api/v3/search/trending
+Accept: {{contentType}}
+
+### Fear & Greed Index
+GET https://api.alternative.me/fng/?limit=1
+Accept: {{contentType}}
+
+

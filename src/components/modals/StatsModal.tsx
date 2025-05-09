@@ -36,9 +36,43 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
       projectNames: item.llm_answer.projects.map((p) => p.coin_or_project),
     });
 
-    return matchCoins(item.llm_answer.projects).filter(
+    // Check for any projects that are already matched from either source
+    const preMatchedProjects = item.llm_answer.projects.filter(
+      (p) =>
+        (p.coingecko_matched && p.coingecko_data) ||
+        (p.cmc_matched && p.cmc_data)
+    );
+
+    if (preMatchedProjects.length > 0) {
+      console.log(
+        `Using ${preMatchedProjects.length} pre-matched projects (CoinGecko: ${
+          preMatchedProjects.filter((p) => p.coingecko_matched).length
+        }, CMC: ${preMatchedProjects.filter((p) => p.cmc_matched).length})`
+      );
+      return preMatchedProjects;
+    }
+
+    // Otherwise try to match coins again with both providers
+    // First get CoinGecko matches
+    const geckoMatched = matchCoins(item.llm_answer.projects).filter(
       (p) => p.coingecko_matched
     );
+
+    // We'll assume that projects not in the CoinGecko matched set may need CMC matching
+    // This is a simplified approach since we don't have direct access to the CMC matching here
+    if (geckoMatched.length === 0) {
+      // If no CoinGecko matches, check if item has any CMC matches
+      console.log(
+        "No CoinGecko matches found, using pre-matched CMC data if available"
+      );
+
+      // Return any projects with CMC data
+      return item.llm_answer.projects.filter(
+        (p) => p.cmc_matched && p.cmc_data
+      );
+    }
+
+    return geckoMatched;
   }, [topCoins, item.llm_answer.projects, isLoadingCoins, matchCoins]);
 
   const matches = useMemo(() => {
@@ -174,7 +208,36 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
         );
       }
 
-      const projects = validProjects;
+      // Debug the projects to see what we're getting
+      console.log("Stats modal projects:", {
+        validProjects: validProjects.length,
+        firstProject: validProjects[0]?.coin_or_project,
+        allProjects: item.llm_answer.projects.length,
+        geckoMatched: item.llm_answer.projects.filter(
+          (p) => p.coingecko_matched && p.coingecko_data
+        ).length,
+        cmcMatched: item.llm_answer.projects.filter(
+          (p) => p.cmc_matched && p.cmc_data
+        ).length,
+      });
+
+      // First try to use validProjects from the memo function which checks both sources
+      let projects = validProjects;
+
+      // If no valid projects found through that mechanism, directly check the projects array
+      // for any that have either CoinGecko or CMC data
+      if (!projects || projects.length === 0) {
+        console.log(
+          "No valid projects found in memo, checking direct project data"
+        );
+        projects = item.llm_answer.projects.filter(
+          (p) =>
+            (p.coingecko_matched && p.coingecko_data) ||
+            (p.cmc_matched && p.cmc_data)
+        );
+
+        console.log(`Found ${projects.length} projects with direct filtering`);
+      }
 
       if (!projects || projects.length === 0) {
         return (
@@ -204,7 +267,14 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
 
       // Sort projects by rpoints in descending order
       const top3Projects = [...projects]
-        .sort((a, b) => b.rpoints - a.rpoints)
+        .sort((a, b) => {
+          // First, prioritize by rpoints
+          if (b.rpoints !== a.rpoints) {
+            return b.rpoints - a.rpoints;
+          }
+          // If rpoints are equal, prioritize by total count
+          return (b.total_count || 0) - (a.total_count || 0);
+        })
         .slice(0, 3);
 
       return (
@@ -226,6 +296,9 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
                     R Points
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-cyan-200 uppercase tracking-wider">
+                    Source
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-cyan-200 uppercase tracking-wider">
                     Categories
                   </th>
                 </tr>
@@ -237,6 +310,12 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
                     const isTopProject = top3Projects.some(
                       (p) => p.coin_or_project === project.coin_or_project
                     );
+
+                    // Determine the data source
+                    const dataSource = project.coingecko_matched
+                      ? "CoinGecko"
+                      : "CMC";
+
                     return (
                       <tr
                         key={`${project.coin_or_project}-${index}`}
@@ -301,6 +380,17 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
                             }
                           >
                             {project.rpoints}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-sm">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                              project.coingecko_matched
+                                ? "bg-blue-900/50 text-blue-300 border border-blue-500/20"
+                                : "bg-purple-900/50 text-purple-300 border border-purple-500/20"
+                            }`}
+                          >
+                            {dataSource}
                           </span>
                         </td>
                         <td className="px-4 py-2 text-sm">

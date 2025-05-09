@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useKnowledgeData } from "@/hooks/useCoinData";
+import { useContextKnowledge } from "@/hooks/useContextKnowledge";
 import { KnowledgeItem, Project } from "@/types/knowledge";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,16 @@ import {
 } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import React from "react";
-import Image from "next/image";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { Home } from "lucide-react";
+import { CoinImage } from "@/components/ui/CoinImage";
 
 interface CategoryDetailData {
   id: string;
@@ -69,7 +78,7 @@ export default function CategoryDetailPage() {
       ? decodeURIComponent(params.id).replace(/\s+/g, "-").toLowerCase()
       : "";
   const { data: knowledge = [], isLoading: knowledgeLoading } =
-    useKnowledgeData();
+    useContextKnowledge();
 
   const [categoryData, setCategoryData] = useState<CategoryDetailData | null>(
     null
@@ -211,9 +220,12 @@ export default function CategoryDetailPage() {
           }
 
           // Normalize project categories
-          const projectCategories = project.category.map((c) =>
-            (c || "").toLowerCase().trim()
-          );
+          const projectCategories = project.category.map((c) => {
+            // Handle non-string or null/undefined values
+            if (c === null || c === undefined) return "";
+            if (typeof c !== "string") return String(c).toLowerCase().trim();
+            return c.toLowerCase().trim();
+          });
 
           // Check if any of our category variants match any project category
           const categoryMatches = projectCategories.some(
@@ -221,19 +233,27 @@ export default function CategoryDetailPage() {
               // Direct match with any variant
               categoryVariants.has(projectCat) ||
               // Or partial match for special cases
-              (categoryId === "layer-1" && projectCat.includes("layer")) ||
-              (categoryId === "meme-token" && projectCat.includes("meme")) ||
+              (categoryId === "layer-1" &&
+                projectCat &&
+                projectCat.includes("layer")) ||
+              (categoryId === "meme-token" &&
+                projectCat &&
+                projectCat.includes("meme")) ||
               (categoryId === "gaming-entertainment-social" &&
+                projectCat &&
                 (projectCat.includes("game") ||
                   projectCat.includes("gaming") ||
                   projectCat.includes("meta"))) ||
               (categoryId === "artificial-intelligence-ai" &&
+                projectCat &&
                 (projectCat.includes("ai") ||
                   projectCat.includes("intelligence"))) ||
               (categoryId === "decentralized-finance-defi" &&
+                projectCat &&
                 (projectCat.includes("defi") ||
                   projectCat.includes("finance"))) ||
               (categoryId === "payment" &&
+                projectCat &&
                 (projectCat.includes("payment") ||
                   projectCat.includes("transaction") ||
                   projectCat.includes("remittance") ||
@@ -256,11 +276,11 @@ export default function CategoryDetailPage() {
               const coin = coinData.get(project.coin_or_project)!;
               const rpoints = Number(project.rpoints) || 0;
               coin.rpoints += isNaN(rpoints) ? 0 : rpoints;
-              coin.mentions += 1;
+              coin.mentions += project.total_count || 1;
 
               // Update totals
               totalRpoints += isNaN(rpoints) ? 0 : rpoints;
-              totalMentions += 1;
+              totalMentions += project.total_count || 1;
 
               if (isRecent) recentActivity += 1;
 
@@ -638,44 +658,6 @@ export default function CategoryDetailPage() {
                       </thead>
                       <tbody>
                         {categoryAnalytics.coinBreakdown.map((coin) => {
-                          // Calculate total mentions across all videos
-                          const totalMentions = knowledge.reduce(
-                            (total, item) => {
-                              if (item.llm_answer?.projects) {
-                                const projects = Array.isArray(
-                                  item.llm_answer.projects
-                                )
-                                  ? item.llm_answer.projects
-                                  : [item.llm_answer.projects];
-
-                                return (
-                                  total +
-                                  projects.reduce((sum, project) => {
-                                    const symbolMatch =
-                                      project.coin_or_project?.match(
-                                        /\(\$([^)]+)\)/
-                                      );
-                                    const symbol = symbolMatch
-                                      ? symbolMatch[1].toLowerCase()
-                                      : "";
-                                    const cleanName = project.coin_or_project
-                                      .replace(/\s*\(\$[^)]+\)/g, "")
-                                      .toLowerCase()
-                                      .trim();
-                                    const key = symbol || cleanName;
-
-                                    if (key === coin.name.toLowerCase()) {
-                                      return sum + (project.total_count || 1);
-                                    }
-                                    return sum;
-                                  }, 0)
-                                );
-                              }
-                              return total;
-                            },
-                            0
-                          );
-
                           return (
                             <tr
                               key={coin.name}
@@ -697,7 +679,7 @@ export default function CategoryDetailPage() {
                                 {coin.rpoints}
                               </td>
                               <td className="py-3 px-4 text-right text-purple-300">
-                                {totalMentions.toLocaleString()}
+                                {coin.mentions.toLocaleString()}
                               </td>
                               <td className="py-3 px-4 text-right">
                                 <Link
@@ -746,16 +728,38 @@ export default function CategoryDetailPage() {
       </div>
 
       <div className="container mx-auto px-4 md:px-6 lg:px-20 py-8 relative z-10">
+        {/* Breadcrumb Navigation */}
+        <div className="flex items-center justify-between mb-8">
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink href="/" className="flex items-center gap-2">
+                  <Home className="w-4 h-4" />
+                  Home
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbLink href="/categories">Categories</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>{displayName}</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 border-teal-500/30 text-teal-400 hover:bg-teal-500/10"
+            onClick={() => router.push(backButtonInfo.href)}
+          >
+            <ArrowLeft className="w-4 h-4" />
+            {backButtonInfo.text}
+          </Button>
+        </div>
+
         <div className="mb-8">
-          <Link href={backButtonInfo.href}>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="mb-4 text-gray-300 hover:text-green-300 hover:bg-green-500/10"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" /> {backButtonInfo.text}
-            </Button>
-          </Link>
           <h1 className="text-3xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-green-400 via-emerald-500 to-teal-500">
             {displayName}
           </h1>
@@ -858,13 +862,15 @@ export default function CategoryDetailPage() {
                           key={index}
                           className="flex items-center bg-black/60 p-3 rounded-lg ring-2 ring-cyan-500/20"
                         >
-                          <Image
+                          <CoinImage
                             src={coinImageUrl}
                             alt={`${categoryData.top_3_coins_id[index]} coin`}
                             width={48}
                             height={48}
                             className="rounded-full"
-                            style={{ height: "auto" }}
+                            fallbackText={categoryData.top_3_coins_id[index]}
+                            coinId={categoryData.top_3_coins_id[index]}
+                            source="coingecko"
                           />
                           <span className="ml-3 text-gray-300 capitalize">
                             {categoryData.top_3_coins_id[index]}
@@ -991,38 +997,6 @@ export default function CategoryDetailPage() {
                   </thead>
                   <tbody>
                     {categoryAnalytics.coinBreakdown.map((coin) => {
-                      const totalMentions = knowledge.reduce((total, item) => {
-                        if (item.llm_answer?.projects) {
-                          const projects = Array.isArray(
-                            item.llm_answer.projects
-                          )
-                            ? item.llm_answer.projects
-                            : [item.llm_answer.projects];
-
-                          return (
-                            total +
-                            projects.reduce((sum, project) => {
-                              const symbolMatch =
-                                project.coin_or_project?.match(/\(\$([^)]+)\)/);
-                              const symbol = symbolMatch
-                                ? symbolMatch[1].toLowerCase()
-                                : "";
-                              const cleanName = project.coin_or_project
-                                .replace(/\s*\(\$[^)]+\)/g, "")
-                                .toLowerCase()
-                                .trim();
-                              const key = symbol || cleanName;
-
-                              if (key === coin.name.toLowerCase()) {
-                                return sum + (project.total_count || 1);
-                              }
-                              return sum;
-                            }, 0)
-                          );
-                        }
-                        return total;
-                      }, 0);
-
                       return (
                         <tr
                           key={coin.name}
@@ -1042,7 +1016,7 @@ export default function CategoryDetailPage() {
                             {coin.rpoints}
                           </td>
                           <td className="py-3 px-4 text-right text-emerald-300">
-                            {totalMentions.toLocaleString()}
+                            {coin.mentions.toLocaleString()}
                           </td>
                           <td className="py-3 px-4 text-right">
                             <Link
