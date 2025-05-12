@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "../styles/chat-overlay-fix.css";
 import { Toaster } from "react-hot-toast";
 import Navbar from "@/components/Navbar";
 import ChatButton from "@/components/ChatButton";
