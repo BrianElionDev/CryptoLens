@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import N8nChatWindow from './N8nChatWindow';
 
@@ -14,7 +14,6 @@ const ChatButton = () => {
     '/channels',
     '/analytics',
     '/', // Crypto Lens home page
-    '/faq',
     '/autofetch',
     '/categories'
   ];
@@ -22,6 +21,27 @@ const ChatButton = () => {
   // Check if current page should show the chat button
   const shouldShow = allowedPages.some(page => 
     pathname === page || pathname.startsWith(`${page}/`));
+  
+  // Add cleanup effect when path changes
+  useEffect(() => {
+    // If navigating away, close the chat to prevent overlay issues
+    setIsOpen(false);
+    
+    // Additional cleanup for any persistent overlay elements
+    if (document.body.classList.contains('chat-overlay-active')) {
+      document.body.classList.remove('chat-overlay-active');
+    }
+    
+    // Force cleanup of any lingering overlay elements
+    setTimeout(() => {
+      const overlays = document.querySelectorAll('.fixed.inset-0.bg-black.bg-opacity-50');
+      overlays.forEach(overlay => {
+        if (overlay instanceof HTMLElement) {
+          overlay.style.display = 'none';
+        }
+      });
+    }, 100);
+  }, [pathname]);
   
   if (!shouldShow) return null;
 

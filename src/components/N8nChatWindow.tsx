@@ -342,6 +342,30 @@ const N8nChatWindow = ({ onClose }: { onClose: () => void }) => {
     }
   }, [chats, initializeN8nChat]);
 
+  // Add this useEffect to add and remove a body class when the chat window is active
+  useEffect(() => {
+    // Add class to body when component mounts
+    document.body.classList.add('chat-overlay-active');
+    
+    // Cleanup function to remove class when component unmounts
+    return () => {
+      document.body.classList.remove('chat-overlay-active');
+      
+      // Extra cleanup for any persistent overlays
+      const persistentOverlays = document.querySelectorAll('.persist-overlay');
+      persistentOverlays.forEach(overlay => {
+        (overlay as HTMLElement).style.display = 'none';
+      });
+    };
+  }, []);
+
+  // Modify the onClose handler to ensure cleanup
+  const handleClose = useCallback(() => {
+    // Remove the class before calling the onClose function
+    document.body.classList.remove('chat-overlay-active');
+    onClose();
+  }, [onClose]);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-gray-900 w-full max-w-[900px] h-[80vh] rounded-lg shadow-2xl flex flex-col overflow-hidden relative">
@@ -377,7 +401,7 @@ const N8nChatWindow = ({ onClose }: { onClose: () => void }) => {
             </button>
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="p-2 rounded-full hover:bg-gray-700 text-gray-300 z-50"
               aria-label="Close chat"
             >

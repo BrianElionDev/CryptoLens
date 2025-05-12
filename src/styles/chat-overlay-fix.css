@@ -1,0 +1,30 @@
+/* Chat overlay fix styles */
+.chat-overlay-active {
+  overflow: hidden; /* Prevent scrolling while chat is open */
+}
+
+/* Fix for persistent overlays on specific pages */
+body:not(.chat-overlay-active) .fixed.inset-0.bg-black.bg-opacity-50 {
+  display: none !important;
+}
+
+/* Add specific z-index for page backgrounds to ensure they don't conflict with the overlay */
+.min-h-screen.bg-gradient-to-br.from-gray-900.via-blue-900\/50.to-gray-900,
+.min-h-screen.bg-gradient-to-br.from-black.via-blue-950\/20.to-black,
+.min-h-screen.bg-gradient-to-br.from-black.via-green-900\/20.to-black {
+  position: relative;
+  z-index: 0;
+}
+
+/* Force remove any lingering overlay elements */
+body:not(.chat-overlay-active) [class*="bg-black/50"],
+body:not(.chat-overlay-active) [class*="bg-black/80"],
+body:not(.chat-overlay-active) [class*="bg-opacity-50"] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Ensure normal pages background is visible */
+body:not(.chat-overlay-active) .fixed.inset-0.overflow-hidden.pointer-events-none {
+  z-index: 0 !important;
+} 
