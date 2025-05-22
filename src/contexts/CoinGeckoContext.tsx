@@ -233,6 +233,9 @@ export function CoinGeckoProvider({ children }: { children: React.ReactNode }) {
 
   // Refresh every 5 minutes
   useEffect(() => {
+    // Only set up interval if not in a serverless function
+    if (typeof window === "undefined") return;
+
     const interval = setInterval(() => {
       void fetchTopCoins();
     }, 5 * 60 * 1000);
