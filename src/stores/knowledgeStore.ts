@@ -48,11 +48,19 @@ const safeStorage = {
 };
 
 // Default state
-const defaultState = {
+const defaultState: Omit<
+  KnowledgeState,
+  | "setSearchTerm"
+  | "setFilterChannel"
+  | "setDateFilter"
+  | "setSortBy"
+  | "setCurrentPage"
+  | "reset"
+> = {
   searchTerm: "",
   filterChannel: "all",
-  dateFilter: "all",
-  sortBy: "date",
+  dateFilter: "all" as DateFilterType,
+  sortBy: "date" as SortByType,
   currentPage: 1,
 };
 
