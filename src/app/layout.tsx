@@ -5,6 +5,7 @@ import { Toaster } from "react-hot-toast";
 import Navbar from "@/components/Navbar";
 import ChatButton from "@/components/ChatButton";
 import { AppProviders } from "@/providers/AppProviders";
+import Script from "next/script";
 
 export const metadata: Metadata = {
   title: "CryptoLens",
@@ -59,6 +60,41 @@ export default function RootLayout({
           />
           <ChatButton />
         </AppProviders>
+
+        {/* Error monitoring script */}
+        <Script id="error-handling" strategy="afterInteractive">
+          {`
+            window.addEventListener('error', function(event) {
+              console.error('Global error caught:', event.error);
+              
+              // Prevent client crashes from taking down the whole app
+              if (event.error && event.error.message) {
+                // Log the error details - in production, you'd send this to a monitoring service
+                console.error('Error details:', {
+                  message: event.error.message,
+                  stack: event.error.stack,
+                  type: event.error.name
+                });
+              }
+              
+              event.preventDefault();
+            });
+
+            window.addEventListener('unhandledrejection', function(event) {
+              console.error('Unhandled Promise Rejection:', event.reason);
+              
+              // Log the rejection details
+              if (event.reason) {
+                console.error('Rejection details:', {
+                  message: event.reason.message || 'Unknown Promise rejection',
+                  stack: event.reason.stack || 'No stack trace available',
+                });
+              }
+              
+              event.preventDefault();
+            });
+          `}
+        </Script>
       </body>
     </html>
   );

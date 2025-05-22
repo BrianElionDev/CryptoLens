@@ -425,12 +425,14 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      onClick={onClose}
+      data-active="true"
     >
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.9, opacity: 0 }}
-        className="bg-gray-800 rounded-xl p-6 max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+        className="bg-gray-800 rounded-xl p-6 max-w-4xl w-full max-h-[80vh] overflow-hidden flex flex-col z-[51]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
@@ -453,7 +455,7 @@ export function StatsModal({ item, onClose }: StatsModalProps) {
               }}
               className="p-2 hover:bg-gray-800/50 rounded-lg transition-colors"
             >
-              <X className="w-5 h-5 text-gray-400" />
+              <X className="w-5 h-5 text-gray-400 hover:text-white" />
             </button>
           </div>
         </div>

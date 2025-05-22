@@ -1,11 +1,29 @@
 /* Chat overlay fix styles */
-.chat-overlay-active {
-  overflow: hidden; /* Prevent scrolling while chat is open */
+.chat-overlay-active,
+.video-overlay-active {
+  overflow: hidden !important; /* Prevent scrolling while modal is open */
+}
+
+/* Override all overlay blocking for categories page */
+body:has(.space-y-6[style*="position: relative"]) [class*="bg-black"],
+body:has(.space-y-6[style*="position: relative"]) [class*="bg-opacity"],
+body:has(.space-y-6[style*="position: relative"]) [class*="backdrop-blur"] {
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
 }
 
 /* Fix for persistent overlays on specific pages */
-body:not(.chat-overlay-active) .fixed.inset-0.bg-black.bg-opacity-50 {
+body:not(.chat-overlay-active):not(.video-overlay-active)
+  .fixed.inset-0.bg-black.bg-opacity-50:not([data-active="true"]),
+body:not(.chat-overlay-active):not(.video-overlay-active)
+  .fixed.inset-0.bg-black.bg-opacity-80:not([data-active="true"]),
+body:not(.chat-overlay-active):not(.video-overlay-active)
+  .fixed.inset-0.bg-black:not([data-active="true"]) {
   display: none !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
 }
 
 /* Add specific z-index for page backgrounds to ensure they don't conflict with the overlay */
@@ -16,15 +34,125 @@ body:not(.chat-overlay-active) .fixed.inset-0.bg-black.bg-opacity-50 {
   z-index: 0;
 }
 
-/* Force remove any lingering overlay elements */
-body:not(.chat-overlay-active) [class*="bg-black/50"],
-body:not(.chat-overlay-active) [class*="bg-black/80"],
-body:not(.chat-overlay-active) [class*="bg-opacity-50"] {
+/* Force remove any lingering overlay elements - BUT EXCLUDE CATEGORY CARDS */
+body:not(.chat-overlay-active):not(.video-overlay-active):not(
+    :has(.space-y-6[style*="position: relative"])
+  )
+  [class*="bg-black/50"]:not([data-active="true"]):not(
+    .bg-black\/80.backdrop-blur-sm.ring-2
+  ),
+body:not(.chat-overlay-active):not(.video-overlay-active):not(
+    :has(.space-y-6[style*="position: relative"])
+  )
+  [class*="bg-black/80"]:not([data-active="true"]):not(
+    .bg-black\/80.backdrop-blur-sm.ring-2
+  ),
+body:not(.chat-overlay-active):not(.video-overlay-active):not(
+    :has(.space-y-6[style*="position: relative"])
+  )
+  [class*="bg-opacity-50"]:not([data-active="true"]):not(
+    .bg-black\/80.backdrop-blur-sm.ring-2
+  ) {
   opacity: 0 !important;
   pointer-events: none !important;
+  visibility: hidden !important;
+}
+
+/* Ensure category cards are always visible */
+.grid.grid-cols-1.md\:grid-cols-2.lg\:grid-cols-3.gap-6 > div {
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
+/* Fix for categories page elements to ensure they're interactive */
+.categories-page button,
+.categories-page select,
+.categories-page input,
+.categories-page a,
+.categories-page [role="button"],
+button[variant="outline"],
+select.appearance-none,
+input[type="text"],
+.flex.flex-wrap.gap-2 > * {
+  position: relative !important;
+  z-index: 20 !important;
+  pointer-events: auto !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* Ensure controls in header are clickable */
+.flex.flex-col.md\:flex-row.justify-between.items-start.md\:items-center.gap-4 {
+  position: relative;
+  z-index: 20;
+}
+
+/* Ensure modals and dropdown menus appear above other elements */
+[class*="backdrop-blur-sm"].rounded-xl,
+[class*="backdrop-blur-sm"].rounded-lg,
+.absolute.inset-0.z-50 {
+  z-index: 30 !important;
+  pointer-events: auto !important;
 }
 
 /* Ensure normal pages background is visible */
-body:not(.chat-overlay-active) .fixed.inset-0.overflow-hidden.pointer-events-none {
+body:not(.chat-overlay-active):not(.video-overlay-active)
+  .fixed.inset-0.overflow-hidden.pointer-events-none {
   z-index: 0 !important;
-} 
+}
+
+/* Make n8n chat's overlay not block clicks when chat is closed */
+body:not(.chat-overlay-active) #n8n-chat-container,
+body:not(.chat-overlay-active) .n8n-chat-window {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* Ensure Knowledge Base components are always clickable */
+.grid.gap-6 > div {
+  position: relative;
+  z-index: 5;
+}
+
+/* Fix for video modal overlay */
+.video-modal-overlay {
+  z-index: 100 !important;
+  backdrop-filter: blur(16px) !important;
+  background-color: rgba(0, 0, 0, 0.9) !important;
+}
+
+/* When video is active, make sure overlay is visible */
+.video-overlay-active .video-modal-overlay {
+  display: block !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  opacity: 1 !important;
+}
+
+/* Prevent overlays from conflicting */
+[data-active="true"] {
+  z-index: 100 !important;
+  pointer-events: auto !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* Add higher z-index for modal content to appear above overlay */
+.z-\[101\] {
+  z-index: 101 !important;
+}
+
+/* Special fix for 3 colored circles */
+body:not(.video-overlay-active) .video-modal-overlay {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
+/* Add protection to ensure click events work correctly */
+.cursor-pointer {
+  position: relative;
+  z-index: 10;
+}
