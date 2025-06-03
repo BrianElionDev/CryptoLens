@@ -106,36 +106,59 @@ const KnowledgeBaseWithPagination = ({
 
       {/* Pagination */}
       {items.length > itemsPerPage && (
-        <div className="mt-8 flex flex-wrap justify-center items-center gap-4">
-          <button
-            onClick={onPrevPage}
-            disabled={currentPage === 1}
-            className="px-6 py-3 rounded-xl bg-gray-900/80 backdrop-blur-sm text-gray-200 hover:text-white transition-all duration-200 border border-blue-500/30 hover:border-blue-400/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 group"
-          >
-            <svg
-              className="w-5 h-5 text-blue-400 group-hover:text-blue-300 transition-colors"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center sm:items-center sm:gap-4 w-full">
+          <div className="flex flex-row gap-2 w-full sm:w-auto justify-center">
+            <button
+              onClick={onPrevPage}
+              disabled={currentPage === 1}
+              className="w-full sm:w-auto px-4 py-2 rounded-lg bg-gray-900/80 backdrop-blur-sm text-gray-200 hover:text-white transition-all duration-200 border border-blue-500/30 hover:border-blue-400/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 group"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-            <span>Previous</span>
-          </button>
+              <svg
+                className="w-5 h-5 text-blue-400 group-hover:text-blue-300 transition-colors"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 19l-7-7 7-7"
+                />
+              </svg>
+              <span>Previous</span>
+            </button>
 
-          <div className="flex items-center space-x-2">
+            <button
+              onClick={onNextPage}
+              disabled={currentPage === Math.ceil(items.length / itemsPerPage)}
+              className="w-full sm:w-auto px-4 py-2 rounded-lg bg-gray-900/80 backdrop-blur-sm text-gray-200 hover:text-white transition-all duration-200 border border-blue-500/30 hover:border-blue-400/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 group"
+            >
+              <span>Next</span>
+              <svg
+                className="w-5 h-5 text-blue-400 group-hover:text-blue-300 transition-colors"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </button>
+          </div>
+
+          <div className="flex flex-row flex-wrap gap-2 w-full sm:w-auto justify-center">
             {Array.from({
               length: Math.ceil(items.length / itemsPerPage),
             }).map((_, i) => (
               <button
                 key={i}
                 onClick={() => onPageSelect(i + 1)}
-                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 ${
+                className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-200 text-sm font-medium ${
                   currentPage === i + 1
                     ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg shadow-blue-500/20"
                     : "bg-gray-900/80 backdrop-blur-sm text-gray-300 hover:text-white border border-blue-500/30 hover:border-blue-400/50"
@@ -145,27 +168,6 @@ const KnowledgeBaseWithPagination = ({
               </button>
             ))}
           </div>
-
-          <button
-            onClick={onNextPage}
-            disabled={currentPage === Math.ceil(items.length / itemsPerPage)}
-            className="px-6 py-3 rounded-xl bg-gray-900/80 backdrop-blur-sm text-gray-200 hover:text-white transition-all duration-200 border border-blue-500/30 hover:border-blue-400/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 group"
-          >
-            <span>Next</span>
-            <svg
-              className="w-5 h-5 text-blue-400 group-hover:text-blue-300 transition-colors"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 5l7 7-7 7"
-              />
-            </svg>
-          </button>
         </div>
       )}
     </>
@@ -458,10 +460,10 @@ export default function KnowledgePage() {
               </div>
             </div>
 
-            {/* Controls Bar */}
-            <div className="flex items-center gap-3">
-              {/* Search */}
-              <div className="relative group flex-1">
+            {/* Controls Bar - Responsive: Search on top, filters below */}
+            <div className="flex flex-col gap-2">
+              {/* Search Row */}
+              <div className="relative group w-full">
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg blur opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                 <div className="relative flex items-center">
                   <input
@@ -489,46 +491,44 @@ export default function KnowledgePage() {
                   </svg>
                 </div>
               </div>
-
-              {/* Channel Filter */}
-              <div className="relative w-48">
-                <select
-                  value={filterChannel}
-                  onChange={(e) => {
-                    setFilterChannel(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  aria-label="Filter by channel"
-                  className="w-full appearance-none bg-gray-900/60 border border-gray-700/50 rounded-lg py-2 px-4 pr-8 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 hover:bg-gray-800/60 transition-colors"
-                >
-                  <option value="all">All Channels</option>
-                  {channels.map((channel) => (
-                    <option key={channel} value={channel}>
-                      {channel}
-                    </option>
-                  ))}
-                </select>
-                <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
-                  <svg
-                    className="w-4 h-4 text-gray-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+              {/* Filters Row - All controls in one row */}
+              <div className="flex flex-row gap-2 w-full items-center">
+                {/* Channel Filter */}
+                <div className="relative w-full max-w-[160px]">
+                  <select
+                    value={filterChannel}
+                    onChange={(e) => {
+                      setFilterChannel(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    aria-label="Filter by channel"
+                    className="w-full appearance-none bg-gray-900/60 border border-gray-700/50 rounded-lg py-2 px-4 pr-8 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 hover:bg-gray-800/60 transition-colors"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 9l-7 7-7-7"
-                    />
-                  </svg>
+                    <option value="all">Channels</option>
+                    {channels.map((channel) => (
+                      <option key={channel} value={channel}>
+                        {channel}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                    <svg
+                      className="w-4 h-4 text-gray-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 9l-7 7-7-7"
+                      />
+                    </svg>
+                  </div>
                 </div>
-              </div>
-
-              {/* Sort Controls */}
-              <div className="flex items-center gap-2">
-                {/* Sort Type */}
-                <div className="relative w-32">
+                {/* Sort Controls */}
+                <div className="relative w-full max-w-[140px]">
                   <select
                     value={sortBy}
                     onChange={(e) => {
@@ -558,10 +558,9 @@ export default function KnowledgePage() {
                     </svg>
                   </div>
                 </div>
-
                 {/* Filter Button with Modern Hover Menu */}
-                <div className="relative group">
-                  <button className="p-2 rounded-lg bg-gray-900/60 border border-gray-700/50 text-gray-400 hover:text-gray-300 hover:bg-gray-800/60 transition-colors flex items-center gap-2">
+                <div className="relative group w-full max-w-[90px]">
+                  <button className="w-full p-2 rounded-lg bg-gray-900/60 border border-gray-700/50 text-gray-400 hover:text-gray-300 hover:bg-gray-800/60 transition-colors flex items-center gap-2">
                     <svg
                       className="w-5 h-5"
                       fill="none"

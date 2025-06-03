@@ -150,34 +150,24 @@ export function CombinedMarketTable({
 
   const defaultChannels = processedData.channels;
 
-  const initializeChannels = (): string[] => {
-    // First try to get from session storage
-    try {
-      if (typeof window !== "undefined") {
-        const storedChannels = sessionStorage.getItem("cryptoSelectedChannels");
-        if (storedChannels) {
-          const parsedChannels = JSON.parse(storedChannels);
-          if (Array.isArray(parsedChannels) && parsedChannels.length > 0) {
-            return parsedChannels;
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Error restoring channels from session storage:", error);
-    }
-    // Fallback to default channels
-    return defaultChannels;
-  };
-
-  // Internal channel state
+  // Initialize with safe defaults to prevent hydration mismatches
   const [internalSelectedChannels, setInternalSelectedChannels] =
-    useState<string[]>(initializeChannels);
+    useState<string[]>(defaultChannels);
 
   // Handle channel changes
   const handleChannelsChange = (channels: string[]) => {
     setInternalSelectedChannels(channels);
-    // Store in session storage for persistence
-    sessionStorage.setItem("cryptoSelectedChannels", JSON.stringify(channels));
+    // Only access sessionStorage client-side
+    if (typeof window !== "undefined") {
+      try {
+        sessionStorage.setItem(
+          "cryptoSelectedChannels",
+          JSON.stringify(channels)
+        );
+      } catch (error) {
+        console.error("Failed to save channels to sessionStorage:", error);
+      }
+    }
     // Notify parent component if callback exists
     if (onChannelsChange) {
       onChannelsChange(channels);
@@ -193,14 +183,59 @@ export function CombinedMarketTable({
     setLocalSelectedChannels(selectedChannels);
   }, [selectedChannels]);
 
-  // Parse the current page directly from URL with useCallback
+  // Parse the current page directly from URL with useCallback - only run client-side
   const getCurrentPageFromUrl = useCallback(() => {
-    const pageParam = searchParams.get("page");
-    return pageParam ? parseInt(pageParam) : 1;
+    if (typeof window === "undefined") return 1;
+    try {
+      const pageParam = searchParams.get("page");
+      return pageParam ? parseInt(pageParam) : 1;
+    } catch (error) {
+      console.error("Failed to parse page from URL:", error);
+      return 1;
+    }
   }, [searchParams]);
 
-  // Use the function for initial state
-  const [currentPage, setCurrentPage] = useState(getCurrentPageFromUrl());
+  // Initialize with safe default to prevent hydration mismatches
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Restore state from sessionStorage and URL after hydration
+  useEffect(() => {
+    // Only run on client-side after hydration
+    if (typeof window === "undefined") return;
+
+    // Restore channels from sessionStorage
+    try {
+      const storedChannels = sessionStorage.getItem("cryptoSelectedChannels");
+      if (storedChannels) {
+        const parsedChannels = JSON.parse(storedChannels);
+        if (Array.isArray(parsedChannels) && parsedChannels.length > 0) {
+          setInternalSelectedChannels(parsedChannels);
+          setLocalSelectedChannels(parsedChannels);
+        }
+      }
+    } catch (error) {
+      console.error("Error restoring channels from sessionStorage:", error);
+    }
+
+    // Restore page from URL
+    const urlPage = getCurrentPageFromUrl();
+    if (urlPage !== currentPage) {
+      setCurrentPage(urlPage);
+    }
+
+    // Restore page from sessionStorage as fallback
+    try {
+      const savedPage = sessionStorage.getItem("cryptoTableCurrentPage");
+      if (savedPage && !searchParams.get("page")) {
+        const pageNum = parseInt(savedPage);
+        if (!isNaN(pageNum) && pageNum > 0) {
+          setCurrentPage(pageNum);
+        }
+      }
+    } catch (error) {
+      console.error("Error restoring page from sessionStorage:", error);
+    }
+  }, []); // Empty dependency array - only run once after mount
 
   // First, add a flag to prevent overwriting URL changes
   const isChangingPage = useRef(false);
@@ -271,7 +306,13 @@ export function CombinedMarketTable({
       setCurrentPage(page);
 
       // Store in session storage for persistence across reloads
-      sessionStorage.setItem("cryptoTableCurrentPage", page.toString());
+      if (typeof window !== "undefined") {
+        try {
+          sessionStorage.setItem("cryptoTableCurrentPage", page.toString());
+        } catch (error) {
+          console.error("Failed to save page to sessionStorage:", error);
+        }
+      }
 
       // Clear the flags after a delay
       setTimeout(() => {
@@ -310,10 +351,16 @@ export function CombinedMarketTable({
         isChangingPage.current = true;
         // Update our state to match the URL
         setCurrentPage(pageFromUrl);
-        sessionStorage.setItem(
-          "cryptoTableCurrentPage",
-          pageFromUrl.toString()
-        );
+        if (typeof window !== "undefined") {
+          try {
+            sessionStorage.setItem(
+              "cryptoTableCurrentPage",
+              pageFromUrl.toString()
+            );
+          } catch (error) {
+            console.error("Failed to save page to sessionStorage:", error);
+          }
+        }
         // Release the lock after a delay
         setTimeout(() => {
           isChangingPage.current = false;
@@ -347,6 +394,16 @@ export function CombinedMarketTable({
       );
       isChangingPage.current = true;
       setCurrentPage(pageFromUrl);
+      if (typeof window !== "undefined") {
+        try {
+          sessionStorage.setItem(
+            "cryptoTableCurrentPage",
+            pageFromUrl.toString()
+          );
+        } catch (error) {
+          console.error("Failed to save page to sessionStorage:", error);
+        }
+      }
       setTimeout(() => {
         isChangingPage.current = false;
       }, 100);
@@ -1585,9 +1642,9 @@ export function CombinedMarketTable({
       {
         accessorKey: "index",
         header: "#",
-        size: 60, // Reduced size for mobile
+        size: 40, // Reduced from 60
         cell: ({ row }: { row: Row<ExtendedCoinData> }) => (
-          <div className="text-[15px] text-gray-400 font-medium">
+          <div className="text-xs sm:text-sm text-gray-400 font-medium">
             {row.index + 1}
           </div>
         ),
@@ -1595,16 +1652,16 @@ export function CombinedMarketTable({
       {
         accessorKey: "name",
         header: "Coins",
-        size: 300,
+        size: 180, // Reduced from 300
         cell: ({ row }: { row: Row<ExtendedCoinData> }) => (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 h-12 w-full overflow-hidden">
             {row.original.image && (
               <CoinImage
                 src={row.original.image}
                 alt={row.original.name || ""}
-                width={32}
-                height={32}
-                className="w-8 h-8 md:w-8 md:h-8"
+                width={24}
+                height={24}
+                className="w-5 h-5 sm:w-6 sm:h-6"
                 coinId={row.original.cmc_id || row.original.id}
                 fallbackText={row.original.symbol?.substring(0, 2)}
                 source={
@@ -1612,45 +1669,42 @@ export function CombinedMarketTable({
                 }
               />
             )}
-            <div className="flex flex-col items-start">
-              <div className="flex items-center gap-1 md:gap-2">
-                <span className="text-[14px] md:text-[15px] font-medium text-gray-100 truncate max-w-[80px] md:max-w-[200px]">
-                  {row.original.name}
-                </span>
-                <span
-                  className={`text-[10px] md:text-xs px-1 md:px-2 py-0.5 rounded-full ${
-                    row.original.data_source === "cmc"
-                      ? "bg-purple-500/20 text-purple-400"
-                      : "bg-blue-500/20 text-blue-400"
-                  }`}
-                >
-                  {row.original.data_source === "cmc" ? "CMC" : "CG"}
-                </span>
-              </div>
-              <span className="text-[10px] md:text-xs text-gray-400">
-                {row.original.symbol?.toUpperCase()}
-              </span>
-            </div>
+            <span className="text-xs sm:text-sm font-medium text-gray-100 truncate max-w-[70px] sm:max-w-[140px] whitespace-nowrap">
+              {row.original.name}
+            </span>
+            <span className="text-[10px] sm:text-xs text-gray-400 ml-1 whitespace-nowrap">
+              {row.original.symbol?.toUpperCase()}
+            </span>
+            <span
+              className={`text-[8px] sm:text-xs px-1 py-0.5 rounded ml-1 ${
+                row.original.data_source === "cmc"
+                  ? "bg-purple-500/20 text-purple-400"
+                  : "bg-blue-500/20 text-blue-400"
+              }`}
+            >
+              {row.original.data_source === "cmc" ? "CMC" : "CG"}
+            </span>
           </div>
         ),
       },
       {
         accessorKey: "price",
         header: "Price",
+        size: 100, // Reduced from 120
         cell: ({ row }: { row: Row<ExtendedCoinData> }) => {
           const price = row.original.price || row.original.current_price || 0;
           const priceChange = row.original.price_change_percentage_24h || 0;
 
-          // Format price based on its value
+          // Format price based on its value - more compact for mobile
           let formattedPrice;
           if (price < 0.0000001) {
-            formattedPrice = price.toFixed(10).replace(/\.?0+$/, "");
-          } else if (price < 0.00001) {
             formattedPrice = price.toFixed(8).replace(/\.?0+$/, "");
-          } else if (price < 0.01) {
+          } else if (price < 0.00001) {
             formattedPrice = price.toFixed(6).replace(/\.?0+$/, "");
-          } else if (price < 1) {
+          } else if (price < 0.01) {
             formattedPrice = price.toFixed(4).replace(/\.?0+$/, "");
+          } else if (price < 1) {
+            formattedPrice = price.toFixed(3).replace(/\.?0+$/, "");
           } else if (price < 100) {
             formattedPrice = price.toFixed(2).replace(/\.?0+$/, "");
           } else {
@@ -1659,7 +1713,7 @@ export function CombinedMarketTable({
 
           return (
             <div
-              className={`font-medium transition-colors duration-300 text-left text-[12px] md:text-[15px] ${
+              className={`font-medium transition-colors duration-300 text-left text-xs sm:text-sm ${
                 priceChange > 0
                   ? "text-green-400"
                   : priceChange < 0
@@ -1671,17 +1725,16 @@ export function CombinedMarketTable({
             </div>
           );
         },
-        size: 120, // Reduced for mobile
       },
       {
         accessorKey: "percent_change_24h",
         header: "24h %",
-        size: 100, // Reduced for mobile
+        size: 80, // Reduced from 100
         cell: ({ row }: { row: Row<ExtendedCoinData> }) => {
           const value = row.original.percent_change_24h ?? 0;
           return (
             <div
-              className={`text-[12px] md:text-[15px] font-medium ${
+              className={`text-xs sm:text-sm font-medium ${
                 value >= 0 ? "text-emerald-400" : "text-red-400"
               }`}
             >
@@ -1692,30 +1745,30 @@ export function CombinedMarketTable({
       },
       {
         accessorKey: "volume_24h",
-        header: "24h Volume",
-        size: 150, // Reduced for mobile
+        header: "24h Vol",
+        size: 90, // Reduced from 150, shorter header
         cell: ({ row }: { row: Row<ExtendedCoinData> }) => (
-          <div className="text-[12px] md:text-[15px] font-medium text-gray-100">
+          <div className="text-xs sm:text-sm font-medium text-gray-100">
             {formatCurrency(row.original.volume_24h)}
           </div>
         ),
       },
       {
         accessorKey: "market_cap",
-        header: "Market Cap",
-        size: 150, // Reduced for mobile
+        header: "Mkt Cap",
+        size: 90, // Reduced from 150, shorter header
         cell: ({ row }: { row: Row<ExtendedCoinData> }) => (
-          <div className="text-[12px] md:text-[15px] font-medium text-gray-100">
+          <div className="text-xs sm:text-sm font-medium text-gray-100">
             {formatCurrency(row.original.market_cap)}
           </div>
         ),
       },
       {
         accessorKey: "total_mentions",
-        header: "Total Mentions",
-        size: 120, // Reduced for mobile
+        header: "Mentions",
+        size: 80, // Reduced from 120, shorter header
         cell: ({ row }: { row: Row<ExtendedCoinData> }) => (
-          <div className="text-[12px] md:text-[15px] font-medium text-blue-300">
+          <div className="text-xs sm:text-sm font-medium text-blue-300">
             {(row.original.total_mentions || 0).toLocaleString()}
           </div>
         ),
@@ -2203,301 +2256,318 @@ export function CombinedMarketTable({
         onCategoryFilter={handleCategoryFilter}
       />
 
-      {/* Status bar with count */}
-      <div className="flex justify-between items-center">
-        <div className="text-sm text-gray-400">
-          {dateFilterActive && matchingCoinsCount === 0
-            ? "No coins found for this date range"
-            : `${sortedCoinData.length} coins`}
-          {/* Replace with client-only component */}
-          {isFetching && <ClientLoadingDots />}
-        </div>
-
-        {/* Date filter controls */}
-        <div className="flex items-center gap-2">
-          {/* Basic toggle buttons for All Time / Most Recent */}
-          <div className="flex items-center bg-gray-800/70 border border-gray-700 rounded-lg overflow-hidden">
-            <button
-              className={`px-3 py-1.5 text-sm font-medium transition-colors ${
-                datePreset === "all-time"
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-300 hover:bg-gray-700/50"
-              }`}
-              onClick={() => {
-                console.log("Toggling to ALL TIME directly");
-                // Direct implementation to set to All Time
-                setDatePreset("all-time");
-                setShowMostRecent(false);
-                setDateRange({ from: undefined, to: undefined });
-                setDateFilterActive(false);
-                // Also update the filter settings object
-                setFilterSettings((prev) => ({
-                  ...prev,
-                  datePreset: "all-time",
-                  showMostRecent: false,
-                  dateRange: { from: undefined, to: undefined },
-                }));
-                // Force refresh
-                refreshKeyRef.current += 1;
-              }}
-            >
-              All Time
-            </button>
-            <button
-              className={`px-3 py-1.5 text-sm font-medium transition-colors ${
-                datePreset === "most-recent"
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-300 hover:bg-gray-700/50"
-              }`}
-              onClick={() => {
-                console.log("Toggling to MOST RECENT directly");
-                // Direct implementation to set to Most Recent
-                setDatePreset("most-recent");
-                setShowMostRecent(true);
-                setDateRange({ from: undefined, to: undefined });
-                setDateFilterActive(true);
-                // Also update the filter settings object
-                setFilterSettings((prev) => ({
-                  ...prev,
-                  datePreset: "most-recent",
-                  showMostRecent: true,
-                  dateRange: { from: undefined, to: undefined },
-                }));
-                // Force refresh
-                refreshKeyRef.current += 1;
-              }}
-            >
-              Most Recent
-            </button>
+      {/* Status bar with count and filters - Mobile optimized */}
+      <div className="flex flex-col space-y-2 sm:space-y-0 sm:flex-row sm:justify-between sm:items-center py-1">
+        {/* Top row on mobile: Coin count + compact filters */}
+        <div className="flex items-center justify-between w-full">
+          {/* Left side - Coin count */}
+          <div className="flex items-center gap-2">
+            <div className="text-sm font-medium text-gray-300">
+              {dateFilterActive && matchingCoinsCount === 0
+                ? "No coins found"
+                : `${sortedCoinData.length} coins`}
+            </div>
+            {/* Loading indicator */}
+            {isFetching && (
+              <div className="flex items-center">
+                <ClientLoadingDots />
+              </div>
+            )}
           </div>
 
-          {/* Date Preset Dropdown */}
-          <Select
-            value={
-              datePreset !== "all-time" && datePreset !== "most-recent"
-                ? datePreset
-                : ""
-            }
-            onValueChange={(value) => {
-              if (value) {
-                handleDatePresetChange(value);
-              }
-            }}
-          >
-            <SelectTrigger className="w-[160px] h-9 text-sm bg-gray-800/70 border-gray-700 text-gray-200">
-              <SelectValue placeholder="Date Filters" />
-            </SelectTrigger>
-            <SelectContent className="bg-gray-800 border-gray-700">
-              <SelectItem value="today">Today</SelectItem>
-              <SelectItem value="yesterday">Yesterday</SelectItem>
-              <SelectItem value="last7days">Last 7 Days</SelectItem>
-              <SelectItem value="last30days">Last 30 Days</SelectItem>
-              <SelectItem value="last90days">Last 3 Months</SelectItem>
-              <SelectItem value="custom">Custom Range</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Custom date range selection - direct in-line calendar */}
-          {datePreset === "custom" && (
-            <div className="flex items-center gap-2">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={`h-9 text-sm bg-gray-800/70 border-gray-700 ${
-                      dateRange.from
-                        ? "text-blue-400 border-blue-700/50"
-                        : "text-gray-200"
-                    } hover:bg-gray-700`}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dateRange.from ? (
-                      format(dateRange.from, "MMM d")
-                    ) : (
-                      <span>Start</span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="bg-gray-800 border-gray-700 p-0">
-                  <Calendar
-                    mode="single"
-                    captionLayout="dropdown-buttons"
-                    selected={dateRange.from}
-                    onSelect={(date) => {
-                      // Update states in a consistent order
-                      console.log(
-                        `Setting start date to: ${
-                          date ? date.toISOString().split("T")[0] : "undefined"
-                        }`
-                      );
-
-                      const startTime = performance.now();
-                      setDateRange({
-                        ...dateRange,
-                        from: date,
-                      });
-                      setFilterSettings((prev) => ({
-                        ...prev,
-                        dateRange: {
-                          ...prev.dateRange,
-                          from: date,
-                        },
-                      }));
-                      setDateFilterActive(true);
-
-                      // Explicitly trigger refresh for immediate feedback
-                      refreshKeyRef.current += 1;
-
-                      // If we have an end date, might as well refresh data
-                      if (dateRange.to) {
-                        console.log(
-                          "Start date set with existing end date - refreshing data"
-                        );
-                        setTimeout(() => (refreshKeyRef.current += 1), 50);
-                      }
-
-                      const endTime = performance.now();
-                      console.log(
-                        `Custom date filter update took ${(
-                          endTime - startTime
-                        ).toFixed(2)}ms`
-                      );
-                    }}
-                    disabled={(date) => {
-                      return (
-                        date > new Date() || // Disable future dates
-                        (dateRangeInfo?.earliest
-                          ? date < dateRangeInfo.earliest
-                          : false)
-                      );
-                    }}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-
-              <span className="text-gray-400">to</span>
-
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={`h-9 text-sm bg-gray-800/70 border-gray-700 ${
-                      dateRange.to
-                        ? "text-blue-400 border-blue-700/50"
-                        : "text-gray-200"
-                    } hover:bg-gray-700`}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dateRange.to ? (
-                      format(dateRange.to, "MMM d")
-                    ) : (
-                      <span>End</span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="bg-gray-800 border-gray-700 p-0">
-                  <Calendar
-                    mode="single"
-                    captionLayout="dropdown-buttons"
-                    selected={dateRange.to}
-                    onSelect={(date) => {
-                      // Update states in a consistent order
-                      console.log(
-                        `Setting end date to: ${
-                          date ? date.toISOString().split("T")[0] : "undefined"
-                        }`
-                      );
-
-                      const startTime = performance.now();
-                      setDateRange({
-                        ...dateRange,
-                        to: date,
-                      });
-                      setFilterSettings((prev) => ({
-                        ...prev,
-                        dateRange: {
-                          ...prev.dateRange,
-                          to: date,
-                        },
-                      }));
-                      setDateFilterActive(true);
-
-                      // Explicitly trigger refresh
-                      refreshKeyRef.current += 1;
-
-                      const endTime = performance.now();
-                      console.log(
-                        `Custom date filter update took ${(
-                          endTime - startTime
-                        ).toFixed(2)}ms`
-                      );
-                    }}
-                    disabled={(date) => {
-                      return (
-                        date > new Date() || // Disable future dates
-                        (dateRange.from
-                          ? date < dateRange.from // Don't allow end date before start date
-                          : false) ||
-                        (dateRangeInfo?.earliest
-                          ? date < dateRangeInfo.earliest
-                          : false)
-                      );
-                    }}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-
-              <Button
-                variant="outline"
-                size="icon"
-                className={`h-9 w-9 ${
-                  dateFilterActive
-                    ? "bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20"
-                    : "bg-gray-800/70 text-gray-300"
+          {/* Right side - Compact filter controls */}
+          <div className="flex items-center gap-1.5">
+            {/* Primary filter toggle - compact mobile */}
+            <div className="flex items-stretch bg-gray-800/60 border border-gray-700/60 rounded-md overflow-hidden">
+              <button
+                className={`px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium transition-all duration-200 ${
+                  datePreset === "all-time"
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-gray-300 hover:bg-gray-700/50 hover:text-white"
                 }`}
                 onClick={() => {
-                  // Clear dates and trigger filter update with clearer logging
-                  console.log("Clearing custom date range");
-
-                  const startTime = performance.now();
-
-                  // Clear dates in state
+                  console.log("Toggling to ALL TIME directly");
+                  setDatePreset("all-time");
+                  setShowMostRecent(false);
                   setDateRange({ from: undefined, to: undefined });
+                  setDateFilterActive(false);
                   setFilterSettings((prev) => ({
                     ...prev,
+                    datePreset: "all-time",
+                    showMostRecent: false,
                     dateRange: { from: undefined, to: undefined },
                   }));
-
-                  // Handle filter state determination
-                  if (dateFilterActive) {
-                    console.log(
-                      "Date filter was active, explicitly deactivating"
-                    );
-                    setDateFilterActive(false);
-                  }
-
-                  // Force double refresh after a small delay to ensure state is updated
                   refreshKeyRef.current += 1;
-                  setTimeout(() => {
-                    refreshKeyRef.current += 1;
-                    const endTime = performance.now();
-                    console.log(
-                      `Clearing date filter took ${(
-                        endTime - startTime
-                      ).toFixed(2)}ms total`
-                    );
-                  }, 50);
                 }}
-                title="Clear dates"
               >
-                <X className="h-4 w-4" />
-              </Button>
+                All Time
+              </button>
+              <button
+                className={`px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium transition-all duration-200 ${
+                  datePreset === "most-recent"
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-gray-300 hover:bg-gray-700/50 hover:text-white"
+                }`}
+                onClick={() => {
+                  console.log("Toggling to MOST RECENT directly");
+                  setDatePreset("most-recent");
+                  setShowMostRecent(true);
+                  setDateRange({ from: undefined, to: undefined });
+                  setDateFilterActive(true);
+                  setFilterSettings((prev) => ({
+                    ...prev,
+                    datePreset: "most-recent",
+                    showMostRecent: true,
+                    dateRange: { from: undefined, to: undefined },
+                  }));
+                  refreshKeyRef.current += 1;
+                }}
+              >
+                <span className="hidden sm:inline">Most Recent</span>
+                <span className="sm:hidden">Recent</span>
+              </button>
             </div>
-          )}
+
+            {/* Advanced date filters - compact */}
+            <Select
+              value={
+                datePreset !== "all-time" && datePreset !== "most-recent"
+                  ? datePreset
+                  : ""
+              }
+              onValueChange={(value) => {
+                if (value) {
+                  handleDatePresetChange(value);
+                }
+              }}
+            >
+              <SelectTrigger className="w-[100px] sm:w-[140px] h-[30px] sm:h-[38px] text-xs sm:text-sm bg-gray-800/60 border-gray-700/60 text-gray-200 hover:bg-gray-700/50">
+                <SelectValue placeholder="Dates" />
+              </SelectTrigger>
+              <SelectContent className="bg-gray-800 border-gray-700">
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="yesterday">Yesterday</SelectItem>
+                <SelectItem value="last7days">Last 7 Days</SelectItem>
+                <SelectItem value="last30days">Last 30 Days</SelectItem>
+                <SelectItem value="last90days">Last 3 Months</SelectItem>
+                <SelectItem value="custom">Custom Range</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
+
+      {/* Custom date range - compact mobile layout */}
+      {datePreset === "custom" && (
+        <div className="flex flex-col gap-2 p-3 sm:p-4 bg-gray-800/40 border border-gray-700/50 rounded-lg">
+          <span className="text-xs sm:text-sm font-medium text-gray-300">
+            Custom Range:
+          </span>
+
+          <div className="flex flex-col sm:flex-row items-stretch gap-2">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={`h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm bg-gray-800/60 border-gray-600 ${
+                    dateRange.from
+                      ? "text-blue-400 border-blue-600/50"
+                      : "text-gray-300"
+                  } hover:bg-gray-700/50`}
+                >
+                  <CalendarIcon className="mr-1 sm:mr-2 h-3 sm:h-4 w-3 sm:w-4" />
+                  {dateRange.from ? (
+                    <span className="sm:hidden">
+                      {format(dateRange.from, "M/d/yy")}
+                    </span>
+                  ) : (
+                    <span className="sm:hidden">Start</span>
+                  )}
+                  {dateRange.from && (
+                    <span className="hidden sm:inline">
+                      {format(dateRange.from, "MMM d, yyyy")}
+                    </span>
+                  )}
+                  {!dateRange.from && (
+                    <span className="hidden sm:inline">Start Date</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="bg-gray-800 border-gray-700 p-0">
+                <Calendar
+                  mode="single"
+                  captionLayout="dropdown-buttons"
+                  selected={dateRange.from}
+                  onSelect={(date) => {
+                    console.log(
+                      `Setting start date to: ${
+                        date ? date.toISOString().split("T")[0] : "undefined"
+                      }`
+                    );
+
+                    const startTime = performance.now();
+                    setDateRange({
+                      ...dateRange,
+                      from: date,
+                    });
+                    setFilterSettings((prev) => ({
+                      ...prev,
+                      dateRange: {
+                        ...prev.dateRange,
+                        from: date,
+                      },
+                    }));
+                    setDateFilterActive(true);
+
+                    refreshKeyRef.current += 1;
+
+                    if (dateRange.to) {
+                      console.log(
+                        "Start date set with existing end date - refreshing data"
+                      );
+                      setTimeout(() => (refreshKeyRef.current += 1), 50);
+                    }
+
+                    const endTime = performance.now();
+                    console.log(
+                      `Custom date filter update took ${(
+                        endTime - startTime
+                      ).toFixed(2)}ms`
+                    );
+                  }}
+                  disabled={(date) => {
+                    return (
+                      date > new Date() ||
+                      (dateRangeInfo?.earliest
+                        ? date < dateRangeInfo.earliest
+                        : false)
+                    );
+                  }}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+
+            <span className="text-gray-400 text-xs sm:text-sm self-center">
+              to
+            </span>
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={`h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm bg-gray-800/60 border-gray-600 ${
+                    dateRange.to
+                      ? "text-blue-400 border-blue-600/50"
+                      : "text-gray-300"
+                  } hover:bg-gray-700/50`}
+                >
+                  <CalendarIcon className="mr-1 sm:mr-2 h-3 sm:h-4 w-3 sm:w-4" />
+                  {dateRange.to ? (
+                    <span className="sm:hidden">
+                      {format(dateRange.to, "M/d/yy")}
+                    </span>
+                  ) : (
+                    <span className="sm:hidden">End</span>
+                  )}
+                  {dateRange.to && (
+                    <span className="hidden sm:inline">
+                      {format(dateRange.to, "MMM d, yyyy")}
+                    </span>
+                  )}
+                  {!dateRange.to && (
+                    <span className="hidden sm:inline">End Date</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="bg-gray-800 border-gray-700 p-0">
+                <Calendar
+                  mode="single"
+                  captionLayout="dropdown-buttons"
+                  selected={dateRange.to}
+                  onSelect={(date) => {
+                    console.log(
+                      `Setting end date to: ${
+                        date ? date.toISOString().split("T")[0] : "undefined"
+                      }`
+                    );
+
+                    const startTime = performance.now();
+                    setDateRange({
+                      ...dateRange,
+                      to: date,
+                    });
+                    setFilterSettings((prev) => ({
+                      ...prev,
+                      dateRange: {
+                        ...prev.dateRange,
+                        to: date,
+                      },
+                    }));
+                    setDateFilterActive(true);
+
+                    refreshKeyRef.current += 1;
+
+                    const endTime = performance.now();
+                    console.log(
+                      `Custom date filter update took ${(
+                        endTime - startTime
+                      ).toFixed(2)}ms`
+                    );
+                  }}
+                  disabled={(date) => {
+                    return (
+                      date > new Date() ||
+                      (dateRange.from ? date < dateRange.from : false) ||
+                      (dateRangeInfo?.earliest
+                        ? date < dateRangeInfo.earliest
+                        : false)
+                    );
+                  }}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 sm:h-9 w-8 sm:w-9 bg-gray-800/60 border-gray-600 text-gray-400 hover:bg-gray-700/50 hover:text-white"
+              onClick={() => {
+                console.log("Clearing custom date range");
+
+                const startTime = performance.now();
+                setDateRange({ from: undefined, to: undefined });
+                setFilterSettings((prev) => ({
+                  ...prev,
+                  dateRange: { from: undefined, to: undefined },
+                }));
+
+                if (dateFilterActive) {
+                  console.log(
+                    "Date filter was active, explicitly deactivating"
+                  );
+                  setDateFilterActive(false);
+                }
+
+                refreshKeyRef.current += 1;
+                setTimeout(() => {
+                  refreshKeyRef.current += 1;
+                  const endTime = performance.now();
+                  console.log(
+                    `Clearing date filter took ${(endTime - startTime).toFixed(
+                      2
+                    )}ms total`
+                  );
+                }, 50);
+              }}
+              title="Clear date range"
+            >
+              <X className="h-3 sm:h-4 w-3 sm:w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Table */}
       {showCategoryTable ? (

@@ -387,82 +387,93 @@ export function DataTable<TData, TValue>({
     const pageNumbers = getPageNumbers();
 
     return (
-      <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800">
-        <div className="flex items-center text-sm text-gray-400">
+      <div className="flex flex-col sm:flex-row items-center justify-between px-3 sm:px-4 py-3 border-t border-gray-800 gap-3 sm:gap-0">
+        <div className="flex items-center text-xs sm:text-sm text-gray-400 order-2 sm:order-1">
           <span>
             Page {currentPageNumber} of {pageCount}
           </span>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-1 sm:space-x-2 order-1 sm:order-2">
+          {/* First page button - hide on small screens */}
           <button
-            className="p-2 rounded-md border border-gray-700 bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="hidden sm:block p-1.5 sm:p-2 rounded-md border border-gray-700 bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => setPage(1)}
             disabled={currentPageNumber === 1}
             aria-label="First page"
             type="button"
           >
-            <ChevronsLeft className="h-4 w-4" />
+            <ChevronsLeft className="h-3 w-3 sm:h-4 sm:w-4" />
           </button>
+
+          {/* Previous page button */}
           <button
-            className="p-2 rounded-md border border-gray-700 bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="p-1.5 sm:p-2 rounded-md border border-gray-700 bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => setPage(Math.max(1, currentPageNumber - 1))}
             disabled={currentPageNumber === 1}
             aria-label="Previous page"
             type="button"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4" />
           </button>
 
-          {/* Page number buttons */}
-          {pageNumbers.map((page, index) => {
-            if (page === "ellipsis1" || page === "ellipsis2") {
+          {/* Page number buttons - limit on mobile */}
+          {pageNumbers
+            .slice(0, window.innerWidth < 640 ? 3 : pageNumbers.length)
+            .map((page, index) => {
+              if (page === "ellipsis1" || page === "ellipsis2") {
+                return (
+                  <span
+                    key={`ellipsis-${index}`}
+                    className="text-gray-500 px-1"
+                  >
+                    ...
+                  </span>
+                );
+              }
+
+              const pageNumber = Number(page);
               return (
-                <span key={`ellipsis-${index}`} className="text-gray-500">
-                  ...
-                </span>
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() => setPage(pageNumber)}
+                  className={`pagination-button px-2 sm:px-3 py-1 rounded-md border text-xs sm:text-sm ${
+                    currentPageNumber === pageNumber
+                      ? "bg-blue-600 text-white border-blue-700"
+                      : "border-gray-700 bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-gray-200"
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  disabled={currentPageNumber === pageNumber}
+                >
+                  {page}
+                </button>
               );
-            }
+            })}
 
-            const pageNumber = Number(page);
-            return (
-              <button
-                key={index}
-                type="button"
-                onClick={() => setPage(pageNumber)}
-                className={`pagination-button px-3 py-1 rounded-md border ${
-                  currentPageNumber === pageNumber
-                    ? "bg-blue-600 text-white border-blue-700"
-                    : "border-gray-700 bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-gray-200"
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
-                disabled={currentPageNumber === pageNumber}
-              >
-                {page}
-              </button>
-            );
-          })}
-
+          {/* Next page button */}
           <button
-            className="p-2 rounded-md border border-gray-700 bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="p-1.5 sm:p-2 rounded-md border border-gray-700 bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => setPage(Math.min(pageCount, currentPageNumber + 1))}
             disabled={currentPageNumber === pageCount}
             aria-label="Next page"
             type="button"
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-3 w-3 sm:h-4 sm:w-4" />
           </button>
+
+          {/* Last page button - hide on small screens */}
           <button
-            className="p-2 rounded-md border border-gray-700 bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="hidden sm:block p-1.5 sm:p-2 rounded-md border border-gray-700 bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => setPage(pageCount)}
             disabled={currentPageNumber === pageCount}
             aria-label="Last page"
             type="button"
           >
-            <ChevronsRight className="h-4 w-4" />
+            <ChevronsRight className="h-3 w-3 sm:h-4 sm:w-4" />
           </button>
         </div>
 
-        <div className="flex items-center text-sm text-gray-400">
+        <div className="hidden sm:flex items-center text-xs sm:text-sm text-gray-400 order-3">
           <span>
             Showing {table.getRowModel().rows.length} of {displayData.length}{" "}
             entries
@@ -478,45 +489,126 @@ export function DataTable<TData, TValue>({
       <div
         className={`w-full ${styles.cryptoTableContainer} ${className || ""}`}
       >
-        <table
-          className={`w-full border-separate border-spacing-0 ${styles.cryptoTable}`}
-        >
-          <thead className="sticky top-0 bg-gray-900/80 backdrop-blur-sm z-10">
-            {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} className="w-full">
-                {headerGroup.headers.map((header) => {
-                  const width = header.column.getSize();
-                  return (
-                    <th
-                      key={header.id}
-                      style={{ width }}
-                      className="py-4 text-left text-sm font-medium text-gray-400 px-4 whitespace-nowrap hover:text-gray-200 transition-colors cursor-pointer"
-                    >
-                      <div className="flex items-center gap-1">
-                        {flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
-                        {header.column.getCanSort() && (
-                          <ArrowUpDown className="h-3 w-3 text-gray-500" />
-                        )}
-                      </div>
-                    </th>
-                  );
-                })}
-              </tr>
-            ))}
-          </thead>
-          <tbody>
-            {Array.from({ length: 10 }).map((_, index) => (
-              <tr key={index} className="bg-gray-900/40">
-                {columns.map((column, colIndex) => (
-                  <LoadingCell key={colIndex} width={column.size || 0} />
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="block lg:hidden">
+          {/* Mobile Loading State */}
+          <div className="overflow-hidden rounded-lg border border-gray-800/50 bg-gray-900/60 backdrop-blur-sm">
+            <div className="flex">
+              {/* Fixed columns skeleton */}
+              <div className="flex-shrink-0 bg-gray-900/90 border-r border-gray-700/50">
+                <table className="border-separate border-spacing-0">
+                  <thead className="bg-gray-800/80">
+                    <tr>
+                      <th className="py-3 px-2 text-left text-xs font-semibold text-gray-300 w-10 border-b border-gray-700/50">
+                        #
+                      </th>
+                      <th className="py-3 px-3 text-left text-xs font-semibold text-gray-300 w-32 border-b border-gray-700/50">
+                        Coins
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-700/30">
+                    {Array.from({ length: 10 }).map((_, index) => (
+                      <tr key={index} className="bg-gray-900/40">
+                        <td className="py-3 px-2 border-b border-gray-800/30">
+                          <div className="h-3 bg-gray-700/50 rounded w-4 animate-pulse"></div>
+                        </td>
+                        <td className="py-3 px-3 border-b border-gray-800/30">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 bg-gray-700/50 rounded-full animate-pulse"></div>
+                            <div className="space-y-2">
+                              <div className="h-3 bg-gray-700/50 rounded w-16 animate-pulse"></div>
+                              <div className="h-2 bg-gray-700/30 rounded w-8 animate-pulse"></div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {/* Scrollable columns skeleton */}
+              <div className="flex-1 overflow-x-auto">
+                <table className="border-separate border-spacing-0 w-full">
+                  <thead className="bg-gray-800/80">
+                    <tr>
+                      <th className="py-3 px-3 w-24 border-b border-gray-700/50">
+                        <div className="h-3 bg-gray-700/50 rounded w-12 animate-pulse"></div>
+                      </th>
+                      {columns.slice(3).map((column, colIndex) => (
+                        <th
+                          key={colIndex}
+                          className="py-3 px-2 min-w-20 whitespace-nowrap border-b border-gray-700/50"
+                        >
+                          <div className="h-3 bg-gray-700/50 rounded w-12 animate-pulse"></div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-700/30">
+                    {Array.from({ length: 10 }).map((_, index) => (
+                      <tr key={index} className="bg-gray-900/40">
+                        <td className="py-3 px-3 w-24 border-b border-gray-800/30">
+                          <div className="h-3 bg-gray-700/50 rounded w-12 animate-pulse"></div>
+                        </td>
+                        {columns.slice(3).map((column, colIndex) => (
+                          <td
+                            key={colIndex}
+                            className="py-3 px-2 min-w-20 border-b border-gray-800/30"
+                          >
+                            <div className="h-3 bg-gray-700/50 rounded w-10 animate-pulse"></div>
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Desktop Loading State */}
+        <div className="hidden lg:block">
+          <table
+            className={`w-full border-separate border-spacing-0 ${styles.cryptoTable}`}
+          >
+            <thead className="sticky top-0 bg-gray-900/80 backdrop-blur-sm z-10">
+              {table.getHeaderGroups().map((headerGroup) => (
+                <tr key={headerGroup.id} className="w-full">
+                  {headerGroup.headers.map((header) => {
+                    const width = header.column.getSize();
+                    return (
+                      <th
+                        key={header.id}
+                        style={{ width }}
+                        className="py-4 text-left text-sm font-medium text-gray-400 px-4 whitespace-nowrap hover:text-gray-200 transition-colors cursor-pointer"
+                      >
+                        <div className="flex items-center gap-1">
+                          {flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                          {header.column.getCanSort() && (
+                            <ArrowUpDown className="h-3 w-3 text-gray-500" />
+                          )}
+                        </div>
+                      </th>
+                    );
+                  })}
+                </tr>
+              ))}
+            </thead>
+            <tbody>
+              {Array.from({ length: 10 }).map((_, index) => (
+                <tr key={index} className="bg-gray-900/40">
+                  {columns.map((column, colIndex) => (
+                    <LoadingCell key={colIndex} width={column.size || 0} />
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     );
   }
@@ -543,90 +635,273 @@ export function DataTable<TData, TValue>({
             }
           }
         `}</style>
-        <table className={styles.cryptoTable}>
-          <thead className="sticky top-0 bg-gray-900/90 backdrop-blur-sm z-10">
-            {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} className="w-full">
-                {headerGroup.headers.map((header) => {
-                  const width = header.column.getSize();
-                  const isSorted = header.column.getIsSorted();
-                  return (
-                    <th
-                      key={header.id}
-                      style={{ width }}
-                      className={`py-4 text-left text-sm font-medium px-4 whitespace-nowrap ${
-                        isSorted
-                          ? "text-blue-400"
-                          : "text-gray-400 hover:text-gray-200"
-                      } transition-colors cursor-pointer`}
-                      onClick={header.column.getToggleSortingHandler()}
-                    >
-                      <div className="flex items-center gap-1">
-                        {flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
-                        {header.column.getCanSort() && (
-                          <span className="ml-1">
-                            {{
-                              asc: <span className="text-blue-400">↑</span>,
-                              desc: <span className="text-blue-400">↓</span>,
-                              false: (
-                                <ArrowUpDown className="h-3 w-3 text-gray-500" />
-                              ),
-                            }[isSorted as string] || null}
-                          </span>
-                        )}
-                      </div>
-                    </th>
-                  );
-                })}
-              </tr>
-            ))}
-          </thead>
-          <tbody>
-            {rowVirtualizer?.getVirtualItems().map((virtualRow) => {
-              const row = table.getRowModel().rows[virtualRow.index];
 
-              // Show loading state for new rows only
-              if (!row && isLoading) {
-                return (
-                  <tr
-                    key={`loading-${virtualRow.index}`}
-                    className="bg-gray-900/40"
-                  >
-                    {columns.map((column, colIndex) => (
-                      <LoadingCell key={colIndex} width={column.size || 0} />
-                    ))}
-                  </tr>
-                );
-              }
+        {/* Mobile Table with Fixed Columns */}
+        <div className="block lg:hidden">
+          <div className="overflow-hidden rounded-lg border border-gray-800/50 bg-gray-900/60 backdrop-blur-sm">
+            <div className="flex">
+              {/* Fixed columns (# and Coins) */}
+              <div className="flex-shrink-0 bg-gray-900/90 border-r border-gray-700/50">
+                <table className="border-separate border-spacing-0">
+                  <thead className="bg-gray-800/80">
+                    <tr>
+                      {table
+                        .getHeaderGroups()[0]
+                        ?.headers.slice(0, 2) // Only # + Coins
+                        .map((header) => {
+                          const isSorted = header.column.getIsSorted();
+                          return (
+                            <th
+                              key={header.id}
+                              className={`py-3 text-left text-xs font-semibold uppercase tracking-wider ${
+                                isSorted
+                                  ? "text-blue-400"
+                                  : "text-gray-300 hover:text-gray-100"
+                              } transition-colors cursor-pointer border-b border-gray-700/50 ${
+                                header.id === "index"
+                                  ? "w-10 px-2" // Rank column
+                                  : "w-32 px-3" // Coins column
+                              }`}
+                              onClick={header.column.getToggleSortingHandler()}
+                            >
+                              <div className="flex items-center gap-1">
+                                {flexRender(
+                                  header.column.columnDef.header,
+                                  header.getContext()
+                                )}
+                                {header.column.getCanSort() && (
+                                  <span className="ml-1">
+                                    {{
+                                      asc: (
+                                        <span className="text-blue-400 text-xs">
+                                          ↑
+                                        </span>
+                                      ),
+                                      desc: (
+                                        <span className="text-blue-400 text-xs">
+                                          ↓
+                                        </span>
+                                      ),
+                                      false: (
+                                        <ArrowUpDown className="h-3 w-3 text-gray-500" />
+                                      ),
+                                    }[isSorted as string] || null}
+                                  </span>
+                                )}
+                              </div>
+                            </th>
+                          );
+                        })}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-700/30">
+                    {rowVirtualizer?.getVirtualItems().map((virtualRow) => {
+                      const row = table.getRowModel().rows[virtualRow.index];
+                      if (!row) return null;
 
-              if (!row) return null;
+                      return (
+                        <tr
+                          key={row.id}
+                          className="hover:bg-blue-500/5 transition-colors cursor-pointer bg-gray-900/40"
+                          onClick={() => onRowClick?.(row.original)}
+                        >
+                          {row
+                            .getVisibleCells()
+                            .slice(0, 2) // Only # + Coins
+                            .map((cell, index) => (
+                              <td
+                                key={cell.id}
+                                className={`py-3 border-b border-gray-800/30 ${
+                                  index === 0 ? "px-2" : "px-3" // Different padding for rank vs coins
+                                }`}
+                              >
+                                <CellContent cell={cell} rowId={row.id} />
+                              </td>
+                            ))}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
 
-              return (
-                <tr
-                  key={row.id}
-                  className="hover:bg-blue-500/5 transition-colors cursor-pointer bg-gray-900/40"
-                  onClick={() => onRowClick?.(row.original)}
-                >
-                  {row.getVisibleCells().map((cell) => {
-                    const width = cell.column.getSize();
+              {/* Scrollable columns with Price prominently shown */}
+              <div className="flex-1 overflow-x-auto">
+                <table className="border-separate border-spacing-0 w-full">
+                  <thead className="bg-gray-800/80">
+                    <tr>
+                      {table
+                        .getHeaderGroups()[0]
+                        ?.headers.slice(2) // Start from Price column
+                        .map((header, index) => {
+                          const isSorted = header.column.getIsSorted();
+                          return (
+                            <th
+                              key={header.id}
+                              className={`py-3 text-left text-xs font-semibold uppercase tracking-wider ${
+                                isSorted
+                                  ? "text-blue-400"
+                                  : "text-gray-300 hover:text-gray-100"
+                              } transition-colors cursor-pointer border-b border-gray-700/50 ${
+                                index === 0
+                                  ? "w-24 px-3 font-medium" // Price column - not sticky, let it scroll naturally
+                                  : "min-w-20 px-2  text-xs" // Other columns
+                              }`}
+                              onClick={header.column.getToggleSortingHandler()}
+                            >
+                              <div className="flex items-center gap-1">
+                                {flexRender(
+                                  header.column.columnDef.header,
+                                  header.getContext()
+                                )}
+                                {header.column.getCanSort() && (
+                                  <span className="ml-1">
+                                    {{
+                                      asc: (
+                                        <span className="text-blue-400 text-xs">
+                                          ↑
+                                        </span>
+                                      ),
+                                      desc: (
+                                        <span className="text-blue-400 text-xs">
+                                          ↓
+                                        </span>
+                                      ),
+                                      false: (
+                                        <ArrowUpDown className="h-3 w-3 text-gray-500" />
+                                      ),
+                                    }[isSorted as string] || null}
+                                  </span>
+                                )}
+                              </div>
+                            </th>
+                          );
+                        })}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-700/30">
+                    {rowVirtualizer?.getVirtualItems().map((virtualRow) => {
+                      const row = table.getRowModel().rows[virtualRow.index];
+                      if (!row) return null;
+
+                      return (
+                        <tr
+                          key={`scroll-${row.id}`}
+                          className="hover:bg-blue-500/5 transition-colors cursor-pointer bg-gray-900/40"
+                          onClick={() => onRowClick?.(row.original)}
+                        >
+                          {row
+                            .getVisibleCells()
+                            .slice(2) // Start from Price column
+                            .map((cell, index) => (
+                              <td
+                                key={cell.id}
+                                className={`py-3 border-b border-gray-800/30 ${
+                                  index === 0
+                                    ? "w-24 px-3 font-medium" // Price column - not sticky, let it scroll naturally
+                                    : "min-w-20 px-2 py-7 text-xs" // Other columns
+                                }`}
+                              >
+                                <CellContent cell={cell} rowId={row.id} />
+                              </td>
+                            ))}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Desktop Table */}
+        <div className="hidden lg:block">
+          <table className={styles.cryptoTable}>
+            <thead className="sticky top-0 bg-gray-900/90 backdrop-blur-sm z-10">
+              {table.getHeaderGroups().map((headerGroup) => (
+                <tr key={headerGroup.id} className="w-full">
+                  {headerGroup.headers.map((header) => {
+                    const width = header.column.getSize();
+                    const isSorted = header.column.getIsSorted();
                     return (
-                      <td
-                        key={cell.id}
+                      <th
+                        key={header.id}
                         style={{ width }}
-                        className="py-5 px-4 whitespace-nowrap border-t border-gray-800/50"
+                        className={`py-4 text-left text-sm font-medium px-4 whitespace-nowrap ${
+                          isSorted
+                            ? "text-blue-400"
+                            : "text-gray-400 hover:text-gray-200"
+                        } transition-colors cursor-pointer`}
+                        onClick={header.column.getToggleSortingHandler()}
                       >
-                        <CellContent cell={cell} rowId={row.id} />
-                      </td>
+                        <div className="flex items-center gap-1">
+                          {flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                          {header.column.getCanSort() && (
+                            <span className="ml-1">
+                              {{
+                                asc: <span className="text-blue-400">↑</span>,
+                                desc: <span className="text-blue-400">↓</span>,
+                                false: (
+                                  <ArrowUpDown className="h-3 w-3 text-gray-500" />
+                                ),
+                              }[isSorted as string] || null}
+                            </span>
+                          )}
+                        </div>
+                      </th>
                     );
                   })}
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              ))}
+            </thead>
+            <tbody>
+              {rowVirtualizer?.getVirtualItems().map((virtualRow) => {
+                const row = table.getRowModel().rows[virtualRow.index];
+
+                // Show loading state for new rows only
+                if (!row && isLoading) {
+                  return (
+                    <tr
+                      key={`loading-${virtualRow.index}`}
+                      className="bg-gray-900/40"
+                    >
+                      {columns.map((column, colIndex) => (
+                        <LoadingCell key={colIndex} width={column.size || 0} />
+                      ))}
+                    </tr>
+                  );
+                }
+
+                if (!row) return null;
+
+                return (
+                  <tr
+                    key={row.id}
+                    className="hover:bg-blue-500/5 transition-colors cursor-pointer bg-gray-900/40"
+                    onClick={() => onRowClick?.(row.original)}
+                  >
+                    {row.getVisibleCells().map((cell) => {
+                      const width = cell.column.getSize();
+                      return (
+                        <td
+                          key={cell.id}
+                          style={{ width }}
+                          className="py-2 px-1 whitespace-nowrap border-t border-gray-800/50 text-xs"
+                        >
+                          <CellContent cell={cell} rowId={row.id} />
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
         {showPagination && <PaginationControls />}
       </div>
     );

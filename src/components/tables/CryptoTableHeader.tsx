@@ -405,7 +405,7 @@ export function CryptoTableHeader({
                 key={category.id}
                 variant="ghost"
                 className={cn(
-                  "px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-1.5",
+                  "px-2 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-1 sm:gap-1.5",
                   activeTab === category.id
                     ? "bg-blue-500/10 text-blue-500 border-b-2 border-blue-500"
                     : "text-gray-400 hover:text-white hover:bg-gray-800/40"
@@ -413,7 +413,9 @@ export function CryptoTableHeader({
                 onClick={() => handleTabChange(category.id)}
               >
                 {category.icon && category.icon}
-                {category.label}
+                <span className="truncate max-w-20 sm:max-w-none">
+                  {category.label}
+                </span>
               </Button>
             ))}
           </div>
@@ -434,7 +436,7 @@ export function CryptoTableHeader({
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col space-y-3 sm:space-y-0 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex-1 max-w-md">
           <div className="relative">
             <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
@@ -444,7 +446,7 @@ export function CryptoTableHeader({
               type="text"
               value={searchTerm}
               onChange={handleSearch}
-              className="block w-full bg-gray-800/40 border border-gray-700 rounded-md py-2 pl-10 pr-10 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="block w-full bg-gray-800/40 border border-gray-700 rounded-md py-2 pl-10 pr-10 text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="Search coins..."
             />
             {searchTerm && (
@@ -460,27 +462,28 @@ export function CryptoTableHeader({
           {/* No results message */}
           {showNoResults && (
             <div className="absolute z-10 mt-1 w-full bg-gray-800 border border-gray-700 rounded-md shadow-lg">
-              <div className="p-4 text-center text-gray-400">
+              <div className="p-4 text-center text-gray-400 text-sm">
                 No coins found matching &quot;{searchTerm}&quot;
               </div>
             </div>
           )}
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center justify-between sm:justify-end space-x-2">
+          {/* Mobile: Show icon only, Desktop: Show icon + text */}
           <Button
             variant="outline"
             onClick={onOpenFilters}
-            className="bg-gray-800/50 hover:bg-gray-700/50 text-white border-gray-700 rounded-md px-4 py-2 flex items-center gap-1.5"
+            className="bg-gray-800/50 hover:bg-gray-700/50 text-white border-gray-700 rounded-md p-4 sm:px-4 sm:py-2 flex items-center gap-1.5"
           >
             <Filter className="h-4 w-4" />
-            Filters
+            <span className=" sm:inline">Filters</span>
           </Button>
 
           <Button
             variant="outline"
             onClick={onToggleColumns}
-            className="bg-gray-800/50 hover:bg-gray-700/50 text-white border-gray-700 rounded-md px-4 py-2 flex items-center gap-1.5"
+            className="bg-gray-800/50 hover:bg-gray-700/50 text-white border-gray-700 rounded-md p-4 sm:px-4 sm:py-2 flex items-center gap-1.5"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4">
               <path
@@ -488,18 +491,18 @@ export function CryptoTableHeader({
                 d="M4,3H20A1,1 0 0,1 21,4V5A1,1 0 0,1 20,6H4A1,1 0 0,1 3,5V4A1,1 0 0,1 4,3M9,7H20A1,1 0 0,1 21,8V9A1,1 0 0,1 20,10H9A1,1 0 0,1 8,9V8A1,1 0 0,1 9,7M4,11H20A1,1 0 0,1 21,12V13A1,1 0 0,1 20,14H4A1,1 0 0,1 3,13V12A1,1 0 0,1 4,11M9,15H20A1,1 0 0,1 21,16V17A1,1 0 0,1 20,18H9A1,1 0 0,1 8,17V16A1,1 0 0,1 9,15Z"
               />
             </svg>
-            Columns
+            <span className=" sm:inline">Columns</span>
           </Button>
 
           <select
             value={showCount}
             onChange={(e) => onShowCountChange?.(Number(e.target.value))}
-            className="bg-gray-800/50 hover:bg-gray-700/50 text-white border border-gray-700 rounded-md px-4 py-2 flex items-center appearance-none cursor-pointer"
+            className="bg-gray-800/50 hover:bg-gray-700/50 text-white border border-gray-700 rounded-md px-4 sm:px-4 py-2 text-xs sm:text-sm appearance-none cursor-pointer min-w-16 sm:min-w-max"
           >
-            <option value={50}>Show 50</option>
-            <option value={100}>Show 100</option>
-            <option value={200}>Show 200</option>
-            <option value={500}>Show 500</option>
+            <option value={50}>50 per page </option>
+            <option value={100}>100 per page</option>
+            <option value={200}>200 per page</option>
+            <option value={500}>500 per page</option>
           </select>
         </div>
       </div>

@@ -22,6 +22,9 @@ interface CoinGeckoMarketData {
   circulating_supply: number;
   total_supply: number;
   max_supply: number;
+  fully_diluted_valuation: {
+    usd: number | null;
+  };
 }
 
 interface CoinGeckoResponse {
@@ -151,6 +154,12 @@ export async function GET(
             circulating_supply: coin.circulating_supply,
             total_supply: coin.total_supply,
             max_supply: coin.max_supply,
+            fully_diluted_valuation: {
+              usd:
+                coin.max_supply && coin.max_supply > 0
+                  ? coin.quote.USD.price * coin.max_supply
+                  : coin.quote.USD.market_cap,
+            },
           },
           image: {
             large: `https://s2.coinmarketcap.com/static/img/coins/64x64/${coin.id}.png`,
@@ -261,6 +270,12 @@ export async function GET(
         const data = (await response.json()) as CoinGeckoResponse;
         return NextResponse.json({
           ...data,
+          market_data: {
+            ...data.market_data,
+            fully_diluted_valuation: {
+              usd: data.market_data.fully_diluted_valuation?.usd ?? null,
+            },
+          },
           data_source: "coingecko",
         });
       } catch (error) {

@@ -129,11 +129,13 @@ export const GraphsTab = ({
     <div className="space-y-8">
       <Card className="bg-gray-800/50 border-gray-700/50 backdrop-blur-sm">
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-gray-200">R-Points Trend</CardTitle>
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <CardTitle className="text-gray-200 mb-2 sm:mb-0">
+              R-Points Trend
+            </CardTitle>
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 w-full sm:w-auto">
               <Select value={selectedCoin} onValueChange={setSelectedCoin}>
-                <SelectTrigger className="w-[200px] bg-gray-900/50 border border-gray-700/50 text-gray-200 hover:bg-gray-800/50 transition-colors">
+                <SelectTrigger className="w-full sm:w-[200px] bg-gray-900/50 border border-gray-700/50 text-gray-200 hover:bg-gray-800/50 transition-colors">
                   <SelectValue placeholder="Select a coin" />
                 </SelectTrigger>
                 <SelectContent className="bg-gray-900/95 border border-gray-700/50 text-gray-200 backdrop-blur-lg">
@@ -151,18 +153,25 @@ export const GraphsTab = ({
               <Tabs
                 value={timeframe}
                 onValueChange={(v) => setTimeframe(v as "all" | "30" | "7")}
+                className="w-full sm:w-auto"
               >
-                <TabsList className="bg-gray-900/60">
-                  <TabsTrigger value="7">7d</TabsTrigger>
-                  <TabsTrigger value="30">30d</TabsTrigger>
-                  <TabsTrigger value="all">All</TabsTrigger>
+                <TabsList className="w-full sm:w-auto bg-gray-900/60">
+                  <TabsTrigger value="7" className="w-full sm:w-auto">
+                    7d
+                  </TabsTrigger>
+                  <TabsTrigger value="30" className="w-full sm:w-auto">
+                    30d
+                  </TabsTrigger>
+                  <TabsTrigger value="all" className="w-full sm:w-auto">
+                    All
+                  </TabsTrigger>
                 </TabsList>
               </Tabs>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="h-[400px]">
+          <div className="h-[250px] sm:h-[400px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData}>
                 <defs>

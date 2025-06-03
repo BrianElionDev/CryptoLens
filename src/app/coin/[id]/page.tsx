@@ -169,6 +169,8 @@ export default function CoinPage({
     sentiment_votes_down_percentage: data.sentiment_votes_down_percentage || 0,
     categories: data.categories || [],
     description: data.description?.en || "",
+    fully_diluted_valuation:
+      data.market_data?.fully_diluted_valuation?.usd ?? 0,
   };
 
   // Get market cap classification
@@ -389,7 +391,20 @@ export default function CoinPage({
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <Card className="bg-black/40 backdrop-blur-sm border-pink-500/20 hover:bg-black/60 transition-all duration-300">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-400 flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-pink-400" />
+                Fully Diluted Valuation
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-gray-200">
+                ${formatNumber(displayData.fully_diluted_valuation)}
+              </div>
+            </CardContent>
+          </Card>
           <Card className="bg-black/40 backdrop-blur-sm border-purple-500/20 hover:bg-black/60 transition-all duration-300">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-gray-400 flex items-center gap-2">
@@ -526,7 +541,7 @@ export default function CoinPage({
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0 sm:p-6">
-            <div className="h-[400px] w-full">
+            <div className="h-[500px] w-full">
               <CoinChart
                 coingecko_id={displayData.coingecko_id}
                 data_source={displayData.data_source}
