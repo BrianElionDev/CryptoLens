@@ -2343,7 +2343,10 @@ export function CombinedMarketTable({
                       )}
                     </div>
                   </PopoverTrigger>
-                  <PopoverContent className="bg-gray-800 border-gray-700 p-0 w-[280px]">
+                  <PopoverContent
+                    className="w-auto p-0 bg-gray-900 border border-gray-800"
+                    align="end"
+                  >
                     <CustomCalendar
                       selected={dateRange.from}
                       onSelect={(date) => {
@@ -2396,7 +2399,10 @@ export function CombinedMarketTable({
                       )}
                     </div>
                   </PopoverTrigger>
-                  <PopoverContent className="bg-gray-800 border-gray-700 p-0 w-[280px]">
+                  <PopoverContent
+                    className="w-auto p-0 bg-gray-900 border border-gray-800"
+                    align="end"
+                  >
                     <CustomCalendar
                       selected={dateRange.to}
                       onSelect={(date) => {
