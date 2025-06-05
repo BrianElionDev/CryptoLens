@@ -24,7 +24,6 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
 import { CryptoTableHeader } from "./CryptoTableHeader";
 import { CryptoFiltersPanel, FilterSettings } from "./CryptoFiltersPanel";
 import { CryptoColumnsSelector, Column } from "./CryptoColumnsSelector";
@@ -33,6 +32,7 @@ import { CategoriesTable } from "./CategoriesTable";
 import { ChannelSelector } from "@/app/analytics/components/ChannelSelector";
 import { CoinImage } from "@/components/ui/CoinImage";
 import dynamic from "next/dynamic";
+import { CustomCalendar } from "../CustomCalendar";
 
 // Add client-only components for loading indicators
 const LoadingDots = () => (
@@ -2343,10 +2343,8 @@ export function CombinedMarketTable({
                       )}
                     </div>
                   </PopoverTrigger>
-                  <PopoverContent className="bg-gray-800 border-gray-700 p-0">
-                    <Calendar
-                      mode="single"
-                      captionLayout="dropdown"
+                  <PopoverContent className="bg-gray-800 border-gray-700 p-0 w-[280px]">
+                    <CustomCalendar
                       selected={dateRange.from}
                       onSelect={(date) => {
                         setDateRange({ ...dateRange, from: date });
@@ -2365,7 +2363,6 @@ export function CombinedMarketTable({
                             : false)
                         );
                       }}
-                      initialFocus
                     />
                   </PopoverContent>
                 </Popover>
@@ -2399,10 +2396,8 @@ export function CombinedMarketTable({
                       )}
                     </div>
                   </PopoverTrigger>
-                  <PopoverContent className="bg-gray-800 border-gray-700 p-0">
-                    <Calendar
-                      mode="single"
-                      captionLayout="dropdown"
+                  <PopoverContent className="bg-gray-800 border-gray-700 p-0 w-[280px]">
+                    <CustomCalendar
                       selected={dateRange.to}
                       onSelect={(date) => {
                         setDateRange({ ...dateRange, to: date });
@@ -2422,7 +2417,6 @@ export function CombinedMarketTable({
                             : false)
                         );
                       }}
-                      initialFocus
                     />
                   </PopoverContent>
                 </Popover>
