@@ -458,13 +458,12 @@ function CategoriesContent() {
                   </div>
 
                   {/* View all link */}
-                  <Link href={`/categories/${category.id}`}>
-                    <button
-                      className={`mt-5 w-full bg-gradient-to-r ${colorAccent.bg} hover:brightness-110 ring-1 ${colorAccent.border} hover:ring-opacity-70 ${colorAccent.text} transition-all py-2 rounded-md flex items-center justify-center`}
-                    >
-                      View Category
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </button>
+                  <Link
+                    href={`/categories/${category.id}`}
+                    className={`mt-5 w-full cursor-pointer bg-gradient-to-r ${colorAccent.bg} hover:brightness-110 ring-1 ${colorAccent.border} hover:ring-opacity-70 ${colorAccent.text} transition-all py-2 rounded-md flex items-center justify-center`}
+                  >
+                    View Category
+                    <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </div>
               </div>

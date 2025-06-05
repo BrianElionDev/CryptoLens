@@ -816,7 +816,7 @@ export function DataTable<TData, TValue>({
         </div>
 
         {/* Desktop Table */}
-        <div className="hidden lg:block">
+        <div className="hidden lg:block w-full">
           <table className={styles.cryptoTable}>
             <thead className="sticky top-0 bg-gray-900/90 backdrop-blur-sm z-10">
               {table.getHeaderGroups().map((headerGroup) => (
@@ -908,90 +908,89 @@ export function DataTable<TData, TValue>({
   }
 
   return (
-    <div className={`${styles.cryptoTableContainer} ${className || ""}`}>
-      <style jsx global>{`
-        .glow-change {
-          animation: glow 2s ease-out;
-        }
-        @keyframes glow {
-          0% {
-            box-shadow: 0 0 0 rgba(59, 130, 246, 0);
-          }
-          20% {
-            box-shadow: 0 0 8px rgba(59, 130, 246, 0.6);
-          }
-          100% {
-            box-shadow: 0 0 0 rgba(59, 130, 246, 0);
-          }
-        }
-      `}</style>
-      <Table className={styles.cryptoTable}>
-        <TableHeader>
-          {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id}>
-              {headerGroup.headers.map((header) => {
-                const isSorted = header.column.getIsSorted();
-                return (
-                  <TableHead
-                    key={header.id}
-                    style={{ width: header.column.getSize() }}
-                    className={`${
-                      isSorted
-                        ? "text-blue-400"
-                        : "text-gray-400 hover:text-gray-200"
-                    }`}
-                    onClick={header.column.getToggleSortingHandler()}
+    <div className={`w-full ${className || ""}`}>
+      <div className="relative w-full overflow-auto">
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => {
+                  return (
+                    <TableHead
+                      key={header.id}
+                      className="whitespace-nowrap"
+                      style={{
+                        width: header.getSize(),
+                        minWidth: header.getSize(),
+                      }}
+                      onClick={header.column.getToggleSortingHandler()}
+                    >
+                      <div className="flex items-center gap-1">
+                        {flexRender(
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
+                        {header.column.getCanSort() && (
+                          <ArrowUpDown className="h-3 w-3" />
+                        )}
+                      </div>
+                    </TableHead>
+                  );
+                })}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {virtualizeRows
+              ? rowVirtualizer?.getVirtualItems().map((virtualRow) => {
+                  const row = table.getRowModel().rows[virtualRow.index];
+                  return (
+                    <TableRow
+                      key={row.id}
+                      data-state={row.getIsSelected() && "selected"}
+                      onClick={() => onRowClick?.(row.original)}
+                      className="cursor-pointer hover:bg-blue-500/5"
+                    >
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell
+                          key={cell.id}
+                          className="whitespace-nowrap"
+                          style={{
+                            width: cell.column.getSize(),
+                            minWidth: cell.column.getSize(),
+                          }}
+                        >
+                          <CellContent cell={cell} rowId={row.id} />
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  );
+                })
+              : table.getRowModel().rows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    data-state={row.getIsSelected() && "selected"}
+                    onClick={() => onRowClick?.(row.original)}
+                    className="cursor-pointer hover:bg-blue-500/5"
                   >
-                    <div className="flex items-center gap-1">
-                      {flexRender(
-                        header.column.columnDef.header,
-                        header.getContext()
-                      )}
-                      {header.column.getCanSort() && (
-                        <span className="ml-1">
-                          {{
-                            asc: <span className="text-blue-400">↑</span>,
-                            desc: <span className="text-blue-400">↓</span>,
-                            false: (
-                              <ArrowUpDown className="h-3 w-3 text-gray-500" />
-                            ),
-                          }[isSorted as string] || null}
-                        </span>
-                      )}
-                    </div>
-                  </TableHead>
-                );
-              })}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {table.getRowModel().rows.map((row) => (
-            <TableRow
-              key={row.id}
-              className={`${onRowClick ? "cursor-pointer" : ""}`}
-              onClick={() => onRowClick?.(row.original)}
-            >
-              {row.getVisibleCells().map((cell) => (
-                <TableCell
-                  key={cell.id}
-                  style={{ width: cell.column.getSize() }}
-                >
-                  <CellContent cell={cell} rowId={row.id} />
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-          {table.getRowModel().rows.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={columns.length} className="text-center py-4">
-                <div className="text-sm text-gray-400">No data available</div>
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-      {showPagination && <PaginationControls />}
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell
+                        key={cell.id}
+                        className="whitespace-nowrap"
+                        style={{
+                          width: cell.column.getSize(),
+                          minWidth: cell.column.getSize(),
+                        }}
+                      >
+                        <CellContent cell={cell} rowId={row.id} />
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+          </TableBody>
+        </Table>
+        {showPagination && <PaginationControls />}
+      </div>
     </div>
   );
 }

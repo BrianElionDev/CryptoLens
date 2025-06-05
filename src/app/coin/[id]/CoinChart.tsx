@@ -41,7 +41,9 @@ async function getCoinHistory(id: string, days: string) {
   return res.json();
 }
 
-export default function CoinChart({ coingecko_id }: CoinChartProps) {
+export default function CoinChart({
+  coingecko_id,
+}: CoinChartProps) {
   const [timeframe, setTimeframe] = useState("1");
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);

@@ -1,4 +1,7 @@
 /* Chat overlay fix styles */
+@reference "tailwindcss";
+
+
 .chat-overlay-active,
 .video-overlay-active {
   overflow: hidden !important; /* Prevent scrolling while modal is open */
