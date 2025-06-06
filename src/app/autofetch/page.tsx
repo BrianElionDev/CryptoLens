@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, Calendar as CalendarIcon, Info } from "lucide-react";
-import { Calendar } from "@/components/ui/calendar";
+import { CustomCalendar } from "@/components/CustomCalendar";
 import {
   Popover,
   PopoverContent,
@@ -231,9 +231,11 @@ export default function AutofetchPage() {
                             <CalendarIcon className="h-4 w-4" />
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="end">
-                          <Calendar
-                            mode="single"
+                        <PopoverContent
+                          className="w-auto p-0 bg-gray-900 border border-gray-800"
+                          align="end"
+                        >
+                          <CustomCalendar
                             selected={
                               publishedAfter
                                 ? new Date(publishedAfter)
@@ -246,7 +248,6 @@ export default function AutofetchPage() {
                               setError("");
                             }}
                             disabled={(date) => date > new Date()}
-                            initialFocus
                           />
                         </PopoverContent>
                       </Popover>
@@ -280,9 +281,11 @@ export default function AutofetchPage() {
                             <CalendarIcon className="h-4 w-4" />
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="end">
-                          <Calendar
-                            mode="single"
+                        <PopoverContent
+                          className="w-auto p-0 bg-gray-900 border border-gray-800"
+                          align="end"
+                        >
+                          <CustomCalendar
                             selected={
                               publishedBefore
                                 ? new Date(publishedBefore)
@@ -300,7 +303,6 @@ export default function AutofetchPage() {
                                 ? date < new Date(publishedAfter)
                                 : false)
                             }
-                            initialFocus
                           />
                         </PopoverContent>
                       </Popover>

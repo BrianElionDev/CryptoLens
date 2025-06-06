@@ -3,7 +3,6 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Filter, Search, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { useContextKnowledge } from "@/hooks/useContextKnowledge";
-import styles from "./cryptoTable.module.css";
 
 export type TabType = "all" | "categories" | string;
 
@@ -28,7 +27,6 @@ export function CryptoTableHeader({
 }: CryptoTableHeaderProps) {
   const [activeTab, setActiveTab] = useState<TabType>("all");
   const [searchTerm, setSearchTerm] = useState("");
-  const [showNoResults, setShowNoResults] = useState(false);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
@@ -363,49 +361,59 @@ export function CryptoTableHeader({
     if (onSearch) {
       onSearch(value);
     }
-
-    // Only show no results UI when parent component tells us
-    // This is just a placeholder until we implement the callback from parent
-    setShowNoResults(value.length > 0 && Math.random() > 0.7);
   };
 
   const clearSearch = () => {
     setSearchTerm("");
-    setShowNoResults(false);
     if (onSearch) {
       onSearch("");
     }
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 w-full">
       {/* Category tabs with scroll indicators */}
-      <div className="relative">
-        {canScrollLeft && (
-          <div className="absolute left-0 top-0 bottom-0 w-12 flex items-center z-10 pointer-events-none">
-            <div className="w-full h-full bg-gradient-to-r from-gray-900 to-transparent opacity-80"></div>
-            <button
-              onClick={() => scrollTabs("left")}
-              className="absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-gray-800/80 hover:bg-gray-700 text-gray-200 rounded-full p-1 shadow-md pointer-events-auto"
-              aria-label="Scroll left"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </button>
-          </div>
-        )}
+      <div className="relative w-full overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none">
+          {canScrollLeft && (
+            <div className="absolute left-0 top-0 bottom-0 w-12 flex items-center z-10">
+              <div className="w-full h-full bg-gradient-to-r from-gray-900 to-transparent opacity-80"></div>
+              <button
+                onClick={() => scrollTabs("left")}
+                className="absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-gray-800/80 hover:bg-gray-700 text-gray-200 rounded-full p-1 shadow-md pointer-events-auto"
+                aria-label="Scroll left"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+            </div>
+          )}
+
+          {canScrollRight && (
+            <div className="absolute right-0 top-0 bottom-0 w-12 flex items-center justify-end z-10">
+              <div className="w-full h-full bg-gradient-to-l from-gray-900 to-transparent opacity-80"></div>
+              <button
+                onClick={() => scrollTabs("right")}
+                className="absolute right-0 top-1/2 -translate-y-1/2 z-20 bg-gray-800/80 hover:bg-gray-700 text-gray-200 rounded-full p-1 shadow-md pointer-events-auto"
+                aria-label="Scroll right"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </div>
+          )}
+        </div>
 
         <div
           ref={tabsContainerRef}
-          className={`flex items-center overflow-x-auto pb-2 ${styles.scrollbarHide}`}
+          className="w-full overflow-x-auto scrollbar-hide"
           onScroll={checkScrollability}
         >
-          <div className="flex space-x-1 min-w-max">
+          <div className="flex space-x-1 min-w-max px-2 py-1">
             {categories.map((category) => (
               <Button
                 key={category.id}
                 variant="ghost"
                 className={cn(
-                  "px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-1.5",
+                  "px-2 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-1 sm:gap-1.5",
                   activeTab === category.id
                     ? "bg-blue-500/10 text-blue-500 border-b-2 border-blue-500"
                     : "text-gray-400 hover:text-white hover:bg-gray-800/40"
@@ -413,68 +421,46 @@ export function CryptoTableHeader({
                 onClick={() => handleTabChange(category.id)}
               >
                 {category.icon && category.icon}
-                {category.label}
+                <span className="truncate max-w-20 sm:max-w-none">
+                  {category.label}
+                </span>
               </Button>
             ))}
           </div>
         </div>
-
-        {canScrollRight && (
-          <div className="absolute right-0 top-0 bottom-0 w-12 flex items-center justify-end z-10 pointer-events-none">
-            <div className="w-full h-full bg-gradient-to-l from-gray-900 to-transparent opacity-80"></div>
-            <button
-              onClick={() => scrollTabs("right")}
-              className="absolute right-0 top-1/2 -translate-y-1/2 z-20 bg-gray-800/80 hover:bg-gray-700 text-gray-200 rounded-full p-1 shadow-md pointer-events-auto"
-              aria-label="Scroll right"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col space-y-3 sm:space-y-0 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex-1 max-w-md">
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-              <Search className="h-4 w-4 text-gray-400" />
-            </div>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={handleSearch}
-              className="block w-full bg-gray-800/40 border border-gray-700 rounded-md py-2 pl-10 pr-10 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Search coins..."
-            />
-            {searchTerm && (
-              <button
-                onClick={clearSearch}
-                className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
+          <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+            <Search className="h-4 w-4 text-gray-400" />
           </div>
-
-          {/* No results message */}
-          {showNoResults && (
-            <div className="absolute z-10 mt-1 w-full bg-gray-800 border border-gray-700 rounded-md shadow-lg">
-              <div className="p-4 text-center text-gray-400">
-                No coins found matching &quot;{searchTerm}&quot;
-              </div>
-            </div>
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={handleSearch}
+            className="block w-full bg-gray-800/40 border border-gray-700 rounded-md py-2 pl-10 pr-10 text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Search coins..."
+          />
+          {searchTerm && (
+            <button
+              onClick={clearSearch}
+              className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white"
+            >
+              <X className="h-4 w-4" />
+            </button>
           )}
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center gap-2">
           <Button
             variant="outline"
             onClick={onOpenFilters}
             className="bg-gray-800/50 hover:bg-gray-700/50 text-white border-gray-700 rounded-md px-4 py-2 flex items-center gap-1.5"
           >
             <Filter className="h-4 w-4" />
-            Filters
+            <span className="sm:inline">Filters</span>
           </Button>
 
           <Button
@@ -488,18 +474,18 @@ export function CryptoTableHeader({
                 d="M4,3H20A1,1 0 0,1 21,4V5A1,1 0 0,1 20,6H4A1,1 0 0,1 3,5V4A1,1 0 0,1 4,3M9,7H20A1,1 0 0,1 21,8V9A1,1 0 0,1 20,10H9A1,1 0 0,1 8,9V8A1,1 0 0,1 9,7M4,11H20A1,1 0 0,1 21,12V13A1,1 0 0,1 20,14H4A1,1 0 0,1 3,13V12A1,1 0 0,1 4,11M9,15H20A1,1 0 0,1 21,16V17A1,1 0 0,1 20,18H9A1,1 0 0,1 8,17V16A1,1 0 0,1 9,15Z"
               />
             </svg>
-            Columns
+            <span className="sm:inline">Columns</span>
           </Button>
 
           <select
             value={showCount}
             onChange={(e) => onShowCountChange?.(Number(e.target.value))}
-            className="bg-gray-800/50 hover:bg-gray-700/50 text-white border border-gray-700 rounded-md px-4 py-2 flex items-center appearance-none cursor-pointer"
+            className="bg-gray-800/50 hover:bg-gray-700/50 text-white border border-gray-700 rounded-md px-4 py-2 text-xs sm:text-sm appearance-none cursor-pointer min-w-16 sm:min-w-max"
           >
-            <option value={50}>Show 50</option>
-            <option value={100}>Show 100</option>
-            <option value={200}>Show 200</option>
-            <option value={500}>Show 500</option>
+            <option value={50}>50 per page</option>
+            <option value={100}>100 per page</option>
+            <option value={200}>200 per page</option>
+            <option value={500}>500 per page</option>
           </select>
         </div>
       </div>

@@ -1,7 +1,8 @@
 /* Custom table styles for CoinMarketCap-like design */
+@reference "tailwindcss";
 
 .cryptoTableContainer {
-  @apply w-full h-full bg-gradient-to-r from-blue-900/10 via-purple-900/10 to-pink-900/10 backdrop-blur-sm rounded-xl border border-gray-800/20;
+  @apply w-full h-full bg-gradient-to-r from-[#1a365d]/10 via-[#4a1d6e]/10 to-[#831843]/10 backdrop-blur-[8px] rounded-xl border border-gray-800/20;
 }
 
 .cryptoTable {
@@ -9,7 +10,7 @@
 }
 
 .cryptoTable th {
-  @apply py-4 px-4 text-sm font-medium text-gray-400 border-b border-gray-800/50 hover:text-gray-200 transition-colors cursor-pointer;
+  @apply py-4 px-4 text-sm font-medium text-gray-400 border-b border-gray-800/50 hover:text-gray-200 transition-colors cursor-pointer w-full;
 }
 
 .cryptoTable td {
@@ -29,7 +30,7 @@
 }
 
 .cryptoTabsContainer {
-  @apply border-b border-gray-800 overflow-x-auto;
+  @apply w-full border-b border-gray-800;
 }
 
 .cryptoTabs {
@@ -53,7 +54,7 @@
 }
 
 .cryptoToolbar {
-  @apply flex items-center space-x-2 overflow-x-auto py-2;
+  @apply flex items-center space-x-2 py-2;
 }
 
 .cryptoToolbarButton {
@@ -81,7 +82,7 @@
 }
 
 .cryptoColumnsSelector {
-  @apply fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm;
+  @apply fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-[8px];
 }
 
 .glowChange {
@@ -120,25 +121,25 @@
   }
 }
 
-/* Custom scrollbar styles */
-.scrollbarHide::-webkit-scrollbar {
-  display: none;
-}
-
+/* Hide scrollbar but keep functionality */
 .scrollbarHide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
 }
 
-/* Make sure the global class also works for any element */
-/* Replace the problematic global selectors */
-.scrollbarHideGlobal::-webkit-scrollbar {
-  display: none;
+.scrollbarHide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
 }
 
-.scrollbarHideGlobal {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+/* Ensure full width for containers */
+.fullWidth {
+  @apply w-full;
+}
+
+/* Add container styles */
+.container {
+  @apply w-full max-w-full overflow-hidden;
 }
 
 /* Tooltip styles */

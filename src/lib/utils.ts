@@ -1,41 +1,42 @@
-import { type ClassValue, clsx } from "clsx";
+import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatCurrency(
-  value: number,
-  options: Intl.NumberFormatOptions = {}
-) {
+export function formatCurrency(value: number): string {
+  if (!value && value !== 0) return "$0";
+
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-    ...options,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   }).format(value);
 }
 
-export function formatPercentage(value: number | null | undefined): string {
-  if (value === null || value === undefined) return "0.00%";
-  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+export function formatPercentage(value: number): string {
+  if (!value && value !== 0) return "0%";
+
+  const formatted = new Intl.NumberFormat("en-US", {
+    style: "percent",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+    signDisplay: "exceptZero",
+  }).format(value / 100);
+
+  return formatted;
 }
 
 export function formatNumber(
-  value: number,
-  type: "price" | "default" = "default"
-) {
-  if (type === "price") {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 6,
-    }).format(value);
-  }
+  value: number | undefined,
+  format: "compact" | "default" = "default"
+): string {
+  if (value === undefined || value === null) return "0";
 
   return new Intl.NumberFormat("en-US", {
-    notation: "compact",
     maximumFractionDigits: 2,
+    notation: format === "compact" ? "compact" : "standard",
   }).format(value);
 }

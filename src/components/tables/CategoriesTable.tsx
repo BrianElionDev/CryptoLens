@@ -241,7 +241,7 @@ export function CategoriesTable({
   };
 
   return (
-    <div className="bg-gradient-to-r from-blue-900/10 via-purple-900/10 to-pink-900/10 backdrop-blur-sm rounded-xl border border-gray-800/20">
+    <div className="bg-gradient-to-r from-blue-900/10 via-purple-900/10 to-pink-900/10 backdrop-blur-[8px] rounded-xl border border-gray-800/20">
       <div className="p-4">
         <div className="flex flex-col space-y-4">
           <h2 className="text-xl font-semibold text-white">Categories</h2>

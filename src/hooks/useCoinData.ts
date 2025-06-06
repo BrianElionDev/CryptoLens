@@ -95,8 +95,18 @@ export interface CoinHistoryData {
   price: number;
 }
 
+// Add interface for CMC response
+interface CMCResponse {
+  data: Record<string, CoinData>;
+  timestamp: number;
+}
+
 // Constants
 const API_TIMEOUT = 30000;
+
+// Add a global CMC request lock
+let cmcRequestPromise: Promise<CMCResponse> | null = null;
+let lastCmcSymbols: string[] = [];
 
 export function useCoinData(
   symbols: string[],
@@ -242,88 +252,124 @@ export function useCoinData(
         return { data: {}, timestamp: Date.now() };
       }
 
-      if (DEBUG_LOGS)
-        console.log(
-          `Querying CMC for ${missingSymbols.length} missing symbols...`
-        );
-
-      // Try to get data from cache first
+      // Try to get data from cache first (for any symbols)
       const cachedData = getCachedData(CACHE_KEY_CMC);
-      if (cachedData && missingSymbols.length > 0) {
+      if (cachedData && cachedData.data) {
+        // See if we can satisfy all missingSymbols from the cache
         const cachedCoins = new Set(
           Object.keys(cachedData.data).map((s) => s.toLowerCase())
         );
         const allSymbolsCached = missingSymbols.every((s) =>
           cachedCoins.has(s.toLowerCase())
         );
-
         if (allSymbolsCached) {
-          // Only log cache usage in development
-          if (process.env.NODE_ENV === "development" && DEBUG_LOGS) {
-            console.log("Using cached CMC data");
-          }
-          return cachedData;
+          // Return only the requested symbols from the cache
+          const filtered = missingSymbols.reduce<Record<string, CoinData>>(
+            (acc, s) => {
+              const key = s.toLowerCase();
+              if (cachedData.data[key]) acc[key] = cachedData.data[key];
+              return acc;
+            },
+            {}
+          );
+          return { data: filtered, timestamp: cachedData.timestamp };
         }
       }
 
-      // Implement retry with exponential backoff for rate limiting
-      const MAX_RETRIES = 3;
-      let retries = 0;
+      // Throttle: Only allow one CMC request at a time
+      if (
+        cmcRequestPromise &&
+        lastCmcSymbols.join(",") === missingSymbols.sort().join(",")
+      ) {
+        // If the same symbols are being requested, await the in-flight promise
+        return cmcRequestPromise;
+      }
 
-      const fetchWithRetry = async () => {
-        try {
-          const response = await axios.post(
-            "/api/coinmarketcap",
-            {
-              symbols: missingSymbols,
-              fallbackMode: true,
-              reason: "Symbols not found in CoinGecko",
-            },
-            { timeout: API_TIMEOUT }
+      const doRequest = async () => {
+        if (DEBUG_LOGS)
+          console.log(
+            `Querying CMC for ${missingSymbols.length} missing symbols...`
           );
 
-          const coinCount = Object.keys(response.data.data || {}).length;
-          // Only log in debug mode and development environment
-          if (DEBUG_LOGS && process.env.NODE_ENV === "development") {
-            console.log(`CMC response: ${coinCount} coins`);
-          }
+        // Implement retry with exponential backoff for rate limiting
+        const MAX_RETRIES = 3;
+        let retries = 0;
 
-          // Save response to cache
-          if (
-            response.data.data &&
-            Object.keys(response.data.data).length > 0
-          ) {
-            setCachedData(CACHE_KEY_CMC, response.data.data);
-          }
-
-          return response.data;
-        } catch (error) {
-          if (axios.isAxiosError(error) && error.response?.status === 429) {
-            if (retries < MAX_RETRIES) {
-              // Exponential backoff: 2s, 4s, 8s
-              const delay = Math.pow(2, retries + 1) * 1000;
-              // Keep this log as it's important for debugging rate limiting
-              console.log(
-                `CMC API rate limited. Retrying in ${delay / 1000}s...`
-              );
-              retries++;
-              await new Promise((resolve) => setTimeout(resolve, delay));
-              return fetchWithRetry();
-            }
-            console.warn(
-              `CMC API rate limited. Max retries (${MAX_RETRIES}) reached.`
+        const fetchWithRetry = async () => {
+          try {
+            const response = await axios.post(
+              "/api/coinmarketcap",
+              {
+                symbols: missingSymbols,
+                fallbackMode: true,
+                reason: "Symbols not found in CoinGecko",
+              },
+              { timeout: API_TIMEOUT }
             );
+
+            const coinCount = Object.keys(response.data.data || {}).length;
+            // Only log in debug mode and development environment
+            if (DEBUG_LOGS && process.env.NODE_ENV === "development") {
+              console.log(`CMC response: ${coinCount} coins`);
+            }
+
+            // Save the ENTIRE response to cache (not just requested symbols)
+            if (
+              response.data.data &&
+              Object.keys(response.data.data).length > 0
+            ) {
+              setCachedData(CACHE_KEY_CMC, response.data.data);
+            }
+
+            // Return only the requested symbols from the response
+            const filtered = missingSymbols.reduce<Record<string, CoinData>>(
+              (acc, s) => {
+                const key = s.toLowerCase();
+                if (response.data.data[key]) acc[key] = response.data.data[key];
+                return acc;
+              },
+              {}
+            );
+            return { data: filtered, timestamp: Date.now() };
+          } catch (error) {
+            if (axios.isAxiosError(error) && error.response?.status === 429) {
+              if (retries < MAX_RETRIES) {
+                // Exponential backoff: 2s, 4s, 8s
+                const delay = Math.pow(2, retries + 1) * 1000;
+                // Keep this log as it's important for debugging rate limiting
+                console.log(
+                  `CMC API rate limited. Retrying in ${delay / 1000}s...`
+                );
+                retries++;
+                await new Promise((resolve) => setTimeout(resolve, delay));
+                return fetchWithRetry();
+              }
+              console.warn(
+                `CMC API rate limited. Max retries (${MAX_RETRIES}) reached.`
+              );
+            }
+            throw error;
           }
-          throw error;
-        }
+        };
+
+        return fetchWithRetry();
       };
 
-      return fetchWithRetry();
+      lastCmcSymbols = missingSymbols.slice().sort();
+      cmcRequestPromise = doRequest();
+      try {
+        const result = await cmcRequestPromise;
+        cmcRequestPromise = null;
+        return result;
+      } catch (err) {
+        cmcRequestPromise = null;
+        throw err;
+      }
     },
     enabled: missingSymbols.length > 0,
-    staleTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 5 * 60 * 1000, // 5 minutes for CMC
     gcTime: 15 * 60 * 1000, // 15 minutes
-    refetchInterval: 15 * 60 * 1000, // 15 minutes
+    refetchInterval: 5 * 60 * 1000, // 5 minutes for CMC
     retry: (failureCount, error) => {
       // Don't use React Query's built-in retry for rate limits
       if (axios.isAxiosError(error) && error.response?.status === 429) {

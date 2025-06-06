@@ -33,62 +33,42 @@ interface CoinHistoryData {
 }
 
 async function getCoinHistory(id: string, days: string) {
-  const response = await fetch(`/api/coins/${id}/history?days=${days}`);
-  if (!response.ok) {
-    const error = await response.json();
+  const res = await fetch(`/api/coins/${id}/history?days=${days}`);
+  if (!res.ok) {
+    const error = await res.json();
     throw new Error(error.error || "Failed to fetch history");
   }
-  return response.json();
+  return res.json();
 }
 
 export default function CoinChart({
   coingecko_id,
-  data_source,
-}: Omit<CoinChartProps, "cmc_id">) {
+}: CoinChartProps) {
   const [timeframe, setTimeframe] = useState("1");
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const [days, setDays] = useState("1");
-
-  const handleTimeframeChange = (value: string) => {
-    setTimeframe(value);
-    setDays(value);
-  };
 
   const {
     data: chartData,
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["coin-history", coingecko_id, days],
-    queryFn: () => getCoinHistory(coingecko_id, days),
+    queryKey: ["coinHistory", coingecko_id, timeframe],
+    queryFn: () => getCoinHistory(coingecko_id, timeframe),
     staleTime: 60 * 1000,
     retry: 2,
-    enabled: !!coingecko_id && data_source !== "cmc",
   });
 
   useEffect(() => {
     if (!chartContainerRef.current || !chartData) return;
 
-    // Clear any existing chart
-    if (chartRef.current) {
-      chartRef.current.remove();
-      chartRef.current = null;
-    }
-
-    const chartContainer = chartContainerRef.current;
-
-    // Set initial dimensions
-    const containerWidth = chartContainer.clientWidth;
-    const containerHeight = chartContainer.clientHeight;
-
-    const chart = createChart(chartContainer, {
+    const chart = createChart(chartContainerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
         textColor: "#94a3b8",
       },
-      width: containerWidth,
-      height: containerHeight,
+      width: chartContainerRef.current.clientWidth,
+      height: 500,
       timeScale: {
         timeVisible: true,
         secondsVisible: false,
@@ -149,78 +129,26 @@ export default function CoinChart({
     candlestickSeries.setData(candlestickData);
     chartRef.current = chart;
 
-    // Create resize handler
-    const handleResize = () => {
-      if (chartRef.current && chartContainer) {
-        const { width, height } = chartContainer.getBoundingClientRect();
-        chartRef.current.resize(width, height);
-        chartRef.current.timeScale().fitContent();
-      }
-    };
-
-    // Set up resize observer
-    const resizeObserver = new ResizeObserver(() => {
-      handleResize();
+    const resizeObserver = new ResizeObserver((entries) => {
+      if (entries.length === 0 || !chartRef.current) return;
+      const { width, height } = entries[0].contentRect;
+      chartRef.current.resize(width, height);
     });
 
-    resizeObserver.observe(chartContainer);
+    resizeObserver.observe(chartContainerRef.current);
 
-    // Handle immediate resize if needed
-    handleResize();
-
-    // Clean up
     return () => {
-      resizeObserver.disconnect();
       chart.remove();
       chartRef.current = null;
+      resizeObserver.disconnect();
     };
   }, [chartData]);
 
-  if (data_source === "cmc") {
-    return (
-      <div className="w-full h-full">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-200">Price History</h3>
-          <Tabs defaultValue={timeframe} onValueChange={handleTimeframeChange}>
-            <TabsList className="bg-gray-900/60">
-              <TabsTrigger
-                value="1"
-                className="data-[state=active]:bg-gray-800"
-              >
-                24h
-              </TabsTrigger>
-              <TabsTrigger
-                value="7"
-                className="data-[state=active]:bg-gray-800"
-              >
-                7d
-              </TabsTrigger>
-              <TabsTrigger
-                value="30"
-                className="data-[state=active]:bg-gray-800"
-              >
-                30d
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
-        <div className="h-[calc(100%-40px)] w-full relative rounded-lg border border-gray-800 bg-gray-900/50 p-4 flex items-center justify-center">
-          <div className="text-center text-gray-400">
-            <p>Historical data is not available in the free version of CMC</p>
-            <p className="text-sm mt-2">
-              Please upgrade to CMC Pro for historical data
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="w-full h-full">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4">
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold text-gray-200">Price History</h3>
-        <Tabs defaultValue={timeframe} onValueChange={handleTimeframeChange}>
+        <Tabs defaultValue={timeframe} onValueChange={setTimeframe}>
           <TabsList className="bg-gray-900/60">
             <TabsTrigger value="1" className="data-[state=active]:bg-gray-800">
               24h
@@ -234,19 +162,20 @@ export default function CoinChart({
           </TabsList>
         </Tabs>
       </div>
-      <div className="h-[calc(100%-56px)] w-full relative rounded-lg border border-blue-500/30 bg-black/50 p-2 sm:p-4">
+      <div className="h-[400px] w-full min-w-[400px] relative rounded-lg border border-gray-800 bg-gray-900/50 p-4">
         {isLoading ? (
           <div className="h-full w-full flex items-center justify-center">
             <div className="w-8 h-8 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
           </div>
         ) : error ? (
           <div className="h-full w-full flex items-center justify-center text-red-500">
-            {error instanceof Error
-              ? error.message
-              : "Error loading chart data"}
+            {error.message}
           </div>
         ) : (
-          <div ref={chartContainerRef} className="w-full h-full" />
+          <div
+            ref={chartContainerRef}
+            className="w-full h-full absolute inset-0"
+          />
         )}
       </div>
     </div>

@@ -315,18 +315,18 @@ export function CryptoMarketsPage() {
   };
 
   return (
-    <div className="min-h-screen pt-24 bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900">
-      <div className="container mx-auto px-4 2xl:px-0 max-w-[1400px] space-y-6">
+    <div className="min-h-screen pt-20 sm:pt-24 bg-gradient-to-br from-gray-900 via-blue-900/50 to-gray-900">
+      <div className="container mx-auto px-3 sm:px-4 2xl:px-0 max-w-[1400px] space-y-4 sm:space-y-6">
         {/* Title Bar with Last Updated */}
         <div className="flex flex-col space-y-1">
           <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-white">
+            <h1 className="text-lg sm:text-xl lg:text-2xl font-bold text-white leading-tight">
               Today&apos;s Cryptocurrency Prices by Market Cap
             </h1>
           </div>
-          <div className="text-xs text-gray-400">
+          <div className="text-xs sm:text-sm text-gray-400">
             {isLoadingGlobalMarket ? (
-              <span className="inline-block w-40 h-4 bg-gray-700/50 rounded animate-pulse" />
+              <span className="inline-block w-32 sm:w-40 h-3 sm:h-4 bg-gray-700/50 rounded animate-pulse" />
             ) : (
               <>
                 The global cryptocurrency market cap today is
@@ -372,68 +372,70 @@ export function CryptoMarketsPage() {
         </div>
 
         {/* Top Cards Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
           {/* Trending Coins Card */}
-          <div className="bg-gradient-to-r from-blue-900/10 via-purple-900/10 to-blue-900/10 border border-gray-800/40 rounded-xl p-4 col-span-1">
-            <div className="flex items-center justify-between mb-4">
+          <div className="bg-gradient-to-r from-blue-900/10 via-purple-900/10 to-blue-900/10 border border-gray-800/40 rounded-xl p-3 sm:p-4 col-span-1">
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
               <div className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-blue-400" />
-                <h2 className="font-semibold text-white">Trending Coins</h2>
+                <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-blue-400" />
+                <h2 className="text-sm sm:text-base font-semibold text-white">
+                  Trending Coins
+                </h2>
               </div>
             </div>
-            <div className="space-y-3 min-h-[230px]">
+            <div className="space-y-2 sm:space-y-3 min-h-[200px] sm:min-h-[230px]">
               {isLoadingTrending
-                ? // Loading skeletons with fixed height to match actual content
+                ? // Loading skeletons with responsive height
                   Array(5)
                     .fill(0)
                     .map((_, i) => (
                       <div
                         key={i}
-                        className="flex items-center justify-between py-1 h-[46px]"
+                        className="flex items-center justify-between py-1 h-[38px] sm:h-[46px]"
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="flex-shrink-0 text-gray-400 font-medium w-5 text-center">
+                        <div className="flex items-center gap-2 sm:gap-3">
+                          <div className="flex-shrink-0 text-gray-400 font-medium w-4 sm:w-5 text-center text-xs sm:text-sm">
                             {i + 1}
                           </div>
-                          <div className="h-8 w-8 bg-gray-700/50 rounded-full flex-shrink-0" />
-                          <div className="space-y-1.5">
-                            <div className="h-4 w-24 bg-gray-700/50 rounded" />
-                            <div className="h-3 w-16 bg-gray-700/30 rounded" />
+                          <div className="h-6 w-6 sm:h-8 sm:w-8 bg-gray-700/50 rounded-full flex-shrink-0" />
+                          <div className="space-y-1 sm:space-y-1.5">
+                            <div className="h-3 sm:h-4 w-20 sm:w-24 bg-gray-700/50 rounded" />
+                            <div className="h-2 sm:h-3 w-12 sm:w-16 bg-gray-700/30 rounded" />
                           </div>
                         </div>
-                        <div className="h-4 w-16 bg-gray-700/50 rounded" />
+                        <div className="h-3 sm:h-4 w-12 sm:w-16 bg-gray-700/50 rounded" />
                       </div>
                     ))
                 : // Actual trending coins
                   trendingCoins.map((coin: TrendingCoin, index: number) => (
                     <div
                       key={coin.item.id}
-                      className="flex items-center justify-between py-1 hover:bg-gray-800/20 rounded-lg transition cursor-pointer h-[46px]"
+                      className="flex items-center justify-between py-1 hover:bg-gray-800/20 rounded-lg transition cursor-pointer h-[38px] sm:h-[46px]"
                       onClick={() => handleCoinClick(coin.item.id)}
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="flex-shrink-0 text-gray-400 font-medium w-5 text-center">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <div className="flex-shrink-0 text-gray-400 font-medium w-4 sm:w-5 text-center text-xs sm:text-sm">
                           {index + 1}
                         </div>
-                        <div className="w-8 h-8 flex-shrink-0">
+                        <div className="w-6 h-6 sm:w-8 sm:h-8 flex-shrink-0">
                           <Image
                             src={coin.item.thumb}
                             alt={coin.item.name}
                             width={32}
                             height={32}
-                            className="rounded-full"
+                            className="rounded-full w-full h-full"
                           />
                         </div>
                         <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-white">
+                          <div className="flex items-center gap-1 sm:gap-2">
+                            <span className="font-medium text-white text-sm sm:text-base truncate max-w-[120px] sm:max-w-none">
                               {coin.item.name}
                             </span>
                             <span className="text-xs text-gray-400">
                               {coin.item.symbol}
                             </span>
                           </div>
-                          <div className="text-xs text-gray-400">
+                          <div className="text-xs text-gray-400 hidden sm:block">
                             {coin.item.price_btc
                               ? `${coin.item.price_btc.toFixed(8)} BTC`
                               : ""}
@@ -441,7 +443,7 @@ export function CryptoMarketsPage() {
                         </div>
                       </div>
                       <div
-                        className={`text-sm font-medium ${
+                        className={`text-xs sm:text-sm font-medium ${
                           (coin.item.data?.price_change_percentage_24h?.usd ||
                             0) >= 0
                             ? "text-green-400"
@@ -460,37 +462,38 @@ export function CryptoMarketsPage() {
           </div>
 
           {/* Global Market Stats Card */}
-          <div className="bg-gradient-to-r from-blue-900/10 via-green-900/10 to-blue-900/10 border border-gray-800/40 rounded-xl p-4 col-span-1 flex flex-col gap-3 min-h-[220px]">
-            <div className="text-lg font-semibold text-white mb-1">
+          <div className="bg-gradient-to-r from-blue-900/10 via-green-900/10 to-blue-900/10 border border-gray-800/40 rounded-xl p-3 sm:p-4 col-span-1 flex flex-col gap-2 sm:gap-3 min-h-[180px] sm:min-h-[220px]">
+            <div className="text-base sm:text-lg font-semibold text-white mb-1">
               Global Market Stats
             </div>
             {isLoadingGlobalMarket ? (
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-2 sm:gap-3">
                 {[1, 2, 3].map((i) => (
                   <div
                     key={i}
-                    className="w-full bg-gray-800/40 border border-gray-700/30 rounded-lg p-4 flex items-center min-h-[64px]"
+                    className="w-full bg-gray-800/40 border border-gray-700/30 rounded-lg p-3 sm:p-4 flex items-center min-h-[50px] sm:min-h-[64px]"
                   >
-                    <div className="w-8 h-8 bg-gray-700/50 rounded-full mr-4" />
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gray-700/50 rounded-full mr-3 sm:mr-4" />
                     <div className="flex-1">
-                      <div className="w-24 h-5 bg-gray-700/40 rounded mb-1" />
-                      <div className="w-16 h-3 bg-gray-700/30 rounded" />
+                      <div className="w-20 sm:w-24 h-4 sm:h-5 bg-gray-700/40 rounded mb-1" />
+                      <div className="w-12 sm:w-16 h-2 sm:h-3 bg-gray-700/30 rounded" />
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-2 sm:gap-3">
                 {/* Market Cap */}
                 <div>
-                  <div className="font-bold text-sm text-blue-300 mb-1 pl-1">
+                  <div className="font-bold text-xs sm:text-sm text-blue-300 mb-1 pl-1">
                     Market Capitalization
                   </div>
-                  <div className="w-full bg-gray-800/40 border border-gray-700/30 rounded-lg p-4 flex items-center">
-                    <div className="w-8 h-8 flex items-center justify-center rounded-full bg-blue-900/30 mr-4">
+                  <div className="w-full bg-gray-800/40 border border-gray-700/30 rounded-lg p-3 sm:p-4 flex items-center">
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center rounded-full bg-blue-900/30 mr-3 sm:mr-4">
                       <svg
-                        width="28"
-                        height="28"
+                        width="20"
+                        height="20"
+                        className="sm:w-7 sm:h-7"
                         fill="none"
                         viewBox="0 0 24 24"
                       >
@@ -506,11 +509,17 @@ export function CryptoMarketsPage() {
                       </svg>
                     </div>
                     <div className="flex-1">
-                      <div className="text-white font-bold text-xl">
+                      <div className="text-white font-bold text-lg sm:text-xl">
                         $
-                        {globalMarketData.marketCap.toLocaleString(undefined, {
-                          maximumFractionDigits: 0,
-                        })}
+                        {(() => {
+                          const cap = globalMarketData.marketCap;
+                          if (cap >= 1e12) return `${(cap / 1e12).toFixed(1)}T`;
+                          if (cap >= 1e9) return `${(cap / 1e9).toFixed(1)}B`;
+                          return cap.toLocaleString(undefined, {
+                            maximumFractionDigits: 0,
+                            notation: "compact",
+                          });
+                        })()}
                       </div>
                       <div className="text-xs text-blue-300 mt-0.5">
                         Market Cap
@@ -520,14 +529,15 @@ export function CryptoMarketsPage() {
                 </div>
                 {/* 24h Volume */}
                 <div>
-                  <div className="font-bold text-sm text-green-300 mb-1 pl-1">
+                  <div className="font-bold text-xs sm:text-sm text-green-300 mb-1 pl-1">
                     24h Trading Volume
                   </div>
-                  <div className="w-full bg-gray-800/40 border border-gray-700/30 rounded-lg p-4 flex items-center">
-                    <div className="w-8 h-8 flex items-center justify-center rounded-full bg-green-900/30 mr-4">
+                  <div className="w-full bg-gray-800/40 border border-gray-700/30 rounded-lg p-3 sm:p-4 flex items-center">
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center rounded-full bg-green-900/30 mr-3 sm:mr-4">
                       <svg
-                        width="28"
-                        height="28"
+                        width="20"
+                        height="20"
+                        className="sm:w-7 sm:h-7"
                         fill="none"
                         viewBox="0 0 24 24"
                       >
@@ -545,11 +555,17 @@ export function CryptoMarketsPage() {
                       </svg>
                     </div>
                     <div className="flex-1">
-                      <div className="text-white font-bold text-xl">
+                      <div className="text-white font-bold text-lg sm:text-xl">
                         $
-                        {globalMarketData.volume24h.toLocaleString(undefined, {
-                          maximumFractionDigits: 0,
-                        })}
+                        {(() => {
+                          const vol = globalMarketData.volume24h;
+                          if (vol >= 1e12) return `${(vol / 1e12).toFixed(1)}T`;
+                          if (vol >= 1e9) return `${(vol / 1e9).toFixed(1)}B`;
+                          return vol.toLocaleString(undefined, {
+                            maximumFractionDigits: 0,
+                            notation: "compact",
+                          });
+                        })()}
                       </div>
                       <div className="text-xs text-green-300 mt-0.5">
                         24h Volume
@@ -559,12 +575,12 @@ export function CryptoMarketsPage() {
                 </div>
                 {/* 24h % Change */}
                 <div>
-                  <div className="font-bold text-sm text-gray-300 mb-1 pl-1">
+                  <div className="font-bold text-xs sm:text-sm text-gray-300 mb-1 pl-1">
                     24h Market Cap Change
                   </div>
-                  <div className="w-full bg-gray-800/40 border border-gray-700/30 rounded-lg p-4 flex items-center">
+                  <div className="w-full bg-gray-800/40 border border-gray-700/30 rounded-lg p-3 sm:p-4 flex items-center">
                     <div
-                      className={`w-8 h-8 flex items-center justify-center rounded-full mr-4 ${
+                      className={`w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center rounded-full mr-3 sm:mr-4 ${
                         globalMarketData.marketCapChange24h >= 0
                           ? "bg-green-900/30"
                           : "bg-red-900/30"
@@ -572,8 +588,9 @@ export function CryptoMarketsPage() {
                     >
                       {globalMarketData.marketCapChange24h >= 0 ? (
                         <svg
-                          width="28"
-                          height="28"
+                          width="20"
+                          height="20"
+                          className="sm:w-7 sm:h-7"
                           fill="none"
                           viewBox="0 0 24 24"
                         >
@@ -587,8 +604,9 @@ export function CryptoMarketsPage() {
                         </svg>
                       ) : (
                         <svg
-                          width="28"
-                          height="28"
+                          width="20"
+                          height="20"
+                          className="sm:w-7 sm:h-7"
                           fill="none"
                           viewBox="0 0 24 24"
                         >
@@ -604,7 +622,7 @@ export function CryptoMarketsPage() {
                     </div>
                     <div className="flex-1">
                       <div
-                        className={`font-bold text-xl ${
+                        className={`font-bold text-lg sm:text-xl ${
                           globalMarketData.marketCapChange24h >= 0
                             ? "text-green-400"
                             : "text-red-400"
@@ -628,12 +646,14 @@ export function CryptoMarketsPage() {
             )}
           </div>
 
-          {/* Fear & Greed Index Card - Simpler Layout Matching User's Image */}
-          <div className="bg-gradient-to-r from-blue-900/10 via-purple-900/10 to-blue-900/10 border border-gray-800/40 rounded-xl p-4 col-span-1 md:col-span-1 xl:col-span-1">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-white">Fear & Greed</h2>
+          {/* Fear & Greed Index Card - Mobile Responsive */}
+          <div className="bg-gradient-to-r from-blue-900/10 via-purple-900/10 to-blue-900/10 border border-gray-800/40 rounded-xl p-3 sm:p-4 col-span-1 md:col-span-1 xl:col-span-1">
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <h2 className="text-sm sm:text-base font-semibold text-white">
+                Fear & Greed
+              </h2>
             </div>
-            <div className="min-h-[180px]">
+            <div className="min-h-[150px] sm:min-h-[180px]">
               {isLoadingFearGreed ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-pulse">
                   {/* Left Column - Value and Date Skeleton */}

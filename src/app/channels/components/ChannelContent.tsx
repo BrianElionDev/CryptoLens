@@ -44,6 +44,8 @@ export const ChannelContent = () => {
   const [open, setOpen] = useState(false);
   const [tempSelectedChannels, setTempSelectedChannels] =
     useState<string[]>(selectedChannels);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 50;
 
   // Get unique channels with proper typing
   const channels = Array.from(
@@ -69,6 +71,11 @@ export const ChannelContent = () => {
 
     initialized.current = true;
   }, [channels, searchParams, setSelectedChannels]);
+
+  // Reset page on channel/filter change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedChannels]);
 
   // Handle URL updates
   const updateUrl = (selectedChannels: string[]) => {
@@ -148,6 +155,13 @@ export const ChannelContent = () => {
       }))
       .sort((a, b) => b.rpoints - a.rpoints);
   }, [channelKnowledge]);
+
+  // Pagination logic
+  const totalPages = Math.ceil(aggregatedData.length / itemsPerPage);
+  const paginatedData = aggregatedData.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   return (
     <div className="space-y-4">
@@ -296,11 +310,14 @@ export const ChannelContent = () => {
 
               <div className="mt-6 space-y-6">
                 <TabsContent value="content" className="focus:outline-none">
-                  <div className="relative overflow-hidden rounded-xl border border-gray-800/50 bg-gray-900/40 backdrop-blur-sm">
-                    <table className="w-full text-sm text-left">
+                  <div className="relative overflow-x-auto rounded-xl border border-gray-800/50 bg-gray-900/40 backdrop-blur-sm">
+                    <table className="min-w-[600px] w-full text-sm text-left">
                       <thead>
                         <tr className="border-b border-gray-800/50">
-                          <th scope="col" className="px-6 py-4">
+                          <th
+                            scope="col"
+                            className="sticky left-0 z-50 bg-gray-900 px-3 sm:px-6 py-2 sm:py-4 text-xs sm:text-sm backdrop-blur-sm"
+                          >
                             <div className="flex items-center gap-2">
                               <svg
                                 className="w-4 h-4 text-indigo-400"
@@ -315,12 +332,15 @@ export const ChannelContent = () => {
                                   d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                                 />
                               </svg>
-                              <span className="text-sm font-medium text-indigo-300">
+                              <span className="font-medium text-indigo-300">
                                 Coin
                               </span>
                             </div>
                           </th>
-                          <th scope="col" className="px-6 py-4">
+                          <th
+                            scope="col"
+                            className="px-3 sm:px-6 py-2 sm:py-4 text-xs sm:text-sm"
+                          >
                             <div className="flex items-center gap-2">
                               <svg
                                 className="w-4 h-4 text-indigo-400"
@@ -335,12 +355,15 @@ export const ChannelContent = () => {
                                   d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
                                 />
                               </svg>
-                              <span className="text-sm font-medium text-indigo-300">
+                              <span className="font-medium text-indigo-300">
                                 R-Points
                               </span>
                             </div>
                           </th>
-                          <th scope="col" className="px-6 py-4">
+                          <th
+                            scope="col"
+                            className="px-3 sm:px-6 py-2 sm:py-4 text-xs sm:text-sm"
+                          >
                             <div className="flex items-center gap-2">
                               <svg
                                 className="w-4 h-4 text-indigo-400"
@@ -355,12 +378,15 @@ export const ChannelContent = () => {
                                   d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
                                 />
                               </svg>
-                              <span className="text-sm font-medium text-indigo-300">
+                              <span className="font-medium text-indigo-300">
                                 Total Count
                               </span>
                             </div>
                           </th>
-                          <th scope="col" className="px-6 py-4">
+                          <th
+                            scope="col"
+                            className="px-3 sm:px-6 py-2 sm:py-4 text-xs sm:text-sm"
+                          >
                             <div className="flex items-center gap-2">
                               <svg
                                 className="w-4 h-4 text-indigo-400"
@@ -375,7 +401,7 @@ export const ChannelContent = () => {
                                   d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
                                 />
                               </svg>
-                              <span className="text-sm font-medium text-indigo-300">
+                              <span className="font-medium text-indigo-300">
                                 Categories
                               </span>
                             </div>
@@ -383,13 +409,13 @@ export const ChannelContent = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-800/30">
-                        {aggregatedData.map(
+                        {paginatedData.map(
                           ({ coin, rpoints, categories, mentions }, idx) => (
                             <tr
                               key={`coin-${idx}-${coin}`}
                               className="hover:bg-gray-800/30 transition-colors"
                             >
-                              <td className="px-6 py-4">
+                              <td className="sticky left-0 z-50 bg-gray-900 px-3 sm:px-6 py-2 sm:py-4 backdrop-blur-sm">
                                 <div className="flex items-center">
                                   <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center mr-3">
                                     <span className="text-indigo-400 font-medium">
@@ -401,30 +427,28 @@ export const ChannelContent = () => {
                                   </span>
                                 </div>
                               </td>
-                              <td className="px-6 py-4">
+                              <td className="px-3 sm:px-6 py-2 sm:py-4">
                                 <div className="flex items-center">
-                                  <span className="px-2.5 py-1 text-sm font-medium bg-indigo-500/10 text-indigo-400 rounded-lg">
+                                  <span className="px-2 py-1 sm:px-2.5 sm:py-1 text-xs sm:text-sm font-medium bg-indigo-500/10 text-indigo-400 rounded-lg">
                                     {rpoints.toLocaleString()}
                                   </span>
                                 </div>
                               </td>
-                              <td className="px-6 py-4">
+                              <td className="px-3 sm:px-6 py-2 sm:py-4">
                                 <div className="flex items-center">
-                                  <span className="px-2.5 py-1 text-sm font-medium bg-gray-800/50 text-gray-300 rounded-lg">
+                                  <span className="px-2 py-1 sm:px-2.5 sm:py-1 text-xs sm:text-sm font-medium bg-gray-800/50 text-gray-300 rounded-lg">
                                     {mentions}
                                   </span>
                                 </div>
                               </td>
-                              <td className="px-6 py-4">
+                              <td className="px-3 sm:px-6 py-2 sm:py-4">
                                 <div className="flex flex-wrap gap-2">
                                   {categories.map((category, catIdx) => {
-                                    // Handle case where category could be an object
                                     const categoryText =
                                       typeof category === "object"
                                         ? (category as CategoryObject).name ||
                                           JSON.stringify(category)
                                         : category;
-
                                     return (
                                       <span
                                         key={`${coin}-${categoryText}-${catIdx}`}
@@ -442,6 +466,72 @@ export const ChannelContent = () => {
                       </tbody>
                     </table>
                   </div>
+                  {/* Pagination Controls */}
+                  {totalPages > 1 && (
+                    <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 w-full">
+                      <div className="flex flex-row gap-2 w-full sm:w-auto justify-center">
+                        <button
+                          onClick={() =>
+                            setCurrentPage((p) => Math.max(1, p - 1))
+                          }
+                          disabled={currentPage === 1}
+                          className="w-full sm:w-auto px-4 py-2 rounded-lg bg-gray-900/80 backdrop-blur-sm text-gray-200 hover:text-white transition-all duration-200 border border-blue-500/30 hover:border-blue-400/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 group"
+                        >
+                          <svg
+                            className="w-5 h-5 text-blue-400 group-hover:text-blue-300 transition-colors"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M15 19l-7-7 7-7"
+                            />
+                          </svg>
+                          <span>Previous</span>
+                        </button>
+                        <button
+                          onClick={() =>
+                            setCurrentPage((p) => Math.min(totalPages, p + 1))
+                          }
+                          disabled={currentPage === totalPages}
+                          className="w-full sm:w-auto px-4 py-2 rounded-lg bg-gray-900/80 backdrop-blur-sm text-gray-200 hover:text-white transition-all duration-200 border border-blue-500/30 hover:border-blue-400/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 group"
+                        >
+                          <span>Next</span>
+                          <svg
+                            className="w-5 h-5 text-blue-400 group-hover:text-blue-300 transition-colors"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 5l7 7-7 7"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                      <div className="flex flex-row flex-wrap gap-2 w-full sm:w-auto justify-center">
+                        {Array.from({ length: totalPages }).map((_, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setCurrentPage(i + 1)}
+                            className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-200 text-sm font-medium ${
+                              currentPage === i + 1
+                                ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg shadow-blue-500/20"
+                                : "bg-gray-900/80 backdrop-blur-sm text-gray-300 hover:text-white border border-blue-500/30 hover:border-blue-400/50"
+                            }`}
+                          >
+                            {i + 1}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </TabsContent>
 
                 <TabsContent value="analytics" className="focus:outline-none">
