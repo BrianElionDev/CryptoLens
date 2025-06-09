@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -24,6 +25,11 @@ export function CryptoColumnsSelector({
 }: CryptoColumnsSelectorProps) {
   const [selectedColumns, setSelectedColumns] = useState<Column[]>(columns);
 
+  // Sync selectedColumns with parent columns prop when it changes
+  useEffect(() => {
+    setSelectedColumns(columns);
+  }, [columns]);
+
   const handleToggleColumn = (columnId: string) => {
     const updatedColumns = selectedColumns.map((col) => {
       if (col.id === columnId) {
@@ -41,9 +47,32 @@ export function CryptoColumnsSelector({
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="relative bg-gray-900 w-full max-w-md rounded-xl border border-gray-800 shadow-xl overflow-hidden">
+  console.log("🚀 CryptoColumnsSelector RENDERING - isOpen:", isOpen);
+
+  // Use portal to render directly to document.body to avoid container clipping
+  if (typeof window === "undefined") return null;
+
+  const modalContent = (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center backdrop-blur-sm"
+      style={{
+        backgroundColor: "rgba(0, 0, 0, 0.8)",
+      }}
+      onClick={(e) => {
+        console.log("🚀 Columns backdrop clicked");
+        // Close on backdrop click
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div
+        className="relative bg-gray-900 w-full max-w-md rounded-xl border-2 border-gray-700 shadow-2xl overflow-hidden"
+        style={{
+          backgroundColor: "#111827",
+          border: "2px solid #374151",
+        }}
+      >
         <div className="flex items-center justify-between p-4 border-b border-gray-800">
           <h2 className="text-xl font-semibold text-white">
             Customize Columns
@@ -91,4 +120,6 @@ export function CryptoColumnsSelector({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }

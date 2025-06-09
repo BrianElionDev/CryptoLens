@@ -456,8 +456,15 @@ export function CryptoTableHeader({
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
-            onClick={onOpenFilters}
-            className="bg-gray-800/50 hover:bg-gray-700/50 text-white border-gray-700 rounded-md px-4 py-2 flex items-center gap-1.5"
+            onClick={() => {
+              if (onOpenFilters) {
+                onOpenFilters();
+              } else {
+                console.log("Filters clicked - no handler provided");
+                // You can add default behavior here, like opening a modal
+              }
+            }}
+            className="bg-gray-800/50 hover:bg-gray-700/50 text-white border-gray-700 rounded-md px-4 py-2 flex items-center gap-1.5 cursor-pointer"
           >
             <Filter className="h-4 w-4" />
             <span className="sm:inline">Filters</span>
@@ -465,8 +472,15 @@ export function CryptoTableHeader({
 
           <Button
             variant="outline"
-            onClick={onToggleColumns}
-            className="bg-gray-800/50 hover:bg-gray-700/50 text-white border-gray-700 rounded-md px-4 py-2 flex items-center gap-1.5"
+            onClick={() => {
+              if (onToggleColumns) {
+                onToggleColumns();
+              } else {
+                console.log("Columns clicked - no handler provided");
+                // You can add default behavior here, like showing/hiding columns
+              }
+            }}
+            className="bg-gray-800/50 hover:bg-gray-700/50 text-white border-gray-700 rounded-md px-4 py-2 flex items-center gap-1.5 cursor-pointer"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4">
               <path
@@ -479,7 +493,17 @@ export function CryptoTableHeader({
 
           <select
             value={showCount}
-            onChange={(e) => onShowCountChange?.(Number(e.target.value))}
+            onChange={(e) => {
+              const newCount = Number(e.target.value);
+              if (onShowCountChange) {
+                onShowCountChange(newCount);
+              } else {
+                console.log(
+                  `Per page changed to: ${newCount} - no handler provided`
+                );
+                // You can add default behavior here
+              }
+            }}
             className="bg-gray-800/50 hover:bg-gray-700/50 text-white border border-gray-700 rounded-md px-4 py-2 text-xs sm:text-sm appearance-none cursor-pointer min-w-16 sm:min-w-max"
           >
             <option value={50}>50 per page</option>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -13,30 +14,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+
 export interface DateRange {
   from: Date | undefined;
   to: Date | undefined;
 }
 
 export interface FilterSettings {
-  dateRange: DateRange;
-  datePreset: string;
-  showMostRecent: boolean;
-  chains: string[];
   categories: string[];
   marketCapMin?: string;
   marketCapMax?: string;
-  fdvMin?: string;
-  fdvMax?: string;
   priceChangeMin?: string;
   priceChangeMax?: string;
   volumeMin?: string;
   volumeMax?: string;
-  volumeChangeMin?: string;
-  volumeChangeMax?: string;
-  ageMin?: string;
-  ageMax?: string;
-  ageUnit: string;
+  dateRange?: DateRange;
+  datePreset?: string;
+  showMostRecent?: boolean;
 }
 
 // Available filter options from data
@@ -65,32 +59,16 @@ export function CryptoFiltersPanel({
   onReset,
   onApply,
   filterOptions,
-  dateRangeInfo,
 }: CryptoFiltersPanelProps) {
   // Add state for local filter changes
   const [localFilters, setLocalFilters] = useState<FilterSettings>({
     ...filters,
   });
 
-  // Use dateRangeInfo to log available date range if present
-  useEffect(() => {
-    if (dateRangeInfo) {
-      console.log("Available date range:", {
-        earliest: dateRangeInfo.earliest,
-        latest: dateRangeInfo.latest,
-      });
-    }
-  }, [dateRangeInfo]);
-
   // Update local filters when parent filters change
   useEffect(() => {
-    console.log("Parent filters changed:", filters);
-    // Ensure we keep the parent's datePreset and showMostRecent states in sync
     setLocalFilters({
       ...filters,
-      // Ensure datePreset is set correctly based on parent filters
-      datePreset: filters.datePreset || "all-time",
-      showMostRecent: !!filters.showMostRecent,
     });
   }, [filters]);
 
@@ -107,9 +85,6 @@ export function CryptoFiltersPanel({
     // Create a clean copy of filters
     const cleanFilters = { ...localFilters };
 
-    // Log the filters we're applying
-    console.log("Applying filters:", cleanFilters);
-
     // Send the filters to parent
     onChange(cleanFilters);
     onApply();
@@ -117,30 +92,25 @@ export function CryptoFiltersPanel({
 
   // Handle reset button click
   const handleReset = () => {
-    onReset();
-    setLocalFilters({
-      ...filters,
+    const resetFilters: FilterSettings = {
+      categories: [],
+      marketCapMin: undefined,
+      marketCapMax: undefined,
+      priceChangeMin: undefined,
+      priceChangeMax: undefined,
+      volumeMin: undefined,
+      volumeMax: undefined,
+      dateRange: { from: undefined, to: undefined },
       datePreset: "all-time",
       showMostRecent: false,
-      dateRange: { from: undefined, to: undefined },
-      categories: [],
-    });
+    };
+    setLocalFilters(resetFilters);
+    onChange(resetFilters);
+    onReset();
   };
 
-  // Default options if none provided
-  const defaultCategories = [
-    { id: "defi", name: "DeFi" },
-    { id: "nft", name: "NFT" },
-    { id: "gaming", name: "Gaming" },
-    { id: "metaverse", name: "Metaverse" },
-    { id: "layer1", name: "Layer 1" },
-    { id: "layer2", name: "Layer 2" },
-    { id: "meme", name: "Meme" },
-    { id: "ai", name: "AI" },
-  ];
-
-  // Use provided options or defaults
-  const availableCategories = filterOptions?.categories || defaultCategories;
+  // Use only data-based categories (no defaults)
+  const availableCategories = filterOptions?.categories || [];
 
   // Helper to format market cap values
   const formatMarketCap = (value: number): string => {
@@ -179,9 +149,29 @@ export function CryptoFiltersPanel({
   // Early return if not open, but after all hooks
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="relative bg-gray-900 w-full max-w-2xl rounded-xl border border-gray-800 shadow-xl overflow-hidden">
+  // Use portal to render directly to document.body to avoid container clipping
+  if (typeof window === "undefined") return null;
+
+  const modalContent = (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center backdrop-blur-sm"
+      style={{
+        backgroundColor: "rgba(0, 0, 0, 0.8)",
+      }}
+      onClick={(e) => {
+        // Close on backdrop click
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div
+        className="relative bg-gray-900 w-full max-w-2xl rounded-xl border-2 border-gray-700 shadow-2xl overflow-hidden"
+        style={{
+          backgroundColor: "#111827",
+          border: "2px solid #374151",
+        }}
+      >
         <div className="flex items-center justify-between p-4 border-b border-gray-800">
           <h2 className="text-xl font-semibold text-white">Filters</h2>
           <Button
@@ -195,30 +185,56 @@ export function CryptoFiltersPanel({
         </div>
 
         <div className="p-4 max-h-[80vh] overflow-y-auto space-y-6">
-          {/* Category Filter - Only show if we have categories */}
-          {availableCategories.length > 0 && (
-            <div className="space-y-2">
-              <label className="text-gray-300 font-medium">Category</label>
-              <Select
-                value={localFilters.categories[0] || "all"}
-                onValueChange={(value) =>
-                  handleLocalChange({ categories: [value] })
-                }
+          {/* Category Filter - Always show */}
+          <div className="space-y-2">
+            <label className="text-gray-300 font-medium">Category</label>
+            <Select
+              value={localFilters.categories[0] || "all"}
+              onValueChange={(value) =>
+                handleLocalChange({
+                  categories: value === "all" ? [] : [value],
+                })
+              }
+            >
+              <SelectTrigger
+                className="w-full bg-gray-800 border-gray-700 text-white hover:bg-gray-700"
+                style={{
+                  backgroundColor: "#1f2937",
+                  borderColor: "#374151",
+                  color: "white",
+                }}
               >
-                <SelectTrigger className="w-full bg-gray-800 border-gray-700 text-white">
-                  <SelectValue placeholder="All Categories" />
-                </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-700">
-                  <SelectItem value="all">All Categories</SelectItem>
-                  {availableCategories.map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
-                      {category.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                <SelectValue placeholder="All Categories" />
+              </SelectTrigger>
+              <SelectContent
+                className="bg-gray-800 border-gray-700 text-white z-[99999]"
+                style={{
+                  backgroundColor: "#1f2937",
+                  borderColor: "#374151",
+                  zIndex: 99999,
+                }}
+              >
+                <SelectItem
+                  value="all"
+                  className="text-white hover:bg-gray-700"
+                >
+                  All Categories
+                </SelectItem>
+                {availableCategories.map((category) => (
+                  <SelectItem
+                    key={category.id}
+                    value={category.id}
+                    className="text-white hover:bg-gray-700"
+                  >
+                    {category.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="text-xs text-gray-400">
+              {availableCategories.length} categories available
             </div>
-          )}
+          </div>
 
           {/* Market Cap Ranges */}
           <div className="space-y-2">
@@ -272,12 +288,19 @@ export function CryptoFiltersPanel({
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="price-up"
-                  checked={localFilters.priceChangeMin === "0"}
+                  checked={localFilters.priceChangeMin === "gainers"}
                   onCheckedChange={(checked) => {
-                    handleLocalChange({
-                      priceChangeMin: checked ? "0" : undefined,
-                      priceChangeMax: undefined,
-                    });
+                    if (checked) {
+                      handleLocalChange({
+                        priceChangeMin: "gainers",
+                        priceChangeMax: undefined,
+                      });
+                    } else {
+                      handleLocalChange({
+                        priceChangeMin: undefined,
+                        priceChangeMax: undefined,
+                      });
+                    }
                   }}
                   className="data-[state=checked]:bg-green-600"
                 />
@@ -285,18 +308,25 @@ export function CryptoFiltersPanel({
                   htmlFor="price-up"
                   className="text-sm font-medium leading-none text-gray-300 cursor-pointer"
                 >
-                  Gainers (24h)
+                  Only Gainers (&gt;0%)
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="price-down"
-                  checked={localFilters.priceChangeMax === "0"}
+                  checked={localFilters.priceChangeMax === "losers"}
                   onCheckedChange={(checked) => {
-                    handleLocalChange({
-                      priceChangeMax: checked ? "0" : undefined,
-                      priceChangeMin: undefined,
-                    });
+                    if (checked) {
+                      handleLocalChange({
+                        priceChangeMax: "losers",
+                        priceChangeMin: undefined,
+                      });
+                    } else {
+                      handleLocalChange({
+                        priceChangeMin: undefined,
+                        priceChangeMax: undefined,
+                      });
+                    }
                   }}
                   className="data-[state=checked]:bg-red-600"
                 />
@@ -304,7 +334,7 @@ export function CryptoFiltersPanel({
                   htmlFor="price-down"
                   className="text-sm font-medium leading-none text-gray-300 cursor-pointer"
                 >
-                  Losers (24h)
+                  Only Losers (&lt;0%)
                 </Label>
               </div>
             </div>
@@ -383,7 +413,7 @@ export function CryptoFiltersPanel({
           <Button
             variant="ghost"
             onClick={handleReset}
-            className="text-blue-400 hover:text-blue-300 hover:bg-blue-900/20 flex items-center gap-2"
+            className="text-blue-400 hover:text-blue-300 hover:bg-blue-900/20 flex items-center gap-2 cursor-pointer"
           >
             <svg viewBox="0 0 24 24" className="h-5 w-5">
               <path
@@ -393,6 +423,7 @@ export function CryptoFiltersPanel({
             </svg>
             Reset
           </Button>
+
           <Button
             variant="default"
             onClick={handleApply}
@@ -404,4 +435,6 @@ export function CryptoFiltersPanel({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }

@@ -8,7 +8,7 @@ import debounce from "lodash/debounce";
 
 import { DataTable } from "@/components/ui/data-table";
 import type { Row } from "@tanstack/react-table";
-import { CalendarIcon, Filter, X } from "lucide-react";
+import { CalendarIcon, Filter } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import {
   Select,
@@ -115,9 +115,6 @@ export function CombinedMarketTable({
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // Debug flag for displaying debug information
-  const debug = false; // Set to true to show debug panels
-
   // Add a filter reset flag to help with synchronization issues
   // Commented out due to unused variable lint error, but preserved for future use
   // const [filterResetFlag, setFilterResetFlag] = useState(0);
@@ -139,19 +136,6 @@ export function CombinedMarketTable({
       }
     >()
   );
-
-  // Debug utils
-  const debugFilters = (enable = false) => {
-    if (!enable) return;
-
-    console.group("FILTERS DEBUG");
-    console.log("Selected channels:", localSelectedChannels);
-    console.log("Available channels:", processedData.channels);
-    console.log("Date preset:", datePreset);
-    console.log("Show most recent:", showMostRecent);
-    console.log("Date range:", dateRange);
-    console.groupEnd();
-  };
 
   const defaultChannels = processedData.channels;
 
@@ -422,7 +406,6 @@ export function CombinedMarketTable({
   });
   const [datePreset, setDatePreset] = useState<string>("all-time");
   const [dateFilterActive, setDateFilterActive] = useState(false);
-  const [matchingCoinsCount, setMatchingCoinsCount] = useState(0);
   const refreshKeyRef = useRef(0);
   const prevDataRef = useRef<ExtendedCoinData[]>([]);
 
@@ -458,12 +441,13 @@ export function CombinedMarketTable({
 
   // Filter settings state
   const [filterSettings, setFilterSettings] = useState<FilterSettings>({
-    dateRange,
-    datePreset,
-    showMostRecent,
-    chains: [],
     categories: [],
-    ageUnit: "hours",
+    marketCapMin: undefined,
+    marketCapMax: undefined,
+    priceChangeMin: undefined,
+    priceChangeMax: undefined,
+    volumeMin: undefined,
+    volumeMax: undefined,
   });
 
   // Reference to the current sorted data for pagination stability
@@ -476,15 +460,17 @@ export function CombinedMarketTable({
 
   // Initialize filterSettings properly
   useEffect(() => {
-    // Make sure filterSettings uses the correct datePreset value
-    setFilterSettings((prev) => ({
-      ...prev,
-      datePreset: "all-time",
-      showMostRecent: false,
-      dateRange: { from: undefined, to: undefined },
-    }));
+    setFilterSettings({
+      categories: [],
+      marketCapMin: undefined,
+      marketCapMax: undefined,
+      priceChangeMin: undefined,
+      priceChangeMax: undefined,
+      volumeMin: undefined,
+      volumeMax: undefined,
+    });
 
-    console.log("Initialized filterSettings with all-time preset");
+    console.log("Initialized filterSettings");
   }, []);
 
   // Get unique dates from coinCategories
@@ -609,118 +595,42 @@ export function CombinedMarketTable({
         ...prev,
         ...newFilters,
       };
-
-      // Update related states in the same batch
-      if (newFilters.dateRange) {
-        setDateRange(newFilters.dateRange);
-      }
-      if (newFilters.showMostRecent !== undefined) {
-        setShowMostRecent(newFilters.showMostRecent);
-      }
-
       return updated;
     });
   };
 
   // Handle apply filters
   const handleApplyFilters = () => {
-    // Debug flag to control logging
-    const debug = false;
-
-    // Call our debug utility with the debug flag
-    debugFilters(debug);
-
-    // Check if we're changing between a significant filter that should reset pagination
+    // Check if we're applying any significant filter that should reset pagination
     const isSignificantChange =
-      filterSettings.dateRange.from !== dateRange.from ||
-      filterSettings.dateRange.to !== dateRange.to ||
-      filterSettings.showMostRecent !== showMostRecent ||
-      (filterSettings.chains.length > 0 &&
-        filterSettings.chains[0] !== "all") ||
       (filterSettings.categories.length > 0 &&
-        filterSettings.categories[0] !== "all");
+        filterSettings.categories[0] !== "all") ||
+      filterSettings.priceChangeMin !== undefined ||
+      filterSettings.priceChangeMax !== undefined ||
+      filterSettings.marketCapMin !== undefined ||
+      filterSettings.marketCapMax !== undefined ||
+      filterSettings.volumeMin !== undefined ||
+      filterSettings.volumeMax !== undefined;
 
-    // IMPROVED FILTER MODE DETECTION: More explicit handling of filter modes based on datePreset
-    const isMostRecent = filterSettings.datePreset === "most-recent";
-    const isAllTime =
-      filterSettings.datePreset === "all-time" ||
-      filterSettings.datePreset === "";
+    // Close the filter panel
+    setFiltersOpen(false);
 
-    // Batch all state updates together
-    const batchStateUpdates = () => {
-      if (isAllTime) {
-        setDateRange({ from: undefined, to: undefined });
-        setShowMostRecent(false);
-        setDatePreset("all-time");
-        setFilterSettings((prev) => ({
-          ...prev,
-          dateRange: { from: undefined, to: undefined },
-          datePreset: "all-time",
-          showMostRecent: false,
-        }));
-      } else if (isMostRecent) {
-        setDateRange({ from: undefined, to: undefined });
-        setShowMostRecent(true);
-        setDatePreset("most-recent");
-        setFilterSettings((prev) => ({
-          ...prev,
-          dateRange: { from: undefined, to: undefined },
-          datePreset: "most-recent",
-          showMostRecent: true,
-        }));
-      } else {
-        setDateRange(filterSettings.dateRange);
-        setShowMostRecent(false);
-        setDatePreset(filterSettings.datePreset);
-        setFilterSettings((prev) => ({
-          ...prev,
-          showMostRecent: false,
-        }));
-      }
+    // Reset to page 1 if applying a significant filter
+    if (isSignificantChange) {
+      resetToPage1();
+    }
 
-      // Update date filter active status
-      setDateFilterActive(
-        !!(
-          filterSettings.dateRange.from ||
-          filterSettings.dateRange.to ||
-          isMostRecent
-        )
-      );
-
-      // Close the filter panel
-      setFiltersOpen(false);
-
-      // Reset to page 1 if applying a significant filter
-      if (isSignificantChange) {
-        resetToPage1();
-      }
-
-      // Increment refresh key only once after all state updates
-      refreshKeyRef.current += 1;
-    };
-
-    // Execute all state updates in one go
-    batchStateUpdates();
+    // Increment refresh key to trigger data refresh
+    refreshKeyRef.current += 1;
   };
 
   // Reset filters
   const handleResetFilters = () => {
     console.log("Resetting all filters");
 
-    // Set All Time as the default preset
-    setDatePreset("all-time");
-    setShowMostRecent(false);
-    setDateRange({ from: undefined, to: undefined });
-    setDateFilterActive(false);
-
     // Reset filter settings
     const resetFilters: FilterSettings = {
-      dateRange: { from: undefined, to: undefined },
-      datePreset: "all-time",
-      showMostRecent: false,
-      chains: [], // Add this back to fix the TypeScript error
       categories: [],
-      ageUnit: "hours",
       marketCapMin: undefined,
       marketCapMax: undefined,
       priceChangeMin: undefined,
@@ -796,6 +706,15 @@ export function CombinedMarketTable({
 
   // Fix in symbols useMemo to ensure total_mentions are correctly initialized and tracked separately per coin
   const symbols = useMemo(() => {
+    console.log(
+      "SYMBOLS RECALCULATING - datePreset:",
+      datePreset,
+      "dateRange:",
+      dateRange,
+      "showMostRecent:",
+      showMostRecent
+    );
+
     // Create a cache key from the dependencies that should trigger a recalculation
     const cacheKey = JSON.stringify({
       showMostRecent,
@@ -809,8 +728,11 @@ export function CombinedMarketTable({
 
     // If nothing has changed, return the previous symbols
     if (cacheKey === lastSymbolsKeyRef.current) {
+      console.log("SYMBOLS CACHE HIT - returning previous symbols");
       return prevSymbolsRef.current;
     }
+
+    console.log("SYMBOLS CACHE MISS - recalculating symbols");
 
     // Update the cache key
     lastSymbolsKeyRef.current = cacheKey;
@@ -929,9 +851,6 @@ export function CombinedMarketTable({
       }
     });
 
-    // Update the matching coins count
-    setMatchingCoinsCount(count);
-
     // Store the exactCoinMap in our ref so sortedCoinData can use it
     exactCoinMapRef.current = exactCoinMap;
 
@@ -948,24 +867,21 @@ export function CombinedMarketTable({
       symbolToExactKeys.get(data.symbol)?.push(exactKey);
     });
 
-    // IMPORTANT: Log the mapping to help debug (only if debug is enabled)
-    if (debug) {
-      console.log("Symbol to exact name mapping:");
-      symbolToExactKeys.forEach((exactKeys, symbol) => {
-        console.log(`Symbol ${symbol} maps to:`, exactKeys);
-      });
-    }
-
     // Return a unique list of symbols for API calls
     // Each symbol will fetch data for potentially multiple exact coins
     const uniqueSymbols = Array.from(symbolToExactKeys.keys());
 
-    if (debug) {
-      console.log(
-        `Generated symbols list with ${uniqueSymbols.length} unique symbols from ${count} total coins`
-      );
-      console.log(`Selected channels: ${channels.join(", ")}`);
-    }
+    console.log(
+      "FINAL SYMBOLS RESULT - count:",
+      count,
+      "exactCoinMap size:",
+      exactCoinMap.size,
+      "uniqueSymbols:",
+      uniqueSymbols.length
+    );
+
+    // CRITICAL FIX: Update the cached symbols BEFORE returning
+    prevSymbolsRef.current = uniqueSymbols;
 
     return uniqueSymbols;
   }, [
@@ -974,7 +890,6 @@ export function CombinedMarketTable({
     processedData.channels,
     dateRange,
     datePreset,
-    debug,
     showMostRecent,
   ]);
 
@@ -1175,31 +1090,27 @@ export function CombinedMarketTable({
 
   // Fix in the sortedCoinData useMemo to use the exactCoinMapRef
   const sortedCoinData = useMemo(() => {
-    // For the "Most Recent" filter:
-    // We collect the latest data for each coin from each selected channel.
-    // 1. For each channel, we only include coins from its most recent date
-    // 2. We merge data for the same coin across channels, preferring:
-    //    - More recent data from the same channel
-    //    - Higher points data when comparing different channels
-    // 3. We then match this data with the API coin data for display
-    // This ensures we show a combined view of the latest trends across all selected channels.
+    console.log(
+      "SORTED COIN DATA RECALCULATING - symbols.length:",
+      symbols.length,
+      "dateFilterActive:",
+      dateFilterActive
+    );
 
-    // Enable debugging to track matching
-    const debug = true;
+    // CRITICAL FIX: If symbols is empty due to date filtering, return empty array immediately
+    if (symbols.length === 0 && dateFilterActive) {
+      console.log(
+        "SYMBOLS IS EMPTY DUE TO DATE FILTERING - returning empty array"
+      );
+      return [];
+    }
 
     // Only log on initial processing or when filters change
     const baseData = prevDataRef.current;
     if (!combinedCoinData?.data?.length) {
-      console.log(
-        "No combined coin data available - using previous data:",
-        baseData.length
-      );
-
       // IMPORTANT: If there's no API data and no previous data,
       // create data directly from processedData.coinCategories
       if (baseData.length === 0 && processedData.coinCategories.length > 0) {
-        console.log("Creating fallback data from knowledge base entries");
-
         // Extract unique coin entries from coinCategories
         const uniqueCoins = new Map();
 
@@ -1275,172 +1186,152 @@ export function CombinedMarketTable({
           (a, b) => b.rpoints - a.rpoints
         );
 
-        console.log(`Created ${fallbackData.length} fallback coin entries`);
-
-        // Save to previous data ref for next render
+        // Save to previous data ref for next render but continue with filtering
         prevDataRef.current = fallbackData;
-        return fallbackData;
       }
-
-      return baseData;
     }
 
-    console.log(
-      `Processing ${combinedCoinData.data.length} coins from API response`
-    );
+    // Get the data to work with (either fresh API data or cached data)
+    let dataToProcess: ExtendedCoinData[] = [];
 
-    // Debug API data format
-    // if (debug) {
-    //   console.log("First coin from API data:", combinedCoinData.data[0]);
-    // }
+    if (combinedCoinData?.data?.length) {
+      // Access the exact coin map that we saved in the symbols function
+      const exactCoins = exactCoinMapRef.current;
 
-    // Access the exact coin map that we saved in the symbols function
-    const exactCoins = exactCoinMapRef.current;
+      // Process the API data
+      const result: ExtendedCoinData[] = [];
 
-    // Process the API data
-    const result: ExtendedCoinData[] = [];
+      // COMPLETELY NEW MATCHING APPROACH:
+      // 1. Create a map to track processed coins to avoid duplicates
+      const processedCoins = new Set<string>();
 
-    // COMPLETELY NEW MATCHING APPROACH:
-    // 1. Create a map to track processed coins to avoid duplicates
-    const processedCoins = new Set<string>();
+      // 2. Create a mapping of cleaned coin names to API coins for better matching
+      const apiCoinMap = new Map<string, CoinData>();
+      combinedCoinData.data.forEach((coin) => {
+        if (coin.name) {
+          apiCoinMap.set(coin.name.toLowerCase().trim(), coin);
 
-    // 2. Create a mapping of cleaned coin names to API coins for better matching
-    const apiCoinMap = new Map<string, CoinData>();
-    combinedCoinData.data.forEach((coin) => {
-      if (coin.name) {
-        apiCoinMap.set(coin.name.toLowerCase().trim(), coin);
-
-        // Also map by symbol for secondary matching
-        if (coin.symbol) {
-          apiCoinMap.set(coin.symbol.toLowerCase().trim(), coin);
+          // Also map by symbol for secondary matching
+          if (coin.symbol) {
+            apiCoinMap.set(coin.symbol.toLowerCase().trim(), coin);
+          }
         }
-      }
-    });
+      });
 
-    // 3. First iterate through our exact coin names to ensure we keep the exact mention counts
-    exactCoins.forEach((coinData, exactName) => {
-      // Extract clean name without symbol for matching
-      const cleanExactName = exactName
-        .replace(/\s*\(\$[^)]+\)/g, "")
-        .toLowerCase()
-        .trim();
+      // 3. First iterate through our exact coin names to ensure we keep the exact mention counts
+      exactCoins.forEach((coinData, exactName) => {
+        // Extract clean name without symbol for matching
+        const cleanExactName = exactName
+          .replace(/\s*\(\$[^)]+\)/g, "")
+          .toLowerCase()
+          .trim();
 
-      // Get the symbol from the exact name - this is important for correct matching
-      const symbolMatch = exactName.match(/\(\$([^)]+)\)/);
-      const exactSymbol = symbolMatch ? symbolMatch[1].toLowerCase() : "";
+        // Get the symbol from the exact name - this is important for correct matching
+        const symbolMatch = exactName.match(/\(\$([^)]+)\)/);
+        const exactSymbol = symbolMatch ? symbolMatch[1].toLowerCase() : "";
 
-      // First, try to find an exact match by both name and symbol
-      let matchedApiCoin = null;
+        // First, try to find an exact match by both name and symbol
+        let matchedApiCoin = null;
 
-      // Look for exact name match first (highest priority)
-      for (const apiCoin of combinedCoinData.data) {
-        if (
-          apiCoin.name &&
-          cleanExactName === apiCoin.name.toLowerCase().trim()
-        ) {
-          // If symbol also matches, this is a perfect match
+        // Look for exact name match first (highest priority)
+        for (const apiCoin of combinedCoinData.data) {
           if (
-            exactSymbol &&
-            apiCoin.symbol &&
-            exactSymbol === apiCoin.symbol.toLowerCase().trim()
+            apiCoin.name &&
+            cleanExactName === apiCoin.name.toLowerCase().trim()
           ) {
+            // If symbol also matches, this is a perfect match
+            if (
+              exactSymbol &&
+              apiCoin.symbol &&
+              exactSymbol === apiCoin.symbol.toLowerCase().trim()
+            ) {
+              matchedApiCoin = apiCoin;
+              break;
+            }
+
+            // Strong match by name (even if symbol doesn't match exactly)
             matchedApiCoin = apiCoin;
             break;
           }
-
-          // Strong match by name (even if symbol doesn't match exactly)
-          matchedApiCoin = apiCoin;
-          break;
         }
-      }
 
-      // If no exact name match was found, try matching by symbol
-      // But be careful with coins like HarryPotterObamaSonic10Inu that have symbol "BITCOIN"
-      if (!matchedApiCoin && exactSymbol) {
-        // Only match by symbol if the name ALSO contains part of the symbol
-        // This prevents wrong matches like HarryPotterObamaSonic10Inu -> Bitcoin
-        const possibleMatches = combinedCoinData.data.filter(
-          (apiCoin) =>
-            apiCoin.symbol &&
-            apiCoin.symbol.toLowerCase() === exactSymbol &&
-            (apiCoin.name.toLowerCase().includes(exactSymbol) ||
-              cleanExactName.includes(apiCoin.name.toLowerCase()))
-        );
-
-        if (possibleMatches.length > 0) {
-          // Take the first match or the one with highest market cap
-          matchedApiCoin = possibleMatches.sort(
-            (a, b) => (b.market_cap || 0) - (a.market_cap || 0)
-          )[0];
-        }
-      }
-
-      // Fallback to coinData.symbol from our mapping, but with strict verification
-      if (!matchedApiCoin && coinData.symbol) {
-        // Only use this if the symbol is not a common word or too generic
-        if (
-          coinData.symbol.length >= 3 &&
-          !["btc", "eth", "bitcoin", "ethereum"].includes(coinData.symbol)
-        ) {
-          const symbolMatch = combinedCoinData.data.find(
+        // If no exact name match was found, try matching by symbol
+        // But be careful with coins like HarryPotterObamaSonic10Inu that have symbol "BITCOIN"
+        if (!matchedApiCoin && exactSymbol) {
+          // Only match by symbol if the name ALSO contains part of the symbol
+          // This prevents wrong matches like HarryPotterObamaSonic10Inu -> Bitcoin
+          const possibleMatches = combinedCoinData.data.filter(
             (apiCoin) =>
               apiCoin.symbol &&
-              apiCoin.symbol.toLowerCase() === coinData.symbol &&
-              (apiCoin.name.toLowerCase().includes(coinData.symbol) ||
+              apiCoin.symbol.toLowerCase() === exactSymbol &&
+              (apiCoin.name.toLowerCase().includes(exactSymbol) ||
                 cleanExactName.includes(apiCoin.name.toLowerCase()))
           );
 
-          if (symbolMatch) {
-            matchedApiCoin = symbolMatch;
-            // Remove debug logging of individual symbol matches
+          if (possibleMatches.length > 0) {
+            // Take the first match or the one with highest market cap
+            matchedApiCoin = possibleMatches.sort(
+              (a, b) => (b.market_cap || 0) - (a.market_cap || 0)
+            )[0];
           }
         }
-      }
 
-      // If we found a match in API data through any matching method
-      if (matchedApiCoin) {
-        // Generate a unique ID for this coin to avoid duplicates
-        const coinUniqueId = matchedApiCoin.id + "-" + exactName;
+        // Fallback to coinData.symbol from our mapping, but with strict verification
+        if (!matchedApiCoin && coinData.symbol) {
+          // Only use this if the symbol is not a common word or too generic
+          if (
+            coinData.symbol.length >= 3 &&
+            !["btc", "eth", "bitcoin", "ethereum"].includes(coinData.symbol)
+          ) {
+            const symbolMatch = combinedCoinData.data.find(
+              (apiCoin) =>
+                apiCoin.symbol &&
+                apiCoin.symbol.toLowerCase() === coinData.symbol &&
+                (apiCoin.name.toLowerCase().includes(coinData.symbol) ||
+                  cleanExactName.includes(apiCoin.name.toLowerCase()))
+            );
 
-        // Only process this coin if we haven't seen it before
-        if (!processedCoins.has(coinUniqueId)) {
-          processedCoins.add(coinUniqueId);
-
-          // Push to results with exact mention count from our knowledge data
-          result.push({
-            ...matchedApiCoin,
-            rpoints: coinData.points,
-            total_mentions: coinData.mentions,
-            data_source: matchedApiCoin.cmc_id ? "cmc" : "coingecko",
-            // Store the exact name to help with display/debugging
-            exact_knowledge_name: exactName,
-          } as ExtendedCoinData);
-
-          if (debug) {
-            // Only log matched coins in debug mode but not each individual one
-            // This line was causing too many logs but we maintain its presence for the debug flag
+            if (symbolMatch) {
+              matchedApiCoin = symbolMatch;
+            }
           }
         }
-      } else if (debug) {
-        // Don't log every failed match - this was flooding the console
-      }
-    });
 
-    // Log the result count
-    if (debug) {
-      console.log(
-        `Found ${result.length} matching coins from ${exactCoins.size} total entries`
+        // If we found a match in API data through any matching method
+        if (matchedApiCoin) {
+          // Generate a unique ID for this coin to avoid duplicates
+          const coinUniqueId = matchedApiCoin.id + "-" + exactName;
+
+          // Only process this coin if we haven't seen it before
+          if (!processedCoins.has(coinUniqueId)) {
+            processedCoins.add(coinUniqueId);
+
+            // Push to results with exact mention count from our knowledge data
+            result.push({
+              ...matchedApiCoin,
+              rpoints: coinData.points,
+              total_mentions: coinData.mentions,
+              data_source: matchedApiCoin.cmc_id ? "cmc" : "coingecko",
+              // Store the exact name to help with display/debugging
+              exact_knowledge_name: exactName,
+            } as ExtendedCoinData);
+          }
+        }
+      });
+
+      // Sort by rpoints (primary) and market cap (secondary)
+      dataToProcess = [...result].sort(
+        (a, b) =>
+          b.rpoints - a.rpoints || (b.market_cap || 0) - (a.market_cap || 0)
       );
+    } else {
+      // Use cached data
+      dataToProcess = [...baseData];
     }
 
-    // Sort by rpoints (primary) and market cap (secondary)
-    const sortedResult = [...result].sort(
-      (a, b) =>
-        b.rpoints - a.rpoints || (b.market_cap || 0) - (a.market_cap || 0)
-    );
-
     // Apply search filter if searchTerm is provided
-    let filteredResult = [...sortedResult];
+    let filteredResult = [...dataToProcess];
+
     if (searchTerm) {
       const lowerSearch = searchTerm.toLowerCase();
       filteredResult = filteredResult.filter(
@@ -1488,18 +1379,32 @@ export function CombinedMarketTable({
         });
 
         // Check if any mention has one of the required categories
-        return coinMentions.some((mention) =>
-          mention.categories && Array.isArray(mention.categories)
-            ? mention.categories.some(
-                (cat) =>
-                  cat &&
-                  typeof cat === "string" &&
-                  filterSettings.categories.includes(
-                    normalizeCategory(cat.toLowerCase())
-                  )
-              )
-            : false
-        );
+        return coinMentions.some((mention) => {
+          if (!mention.categories || !Array.isArray(mention.categories)) {
+            return false;
+          }
+
+          return mention.categories.some((cat) => {
+            if (!cat || typeof cat !== "string") {
+              return false;
+            }
+
+            const normalizedDataCategory = normalizeCategory(cat.toLowerCase());
+
+            // Try multiple matching strategies
+            const exactMatch = filterSettings.categories.includes(
+              normalizedDataCategory
+            );
+            const directMatch = filterSettings.categories.includes(
+              cat.toLowerCase()
+            );
+            const cleanMatch = filterSettings.categories.includes(
+              cat.toLowerCase().trim()
+            );
+
+            return exactMatch || directMatch || cleanMatch;
+          });
+        });
       });
     }
 
@@ -1508,8 +1413,15 @@ export function CombinedMarketTable({
       filterSettings.priceChangeMin !== undefined ||
       filterSettings.priceChangeMax !== undefined
     ) {
-      // Apply minimum filter (gainers)
-      if (filterSettings.priceChangeMin !== undefined) {
+      // Apply gainers filter
+      if (filterSettings.priceChangeMin === "gainers") {
+        filteredResult = filteredResult.filter((coin) => {
+          const priceChange =
+            coin.price_change_percentage_24h || coin.percent_change_24h || 0;
+          return priceChange > 0;
+        });
+      } else if (filterSettings.priceChangeMin !== undefined) {
+        // Apply numeric minimum filter
         const min = parseFloat(filterSettings.priceChangeMin);
         if (!isNaN(min)) {
           filteredResult = filteredResult.filter((coin) => {
@@ -1520,8 +1432,15 @@ export function CombinedMarketTable({
         }
       }
 
-      // Apply maximum filter (losers)
-      if (filterSettings.priceChangeMax !== undefined) {
+      // Apply losers filter
+      if (filterSettings.priceChangeMax === "losers") {
+        filteredResult = filteredResult.filter((coin) => {
+          const priceChange =
+            coin.price_change_percentage_24h || coin.percent_change_24h || 0;
+          return priceChange < 0;
+        });
+      } else if (filterSettings.priceChangeMax !== undefined) {
+        // Apply numeric maximum filter
         const max = parseFloat(filterSettings.priceChangeMax);
         if (!isNaN(max)) {
           filteredResult = filteredResult.filter((coin) => {
@@ -1581,8 +1500,17 @@ export function CombinedMarketTable({
       }
     }
 
-    prevDataRef.current = filteredResult;
-    prevSortedDataRef.current = filteredResult;
+    // Store unfiltered data for caching, but return filtered data
+    prevDataRef.current = dataToProcess; // Store unfiltered data for next render
+    prevSortedDataRef.current = filteredResult; // Store final result for pagination
+
+    console.log(
+      "SORTED COIN DATA FINAL RESULT - length:",
+      filteredResult.length,
+      "dateFilterActive:",
+      dateFilterActive
+    );
+
     return filteredResult;
   }, [
     combinedCoinData,
@@ -1590,8 +1518,10 @@ export function CombinedMarketTable({
     localSelectedChannels,
     processedData.channels,
     dateRange,
+    dateFilterActive,
     searchTerm,
     filterSettings,
+    symbols.length,
   ]);
 
   // Control pagination when data changes
@@ -1867,10 +1797,49 @@ export function CombinedMarketTable({
     updatePageUrl(1);
   };
 
+  // Extract categories from actual data
+  const dataCategories = useMemo(() => {
+    const categoryMap = new Map<
+      string,
+      { id: string; name: string; count: number }
+    >();
+
+    // Get all unique categories from the data
+    processedData.coinCategories.forEach((coin) => {
+      if (coin.categories && Array.isArray(coin.categories)) {
+        coin.categories.forEach((cat) => {
+          if (cat && typeof cat === "string") {
+            const trimmedCat = cat.trim();
+            if (trimmedCat) {
+              // Normalize category for consistent ID
+              const normalizedId = normalizeCategory(trimmedCat);
+              const displayName =
+                trimmedCat.charAt(0).toUpperCase() + trimmedCat.slice(1);
+
+              const existing = categoryMap.get(normalizedId);
+              if (existing) {
+                existing.count += 1;
+              } else {
+                categoryMap.set(normalizedId, {
+                  id: normalizedId,
+                  name: displayName,
+                  count: 1,
+                });
+              }
+            }
+          }
+        });
+      }
+    });
+
+    // Sort by count (most frequent first) and return array
+    return Array.from(categoryMap.values())
+      .sort((a, b) => b.count - a.count)
+      .map(({ id, name }) => ({ id, name }));
+  }, [processedData.coinCategories]);
+
   // Handle category filtering
   const handleCategoryFilter = (category: string | null) => {
-    console.log("Category filter:", category);
-
     if (category) {
       // Apply category filter
       setFilterSettings((prev) => ({
@@ -2219,38 +2188,55 @@ export function CombinedMarketTable({
   const hasShownNaNWarningRef = useRef(false);
 
   return (
-    <div className="space-y-4">
-      {/* Add the channel selector at the top */}
-      <div className="flex justify-between items-center">
-        <div>{/* You could add a title or other controls here */}</div>
-        <ChannelSelector
-          channels={processedData.channels}
-          selectedChannels={internalSelectedChannels}
-          onChannelsChange={handleChannelsChange}
+    <>
+      <div className="space-y-4">
+        {/* Add the channel selector at the top */}
+        <div className="flex justify-between items-center">
+          <div>{/* You could add a title or other controls here */}</div>
+          <ChannelSelector
+            channels={processedData.channels}
+            selectedChannels={internalSelectedChannels}
+            onChannelsChange={handleChannelsChange}
+          />
+        </div>
+
+        {/* New Table Header Component */}
+        <CryptoTableHeader
+          onTabChange={handleTabChange}
+          onOpenFilters={() => setFiltersOpen(true)}
+          onToggleColumns={() => setColumnsOpen(true)}
+          showCount={showCount}
+          onShowCountChange={handleShowCountChange}
+          onSearch={handleSearch}
+          onCategoryFilter={handleCategoryFilter}
         />
-      </div>
 
-      {/* New Table Header Component */}
-      <CryptoTableHeader
-        onTabChange={handleTabChange}
-        onOpenFilters={() => setFiltersOpen(true)}
-        onToggleColumns={() => setColumnsOpen(true)}
-        showCount={showCount}
-        onShowCountChange={handleShowCountChange}
-        onSearch={handleSearch}
-        onCategoryFilter={handleCategoryFilter}
-      />
-
-      {/* Status bar with count and filters - Mobile optimized */}
-      <div className="flex flex-col space-y-2 sm:space-y-0 sm:flex-row sm:justify-between sm:items-center py-1">
-        {/* Top row on mobile: Coin count + compact filters */}
-        <div className="flex items-center justify-between w-full">
-          {/* Left side - Coin count */}
+        {/* Status bar with count and filters - Mobile optimized */}
+        <div className="flex flex-col space-y-3 sm:space-y-0 sm:flex-row sm:justify-between sm:items-center py-2">
+          {/* Left side - Coin count + loading indicator */}
           <div className="flex items-center gap-2">
             <div className="text-sm font-medium text-gray-300">
-              {dateFilterActive && matchingCoinsCount === 0
-                ? "No coins found"
-                : `${sortedCoinData.length} coins`}
+              {sortedCoinData.length === 0 && dateFilterActive ? (
+                <span className="text-yellow-400">
+                  {showMostRecent
+                    ? "No recent coins found"
+                    : datePreset === "custom"
+                    ? "No coins found in custom range"
+                    : `No coins found ${
+                        datePreset === "today"
+                          ? "today"
+                          : datePreset === "yesterday"
+                          ? "yesterday"
+                          : datePreset === "last7days"
+                          ? "in last 7 days"
+                          : datePreset === "last30days"
+                          ? "in last 30 days"
+                          : `for ${datePreset}`
+                      }`}
+                </span>
+              ) : (
+                `${sortedCoinData.length} coins`
+              )}
             </div>
             {/* Loading indicator */}
             {isFetching && (
@@ -2260,32 +2246,13 @@ export function CombinedMarketTable({
             )}
           </div>
 
-          {/* Right side - Compact filter controls */}
-          <div className="flex items-center gap-1.5">
-            {/* Advanced date filters - compact */}
+          {/* Right side - Date filter dropdown */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
             <Select value={datePreset} onValueChange={handleDatePresetChange}>
-              <SelectTrigger className="w-[100px] sm:w-[140px] h-[30px] cursor-pointer sm:h-[38px] text-xs sm:text-sm bg-gray-800/60 border-gray-700/60 text-gray-200 hover:bg-gray-700/50 ">
-                <SelectValue placeholder="Dates">
-                  {datePreset === "all-time"
-                    ? "All Time"
-                    : datePreset === "most-recent"
-                    ? "Most Recent"
-                    : datePreset === "today"
-                    ? "Today"
-                    : datePreset === "yesterday"
-                    ? "Yesterday"
-                    : datePreset === "last7days"
-                    ? "Last 7 Days"
-                    : datePreset === "last30days"
-                    ? "Last 30 Days"
-                    : datePreset === "last90days"
-                    ? "Last 3 Months"
-                    : datePreset === "custom"
-                    ? "Custom Range"
-                    : "Filter dates"}
-                </SelectValue>
+              <SelectTrigger className="w-[180px] bg-gray-800 border-gray-700 text-white text-sm cursor-pointer">
+                <SelectValue placeholder="Select time period" />
               </SelectTrigger>
-              <SelectContent className="bg-gray-800 border-gray-700">
+              <SelectContent className="bg-gray-800 border-gray-700 text-white z-50">
                 <SelectItem value="all-time" className="cursor-pointer">
                   All Time
                 </SelectItem>
@@ -2304,312 +2271,240 @@ export function CombinedMarketTable({
                 <SelectItem value="last30days" className="cursor-pointer">
                   Last 30 Days
                 </SelectItem>
-                <SelectItem value="last90days" className="cursor-pointer">
-                  Last 3 Months
-                </SelectItem>
                 <SelectItem value="custom" className="cursor-pointer">
                   Custom Range
                 </SelectItem>
               </SelectContent>
             </Select>
 
-            {/* Inline custom range controls (same row) */}
+            {/* Custom date range picker - show when custom is selected */}
             {datePreset === "custom" && (
-              <div className="flex items-center gap-2 ml-2">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
                 <Popover>
                   <PopoverTrigger asChild>
-                    <div
-                      className={`h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm bg-gray-800/60 border border-gray-600 rounded-md flex items-center cursor-pointer ${
-                        dateRange.from
-                          ? "text-blue-400 border-blue-600/50"
-                          : "text-gray-300"
-                      } hover:bg-gray-700/50`}
+                    <Button
+                      variant="outline"
+                      className="w-full sm:w-auto justify-start text-left font-normal bg-gray-800 border-gray-700 text-white text-sm"
                     >
-                      <CalendarIcon className="mr-1 sm:mr-2 h-3 sm:h-4 w-3 sm:w-4" />
+                      <CalendarIcon className="mr-2 h-4 w-4" />
                       {dateRange.from ? (
-                        <span className="sm:hidden">
-                          {format(dateRange.from, "M/d/yy")}
-                        </span>
+                        format(dateRange.from, "MMM dd, yyyy")
                       ) : (
-                        <span className="sm:hidden">Start</span>
+                        <span>From date</span>
                       )}
-                      {dateRange.from && (
-                        <span className="hidden sm:inline">
-                          {format(dateRange.from, "MMM d, yyyy")}
-                        </span>
-                      )}
-                      {!dateRange.from && (
-                        <span className="hidden sm:inline">Start Date</span>
-                      )}
-                    </div>
+                    </Button>
                   </PopoverTrigger>
                   <PopoverContent
-                    className="w-auto p-0 bg-gray-900 border border-gray-800"
-                    align="end"
+                    className="w-auto p-0 bg-gray-800 border-gray-700 z-50"
+                    align="start"
                   >
                     <CustomCalendar
                       selected={dateRange.from}
                       onSelect={(date) => {
-                        setDateRange({ ...dateRange, from: date });
-                        setFilterSettings((prev) => ({
-                          ...prev,
-                          dateRange: { ...prev.dateRange, from: date },
-                        }));
-                        setDateFilterActive(true);
+                        console.log("From date selected:", date);
+                        const newRange = { ...dateRange, from: date };
+                        setDateRange(newRange);
+                        setDateFilterActive(!!date || !!dateRange.to);
                         refreshKeyRef.current += 1;
                       }}
                       disabled={(date) => {
-                        return (
-                          date > new Date() ||
-                          (dateRangeInfo?.earliest
-                            ? date < dateRangeInfo.earliest
-                            : false)
-                        );
+                        if (!dateRangeInfo) {
+                          console.log("No dateRangeInfo, allowing all dates");
+                          return false;
+                        }
+                        const isDisabled =
+                          date < dateRangeInfo.earliest ||
+                          date > dateRangeInfo.latest;
+                        if (isDisabled) {
+                          console.log(
+                            "Date disabled:",
+                            date,
+                            "Range:",
+                            dateRangeInfo.earliest,
+                            "to",
+                            dateRangeInfo.latest
+                          );
+                        }
+                        return isDisabled;
                       }}
                     />
                   </PopoverContent>
                 </Popover>
-                <span className="text-gray-400 text-xs sm:text-sm self-center">
+
+                <span className="text-gray-400 text-sm hidden sm:block">
                   to
                 </span>
+
                 <Popover>
                   <PopoverTrigger asChild>
-                    <div
-                      className={`h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm bg-gray-800/60 border border-gray-600 rounded-md flex items-center cursor-pointer ${
-                        dateRange.to
-                          ? "text-blue-400 border-blue-600/50"
-                          : "text-gray-300"
-                      } hover:bg-gray-700/50`}
+                    <Button
+                      variant="outline"
+                      className="w-full sm:w-auto justify-start text-left font-normal bg-gray-800 border-gray-700 text-white text-sm"
                     >
-                      <CalendarIcon className="mr-1 sm:mr-2 h-3 sm:h-4 w-3 sm:w-4" />
+                      <CalendarIcon className="mr-2 h-4 w-4" />
                       {dateRange.to ? (
-                        <span className="sm:hidden">
-                          {format(dateRange.to, "M/d/yy")}
-                        </span>
+                        format(dateRange.to, "MMM dd, yyyy")
                       ) : (
-                        <span className="sm:hidden">End</span>
+                        <span>To date</span>
                       )}
-                      {dateRange.to && (
-                        <span className="hidden sm:inline">
-                          {format(dateRange.to, "MMM d, yyyy")}
-                        </span>
-                      )}
-                      {!dateRange.to && (
-                        <span className="hidden sm:inline">End Date</span>
-                      )}
-                    </div>
+                    </Button>
                   </PopoverTrigger>
                   <PopoverContent
-                    className="w-auto p-0 bg-gray-900 border border-gray-800"
-                    align="end"
+                    className="w-auto p-0 bg-gray-800 border-gray-700 z-50"
+                    align="start"
                   >
                     <CustomCalendar
                       selected={dateRange.to}
                       onSelect={(date) => {
-                        setDateRange({ ...dateRange, to: date });
-                        setFilterSettings((prev) => ({
-                          ...prev,
-                          dateRange: { ...prev.dateRange, to: date },
-                        }));
-                        setDateFilterActive(true);
+                        console.log("To date selected:", date);
+                        const newRange = { ...dateRange, to: date };
+                        setDateRange(newRange);
+                        setDateFilterActive(!!dateRange.from || !!date);
                         refreshKeyRef.current += 1;
                       }}
                       disabled={(date) => {
-                        return (
-                          date > new Date() ||
-                          (dateRange.from ? date < dateRange.from : false) ||
-                          (dateRangeInfo?.earliest
-                            ? date < dateRangeInfo.earliest
-                            : false)
-                        );
+                        if (!dateRangeInfo) {
+                          console.log(
+                            "No dateRangeInfo for 'to' date, allowing all dates"
+                          );
+                          return false;
+                        }
+                        const isDisabled =
+                          date < dateRangeInfo.earliest ||
+                          date > dateRangeInfo.latest ||
+                          Boolean(dateRange.from && date < dateRange.from);
+                        if (isDisabled) {
+                          console.log(
+                            "To date disabled:",
+                            date,
+                            "Range:",
+                            dateRangeInfo.earliest,
+                            "to",
+                            dateRangeInfo.latest,
+                            "From:",
+                            dateRange.from
+                          );
+                        }
+                        return isDisabled;
                       }}
                     />
                   </PopoverContent>
                 </Popover>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 sm:h-9 w-8 sm:w-9 bg-gray-800/60 border-gray-600 text-gray-400 hover:bg-gray-700/50 hover:text-white"
-                  onClick={() => {
-                    setDateRange({ from: undefined, to: undefined });
-                    setFilterSettings((prev) => ({
-                      ...prev,
-                      dateRange: { from: undefined, to: undefined },
-                    }));
-                    if (dateFilterActive) setDateFilterActive(false);
-                    refreshKeyRef.current += 1;
-                  }}
-                  title="Clear date range"
-                >
-                  <X className="h-3 sm:h-4 w-3 sm:w-4" />
-                </Button>
               </div>
             )}
           </div>
         </div>
-      </div>
 
-      {/* Table */}
-      {showCategoryTable ? (
-        <CategoriesTable
-          processedData={processedData}
-          onCategorySelect={handleCategorySelect}
-        />
-      ) : (
-        <div className="bg-gradient-to-r from-[#1a365d]/10 via-[#4a1d6e]/10 to-[#831843]/10 backdrop-blur-[8px] rounded-xl border border-gray-800/20 overflow-x-auto">
-          {sortedCoinData.length === 0 ? (
-            <div className="py-16 flex flex-col items-center justify-center text-gray-500">
-              <Filter className="h-12 w-12 mb-4 opacity-30" />
-              <p className="text-lg font-medium">
-                {dateFilterActive
-                  ? showMostRecent
-                    ? "No recent coins found for the selected channels"
-                    : datePreset === "custom"
-                    ? "No coins found for the custom date range"
-                    : `No coins found for the "${datePreset}" filter`
-                  : searchTerm
-                  ? `No coins found matching "${searchTerm}"`
-                  : "No coins found with the current filters"}
-              </p>
-              <p className="text-sm mt-2">
-                {dateFilterActive && showMostRecent
-                  ? "Try selecting different channels or use 'All Time' filter"
-                  : dateFilterActive && datePreset === "custom"
-                  ? "Try selecting a broader date range or use a preset filter"
-                  : dateFilterActive
-                  ? "Try selecting a different time period or use 'All Time'"
-                  : searchTerm
-                  ? "Try a different search term or clear the search"
-                  : "Try adjusting your filters or selecting different channels"}
-              </p>
+        {/* Table */}
+        {showCategoryTable ? (
+          <CategoriesTable
+            processedData={processedData}
+            onCategorySelect={handleCategorySelect}
+          />
+        ) : (
+          <div className="bg-gradient-to-r from-[#1a365d]/10 via-[#4a1d6e]/10 to-[#831843]/10 backdrop-blur-[8px] rounded-xl border border-gray-800/20 overflow-x-auto">
+            {sortedCoinData.length === 0 ? (
+              <div className="py-16 flex flex-col items-center justify-center text-gray-500">
+                <Filter className="h-12 w-12 mb-4 opacity-30" />
+                <p className="text-lg font-medium">
+                  {dateFilterActive
+                    ? "No coins found in selected date range"
+                    : searchTerm
+                    ? `No coins found matching "${searchTerm}"`
+                    : "No coins found"}
+                </p>
+                <p className="text-sm mt-2 text-gray-400">
+                  {dateFilterActive
+                    ? "Try a different time period or use 'All Time'"
+                    : searchTerm
+                    ? "Try a different search term"
+                    : "Adjust your filters or try different channels"}
+                </p>
 
-              {/* Action buttons */}
-              <div className="mt-6 flex gap-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="bg-gray-800/50 border-gray-700 text-gray-200 hover:bg-gray-700"
-                  onClick={handleResetFilters}
-                >
-                  Reset All Filters
-                </Button>
-
-                {dateFilterActive && (
+                {/* Action buttons */}
+                <div className="mt-6 flex gap-3">
                   <Button
                     variant="outline"
                     size="sm"
-                    className="bg-blue-600/20 border-blue-500 text-blue-400 hover:bg-blue-700/20"
-                    onClick={() => {
-                      // Switch to All Time
-                      setDatePreset("all-time");
-                      setShowMostRecent(false);
-                      setDateRange({ from: undefined, to: undefined });
-                      setDateFilterActive(false);
-                      setFilterSettings((prev) => ({
-                        ...prev,
-                        datePreset: "all-time",
-                        showMostRecent: false,
-                        dateRange: { from: undefined, to: undefined },
-                      }));
-                      refreshKeyRef.current += 1;
-                    }}
+                    className="bg-gray-800/50 border-gray-700 text-gray-200 hover:bg-gray-700"
+                    onClick={handleResetFilters}
                   >
-                    Show All Time
+                    Reset Filters
                   </Button>
-                )}
-              </div>
 
-              {/* Debug info section */}
-              {debug && (
-                <div className="mt-4 p-3 bg-gray-800 rounded text-xs text-left w-full max-w-lg">
-                  <p className="text-blue-300 font-semibold">
-                    Debug Filter Info:
-                  </p>
-                  <p>
-                    Filter mode:{" "}
-                    {showMostRecent
-                      ? "Most Recent"
-                      : dateFilterActive
-                      ? datePreset === "custom"
-                        ? "Custom Date Range"
-                        : datePreset
-                      : "All Time"}
-                  </p>
-                  <p>
-                    Selected channels:{" "}
-                    {localSelectedChannels.length > 0
-                      ? localSelectedChannels.join(", ")
-                      : "All channels"}
-                  </p>
-                  <p>Search term: {searchTerm || "None"}</p>
-                  <p>
-                    Category filter:{" "}
-                    {filterSettings.categories.length > 0
-                      ? filterSettings.categories.join(", ")
-                      : "None"}
-                  </p>
-                  <p>
-                    Chain filter:{" "}
-                    {filterSettings.chains.length > 0
-                      ? filterSettings.chains.join(", ")
-                      : "None"}
-                  </p>
-                  <p>
-                    Total categories in data:{" "}
-                    {processedData.coinCategories.length}
-                  </p>
-                  <p>Matched before filtering: {matchingCoinsCount}</p>
+                  {dateFilterActive && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="bg-blue-600/20 border-blue-500 text-blue-400 hover:bg-blue-700/20"
+                      onClick={() => {
+                        setDatePreset("all-time");
+                        setShowMostRecent(false);
+                        setDateRange({ from: undefined, to: undefined });
+                        setDateFilterActive(false);
+                        refreshKeyRef.current += 1;
+                      }}
+                    >
+                      Show All Time
+                    </Button>
+                  )}
                 </div>
-              )}
-            </div>
-          ) : isDataFetching && sortedCoinData.length === 0 ? (
-            <Skeleton />
-          ) : (
-            <div ref={tableRef} className="overflow-x-auto w-full">
-              <DataTable
-                key={tableId}
-                columns={visibleColumns}
-                data={sortedCoinData}
-                onRowClick={onRowClick}
-                virtualizeRows={true}
-                isLoading={
-                  isInitialLoad ||
-                  (isDataFetching && sortedCoinData.length === 0)
-                }
-                pageSize={showCount}
-                showPagination={true}
-                currentPage={currentPage}
-                initialPage={getCurrentPageFromUrl()}
-                onPageChange={handlePageChange}
-                className="w-full"
-              />
+              </div>
+            ) : isDataFetching && sortedCoinData.length === 0 ? (
+              <Skeleton />
+            ) : (
+              <div ref={tableRef} className="overflow-x-auto w-full">
+                <DataTable
+                  key={tableId}
+                  columns={visibleColumns}
+                  data={sortedCoinData}
+                  onRowClick={onRowClick}
+                  virtualizeRows={true}
+                  isLoading={
+                    isInitialLoad ||
+                    (isDataFetching && sortedCoinData.length === 0)
+                  }
+                  pageSize={showCount}
+                  showPagination={true}
+                  currentPage={currentPage}
+                  initialPage={getCurrentPageFromUrl()}
+                  onPageChange={handlePageChange}
+                  className="w-full"
+                />
 
-              {/* Add loading indicator */}
-              {isFetching && <ClientLoadingIndicator />}
-            </div>
-          )}
-        </div>
+                {/* Add loading indicator */}
+                {isFetching && <ClientLoadingIndicator />}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Modals rendered outside the main container to avoid CSS containment issues */}
+      {filtersOpen && (
+        <CryptoFiltersPanel
+          isOpen={filtersOpen}
+          onClose={() => setFiltersOpen(false)}
+          filters={filterSettings}
+          onChange={handleFilterChange}
+          onReset={handleResetFilters}
+          onApply={handleApplyFilters}
+          dateRangeInfo={dateRangeInfo}
+          filterOptions={{
+            categories: dataCategories,
+          }}
+        />
       )}
 
-      {/* Filters Panel */}
-      <CryptoFiltersPanel
-        isOpen={filtersOpen}
-        onClose={() => setFiltersOpen(false)}
-        filters={filterSettings}
-        onChange={handleFilterChange}
-        onReset={handleResetFilters}
-        onApply={handleApplyFilters}
-        dateRangeInfo={dateRangeInfo}
-      />
-
-      {/* Columns Selector */}
-      <CryptoColumnsSelector
-        isOpen={columnsOpen}
-        onClose={() => setColumnsOpen(false)}
-        columns={tableColumns}
-        onChange={handleColumnChange}
-      />
-    </div>
+      {columnsOpen && (
+        <CryptoColumnsSelector
+          isOpen={columnsOpen}
+          onClose={() => setColumnsOpen(false)}
+          columns={tableColumns}
+          onChange={handleColumnChange}
+        />
+      )}
+    </>
   );
 }
 
